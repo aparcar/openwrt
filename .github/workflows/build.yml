@@ -1,0 +1,213 @@
+name: Build OpenWrt staging
+
+on: [push]
+
+jobs:
+  determine_targets:
+    name: Find available targets
+    runs-on: ubuntu-20.04
+    outputs:
+      targets: ${{ steps.find_targets.outputs.targets }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Find targets
+      id: find_targets
+      run: |
+        TARGETS="$(perl ./scripts/dump-target-info.pl targets 2>/dev/null | awk '{ print $1 }')"
+        JSON='{"targets":['
+        FIRST=1
+        for TARGET in $TARGETS; do
+          [[ $FIRST -ne 1 ]] && JSON="$JSON"','
+          JSON="$JSON"'"'"${TARGET}"'"'
+          FIRST=0
+        done
+        JSON="$JSON"']}'
+
+        echo -e "\n---- targets ----\n"
+        echo "$JSON"
+        echo -e "\n---- targets ----\n"
+
+        echo "targets=$JSON" >> "$GITHUB_ENV"
+
+  build:
+    name: Build ${{ matrix.config }}/${{ matrix.targets }}
+    needs: determine_targets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: False
+      matrix:
+        targets:
+          - "x86/64"
+          - "mediatek/mt7622"
+        config:
+          - "default"
+          - "selinux"
+          - "nls"
+          - "gcc10"
+
+      #matrix: ${{fromJson(needs.determine_targets.outputs.targets)}}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Cache sources
+      uses: actions/cache@v2
+      with:
+        path: dl/
+        key: ${{ matrix.targets }}
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo apt-get -y install libncurses-dev
+        TARGET=$(echo ${{ matrix.targets }} | cut -d "/" -f 1)
+        SUBTARGET=$(echo ${{ matrix.targets }} | cut -d "/" -f 2)
+        echo "TARGET=$TARGET" >> "$GITHUB_ENV"
+        echo "SUBTARGET=$SUBTARGET" >> "$GITHUB_ENV"
+
+    - name: Update & Install feeds
+      run: |
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Set configuration
+      run: |
+        curl "https://downloads.openwrt.org/snapshots/targets/${{ matrix.targets }}/config.buildinfo" > .config
+        cat ".ci/${{ matrix.config }}.config" >> .config
+
+        echo -e "\n---- config input ----\n"
+        cat .config
+        echo -e "\n---- config input ----\n"
+
+        make defconfig
+
+        echo -e "\n---- config post-defconfig ----\n"
+        cat .config
+        echo -e "\n---- config post-defconfig ----\n"
+
+    - name: Download package
+      run: |
+        make download -j$(nproc)
+
+    - name: Build tools
+      run: |
+        make tools/install -j$(nproc) || \
+          make tools/install V=s || exit 1
+
+    - name: Build toolchain
+      run: |
+        make toolchain/install -j$(nproc) || \
+          make toolchain/install V=s || exit 1
+
+    - name: Build target
+      run: |
+        make target/compile -j$(nproc) IGNORE_ERRORS='n m' || \
+          make target/compile IGNORE_ERRORS='n m' V=s || exit 1
+
+    - name: Build packages
+      run: |
+        make package/compile -j$(nproc) IGNORE_ERRORS='n m' || \
+          make package/compile IGNORE_ERRORS='n m' V=s || exit 1
+
+        make package/install -j$(nproc) || \
+          make package/install V=s || exit 1
+
+        make package/index CONFIG_SIGNED_PACKAGES= V=s
+
+    - name: Build firmware
+      run: |
+        make target/install EXTRA_IMAGE_NAME=${{ matrix.config }} -j$(nproc) || \
+          make target/install V=s || exit 1
+
+    - name: Buildinfo
+      run: |
+        make buildinfo V=s
+
+    - name: JSON overview
+      run: |
+        make json_overview_image_info V=s
+      continue-on-error: true
+
+    - name: Checksum
+      run: |
+        make checksum V=s
+
+    - name: Sanitize target
+      run: echo "target_sani=$(echo ${{ matrix.targets }} | tr '/' '-')" >> "$GITHUB_ENV"
+
+    - name: Upload images
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.target_sani }}-${{ matrix.config }}-images
+        path: bin/targets/${{ matrix.targets }}/openwrt-${{ matrix.config }}-${{ env.TARGET }}-*
+
+    - name: Upload packages
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.target_sani }}-${{ matrix.config }}-packages
+        path: |
+          bin/**/*.ipk
+          !bin/targets/${{ matrix.targets }}/packages/kmod-*.ipk
+
+    - name: Upload kmods
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.target_sani }}-${{ matrix.config }}-kmods
+        path: bin/targets/${{ matrix.targets }}/packages/kmod-*.ipk
+
+    - name: Upload supplementary
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.target_sani }}-${{ matrix.config }}-supplementary
+        path: |
+          bin/targets/${{ matrix.targets }}/*.buildinfo
+          bin/targets/${{ matrix.targets }}/*.json
+          bin/targets/${{ matrix.targets }}/*.manifest
+          bin/targets/${{ matrix.targets }}/kernel-debug.tar.zst
+          bin/targets/${{ matrix.targets }}/openwrt-imagebuilder*
+          bin/targets/${{ matrix.targets }}/openwrt-sdk*
+          bin/targets/${{ matrix.targets }}/sha256sums*
+
+    - name: Upload logs
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.target_sani }}-${{ matrix.config }}-logs
+        path: logs/
+
+    - name: Test ImageBuilder
+      run: |
+        cd bin/targets/${{ matrix.targets }}/
+        tar xf openwrt-imagebuilder-*
+        cd openwrt-imagebuilder-*/
+        mkdir packages
+        cp "$GITHUB_WORKSPACE"/bin/targets/${{ matrix.targets }}/packages/kmod-*.ipk packages/
+        echo "src imagebuilder file:packages" >> repositories.conf
+        make image
+        ls ./bin/targets/${{ matrix.targets }}/openwrt-* | grep squashfs
+
+    - name: Test SDK
+      run: |
+        cd bin/targets/${{ matrix.targets }}/
+        tar xf openwrt-sdk-*
+        cd openwrt-sdk-*/
+        touch .config
+        make prepare-tmpinfo scripts/config/conf
+        ./scripts/config/conf --defconfig=.config Config.in
+        make prereq
+        rm .config
+        make defconfig
+        ./scripts/feeds update base
+        ./scripts/feeds install busybox
+        sync
+        sleep 1
+        make package/busybox/compile V=s
+        sync
+        sleep 1
+        ls ./bin/packages/*/base/busybox*
