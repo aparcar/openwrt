@@ -256,6 +256,7 @@ if VERSIONOPT
 			Enable this to include the version number in firmware image, SDK-
 			and Image Builder archive file names
 
+
 	config VERSION_CODE_FILENAMES
 		bool
 		prompt "Revision code in filenames"
@@ -264,6 +265,16 @@ if VERSIONOPT
 			Enable this to include the revision identifier or the configured
 			version code into the firmware image, SDK- and Image Builder archive
 			file names
+
+	config TARGET_FILENAMES
+		bool
+		prompt "Target and subtarget in filenames"
+		default y
+		help
+			Enable this to include the target (and subtarget) in firmware image
+			filenames. SDK and ImageBuilder archive filenames are not influenced
+			by this option.
+
 endif
 
 
