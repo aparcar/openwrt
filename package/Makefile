@@ -59,6 +59,7 @@ $(curdir)/merge-index: $(curdir)/merge
 	(cd $(PACKAGE_DIR_ALL) && $(SCRIPT_DIR)/ipkg-make-index.sh . 2>&1 > Packages; )
 
 ifndef SDK
+  $(curdir)/compile: $(curdir)/utils/abuild-tar/host/compile
   $(curdir)/compile: $(curdir)/system/opkg/host/compile
 endif
 
