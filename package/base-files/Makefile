@@ -107,6 +107,10 @@ ifdef CONFIG_SIGNED_PACKAGES
 	[ -s $(BUILD_KEY).ucert ] || \
 		$(STAGING_DIR_HOST)/bin/ucert -I -c $(BUILD_KEY).ucert -p $(BUILD_KEY).pub -s $(BUILD_KEY)
 
+	[ -s $(BUILD_KEY_RSA) -a -s $(BUILD_KEY_RSA).pub ] || \
+		openssl genrsa -out $(BUILD_KEY_RSA) 2048; \
+		openssl rsa -in $(BUILD_KEY_RSA) -pubout -out $(BUILD_KEY_RSA).pub
+
   endef
 
 ifndef CONFIG_BUILDBOT

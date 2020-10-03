@@ -1,0 +1,95 @@
+#!/bin/bash
+
+pkginfo_val() {
+	local key="$1"
+	local file="$2"
+	awk -F ' = ' "\$1 == \"$key\" {print \$2}" "$file"
+}
+
+datadir="$1"
+outputdir="$2"
+BUILD_KEY_RSA="$3"
+tmp_dir=$(mktemp -d -t apk-XXXXXXXXXX)
+file="$tmp_dir/.PKGINFO"
+
+sed -n \
+	-e 's/Package:/pkgname =/p' \
+	-e 's/Version:/pkgver =/p' \
+	-e 's/Installed-Size:/size =/p' \
+	-e 's/Description:/pkgdesc =/p' \
+	-e 's/License:/license =/p' \
+	-e 's/Source:/origin =/p' \
+	-e 's/Architecture:/arch =/p' \
+	"$datadir/CONTROL/control" \
+	>"$file"
+
+grep "Depends" "$datadir/CONTROL/control" | sed \
+	-e 's/Depends://' \
+	-e "s/ (=/></g" \
+	-e "s/)//g" \
+	-e 's/ /depend = /g' \
+	-e 's/,/\n/g' \
+	>>"$file"
+
+dir="${file%/.PKGINFO}"
+name=$(pkginfo_val pkgname "$file")
+ver=$(pkginfo_val pkgver "$file")
+size=$(pkginfo_val size "$file")
+arch=$(pkginfo_val arch "$file")
+apk="${name}_${ver}_${arch}.apk"
+metafiles=".PKGINFO"
+keyname=${BUILD_KEY_RSA##*/}.pub
+sig_rsa=".SIGN.RSA.$keyname"
+
+echo "$metafiles" >"$dir/.metafiles"
+rm -f "$dir/data.tar.gz" "$dir/control.tar.gz"
+
+(
+	cd "$datadir" || exit 1
+	# data.tar.gz
+
+	echo "Package size: ${size}"
+	echo "Compressing data..."
+	set -- *
+	if [ "$1" = '*' ]; then
+		touch .dummy
+		set -- .dummy
+	fi
+
+	# normalize timestamps
+	find "$@" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
+	find "$@" -print0 | LC_ALL=C sort -z | tar --xattrs \
+		--exclude=CONTROL \
+		--format=posix \
+		--pax-option=exthdr.name=%d/PaxHeaders/%f,atime:=0,ctime:=0 \
+		--mtime="@${SOURCE_DATE_EPOCH}" \
+		--no-recursion --null -T - \
+		-f - -c | abuild-tar --hash | gzip -n -9 >"$tmp_dir/data.tar.gz"
+
+	# data.tar.gz
+	echo "Create checksum..."
+	# append the hash for data.tar.gz
+	sha256=$(sha256sum "$dir"/data.tar.gz | cut -f1 -d' ')
+	echo "datahash = $sha256" >>"$dir"/.PKGINFO
+
+	cd "$tmp_dir" || exit 1
+	tar \
+		--format=posix \
+		--pax-option=exthdr.name=%d/PaxHeaders/%f,atime:=0,ctime:=0 \
+		--mtime="@${SOURCE_DATE_EPOCH}" \
+		-f - -c $(cat "$dir/.metafiles") | abuild-tar --cut |
+		gzip -n -9 >control.tar.gz
+
+	# signing works but requires manually generated private key
+	openssl dgst -sha1 -sign "$BUILD_KEY_RSA" -out "$sig_rsa" "control.tar.gz"
+	touch -h -d "@$SOURCE_DATE_EPOCH" "$sig_rsa"
+
+	tmptargz=$(mktemp)
+	tar -f - -c .SIGN* | abuild-tar --cut | gzip -n -9 >"$tmptargz"
+	tmpsigned=$(mktemp)
+	cat "$tmptargz" "control.tar.gz" >"$tmpsigned"
+	mv "$tmpsigned" "control.tar.gz"
+
+	echo "Create $apk"
+	cat control.tar.gz data.tar.gz >"$outputdir/$apk"
+)

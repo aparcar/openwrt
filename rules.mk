@@ -258,6 +258,7 @@ else
 endif
 
 BUILD_KEY=$(TOPDIR)/key-build
+BUILD_KEY_RSA=$(TOPDIR)/key-build.rsa
 
 FAKEROOT:=$(STAGING_DIR_HOST)/bin/fakeroot
 

@@ -264,6 +264,7 @@ $(_endef)
 
 	$(INSTALL_DIR) $$(PDIR_$(1))
 	$(FAKEROOT) $(SCRIPT_DIR)/ipkg-build -m "$(FILE_MODES)" $$(IDIR_$(1)) $$(PDIR_$(1))
+	$(FAKEROOT) $(SCRIPT_DIR)/apk-build $$(IDIR_$(1)) $$(PDIR_$(1)) $(BUILD_KEY_RSA)
 	@[ -f $$(IPKG_$(1)) ]
 
     $(1)-clean:
