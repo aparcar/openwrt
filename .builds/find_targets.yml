@@ -1,0 +1,27 @@
+image: debian/stable
+
+sources:
+  - https://git.sr.ht/~aparcar/openwrt
+
+packages:
+  - build-essential
+  - curl
+  - file
+  - gawk
+  - gettext
+  - git
+  - libncurses-dev
+  - libssl-dev
+  - python3
+  - rsync
+  - subversion
+  - swig
+  - unzip
+  - wget
+  - zlib1g-dev
+
+tasks:
+  - setup: |
+      cd openwrt
+      ./scripts/dump-target-info.pl targets > targets.txt 2>/dev/null
+      cat targets.txt
