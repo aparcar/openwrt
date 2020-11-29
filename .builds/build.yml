@@ -1,0 +1,47 @@
+image: debian/stable
+
+sources:
+  - https://git.sr.ht/~aparcar/openwrt
+
+environment:
+  TARGET: "mediatek/mt7622"
+
+packages:
+  - build-essential
+  - curl
+  - file
+  - gawk
+  - gettext
+  - git
+  - libncurses-dev
+  - libssl-dev
+  - python3
+  - rsync
+  - subversion
+  - swig
+  - unzip
+  - wget
+  - zlib1g-dev
+
+artifacts:
+  - ./openwrt/bin/
+
+tasks:
+  - setup: |
+      cd openwrt
+      make defconfig
+      make prereq
+
+  - update_packages: |
+      cd openwrt
+      ./scripts/feeds update
+      ./scripts/feeds install -a
+
+  - configuration: |
+      cd openwrt
+      curl "https://downloads.openwrt.org/snapshots/targets/$TARGET/config.buildinfo" > .config
+      make defconfig
+
+  - build: |
+      cd openwrt
+      make -j $(nproc)
