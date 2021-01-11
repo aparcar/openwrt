@@ -15,6 +15,7 @@ export SAVE_OVERLAY_PATH=
 export SAVE_PARTITIONS=1
 export SAVE_INSTALLED_PKGS=0
 export SKIP_UNCHANGED=0
+export SAVE_SERVICE_STATUS=0
 export CONF_IMAGE=
 export CONF_BACKUP_LIST=0
 export CONF_BACKUP=
@@ -35,6 +36,7 @@ while [ -n "$1" ]; do
 		-c) export SAVE_OVERLAY=1 SAVE_OVERLAY_PATH=/etc;;
 		-o) export SAVE_OVERLAY=1 SAVE_OVERLAY_PATH=/;;
 		-p) export SAVE_PARTITIONS=0;;
+		-s) export SAVE_SERVICE_STATUS=1;;
 		-k) export SAVE_INSTALLED_PKGS=1;;
 		-u) export SKIP_UNCHANGED=1;;
 		-b|--create-backup) export CONF_BACKUP="$2" NEED_IMAGE=1; shift;;
@@ -57,13 +59,14 @@ export CONFFILES=/tmp/sysupgrade.conffiles
 export CONF_TAR=/tmp/sysupgrade.tgz
 export ETCBACKUP_DIR=/etc/backup
 export INSTALLED_PACKAGES=${ETCBACKUP_DIR}/installed_packages.txt
+export SERVICE_STATUS=${ETCBACKUP_DIR}/service_status.txt
 
 IMAGE="$1"
 
 [ -z "$IMAGE" -a -z "$NEED_IMAGE" -a $CONF_BACKUP_LIST -eq 0 -o $HELP -gt 0 ] && {
 	cat <<EOF
 Usage: $0 [<upgrade-option>...] <image file or URL>
-       $0 [-q] [-i] [-c] [-u] [-o] [-k] <backup-command> <file>
+       $0 [-q] [-i] [-c] [-u] [-o] [-s] [-k] <backup-command> <file>
 
 upgrade-option:
 	-f <config>  restore configuration from .tar.gz (file or url)
@@ -74,6 +77,7 @@ upgrade-option:
 	-u           skip from backup files that are equal to those in /rom
 	-n           do not save configuration over reflash
 	-p           do not attempt to restore the partition table after flash.
+	-s           do not attempt to restore the status of the services.
 	-k           include in backup a list of current installed packages at
 	             $INSTALLED_PACKAGES
 	-T | --test
@@ -230,8 +234,7 @@ do_save_conffiles() {
 	run_hooks "$CONFFILES" $sysupgrade_init_conffiles
 	ask_bool 0 "Edit config file list" && vi "$CONFFILES"
 
-	if [ "$SAVE_INSTALLED_PKGS" -eq 1 ]; then
-		echo "${INSTALLED_PACKAGES}" >> "$CONFFILES"
+	if [ "$SAVE_INSTALLED_PKGS" -eq 1 ] || [ "$SAVE_SERVICE_STATUS" -eq 1 ]; then
 		mkdir -p "$ETCBACKUP_DIR"
 		# Avoid touching filesystem on each backup
 		RAMFS="$(mktemp -d -t sysupgrade.XXXXXX)"
@@ -242,13 +245,28 @@ do_save_conffiles() {
 				ask_bool 0 "Abort" && exit
 			}
 
-		# Format: pkg-name<TAB>{rom,overlay,unkown}
-		# rom is used for pkgs in /rom, even if updated later
-		find /usr/lib/opkg/info -name "*.control" \( \
-			\( -exec test -f /rom/{} \; -exec echo {} rom \; \) -o \
-			\( -exec test -f /overlay/upper/{} \; -exec echo {} overlay \; \) -o \
-			\( -exec echo {} unknown \; \) \
-			\) | sed -e 's,.*/,,;s/\.control /\t/' > ${INSTALLED_PACKAGES}
+		if [ "$SAVE_INSTALLED_PKGS" -eq 1 ]; then
+			echo "${INSTALLED_PACKAGES}" >> "$CONFFILES"
+			# Format: pkg-name<TAB>{rom,overlay,unkown}
+			# rom is used for pkgs in /rom, even if updated later
+			find /usr/lib/opkg/info -name "*.control" \( \
+				\( -exec test -f /rom/{} \; -exec echo {} rom \; \) -o \
+				\( -exec test -f /overlay/upper/{} \; -exec echo {} overlay \; \) -o \
+				\( -exec echo {} unknown \; \) \
+					\) | sed -e 's,.*/,,;s/\.control /\t/' > ${INSTALLED_PACKAGES}
+		fi
+
+		if [ "$SAVE_SERVICE_STATUS" -eq 1 ]; then
+			echo "${SERVICE_STATUS}" >> "$CONFFILES"
+			# Format: /etc/init.d/servicename {enable,disable}
+			rm -f ${SERVICE_STATUS}
+			for service in /etc/init.d/* ; do \
+				${service} enabled && \
+					echo >> ${SERVICE_STATUS} "$service" "enable" || \
+					echo >> ${SERVICE_STATUS} "$service" "disable" \
+				; \
+			done
+		fi
 	fi
 
 	v "Saving config files..."

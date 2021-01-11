@@ -1,0 +1,3 @@
+SERVICE_STATUS=/etc/backup/service_status.txt
+
+[ -e ${SERVICE_STATUS} ] && . ${SERVICE_STATUS}
