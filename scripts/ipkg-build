@@ -7,6 +7,7 @@
 #   Updated to work on Familiar Pre0.7rc1, with busybox tar.
 #   Note it Requires: binutils-ar (since the busybox ar can't create)
 #   For UID debugging it needs a better "find".
+# format code via `shfmt -sr -w ipkg-build`
 set -e
 
 version=1.0
@@ -46,7 +47,7 @@ pkg_appears_sane() {
 
 	if echo "$pkg" | grep '[^a-zA-Z0-9_.+-]'; then
 		echo "*** Error: Package name $name contains illegal characters, (other than [a-z0-9.+-])" >&2
-		PKG_ERROR=1;
+		PKG_ERROR=1
 	fi
 
 	if [ -f "$CONTROL/conffiles" ]; then
@@ -71,14 +72,14 @@ resolve_file_mode_id() {
 	local var=$1 type=$2 name=$3 id
 
 	case "$name" in
-		root)
-			id=0
+	root)
+		id=0
 		;;
-		*[!0-9]*)
-			id=$(sed -ne "s#^$type $name \\([0-9]\\+\\)\\b.*\$#\\1#p" "$TOPDIR/tmp/.packageusergroup" 2>/dev/null)
+	*[!0-9]*)
+		id=$(sed -ne "s#^$type $name \\([0-9]\\+\\)\\b.*\$#\\1#p" "$TOPDIR/tmp/.packageusergroup" 2> /dev/null)
 		;;
-		*)
-			id=$name
+	*)
+		id=$name
 		;;
 	esac
 
@@ -93,16 +94,16 @@ resolve_file_mode_id() {
 file_modes=""
 usage="Usage: $0 [-v] [-h] [-m] <pkg_directory> [<destination_directory>]"
 while getopts "hvm:" opt; do
-    case $opt in
-	v ) echo "$version"
-	    exit 0
-	    ;;
-	h ) 	echo "$usage"  >&2 ;;
-	m )	file_modes=$OPTARG ;;
-	\? ) 	echo "$usage"  >&2
+	case $opt in
+	v)
+		echo "$version"
+		exit 0
+		;;
+	h) echo "$usage" >&2 ;;
+	m) file_modes=$OPTARG ;;
+	\?) echo "$usage" >&2 ;;
 	esac
 done
-
 
 shift $((OPTIND - 1))
 
@@ -114,8 +115,8 @@ case $# in
 	;;
 2)
 	dest_dir=$2
-	if [ "$dest_dir" = "." ] || [ "$dest_dir" = "./" ] ; then
-	    dest_dir=$PWD
+	if [ "$dest_dir" = "." ] || [ "$dest_dir" = "./" ]; then
+		dest_dir=$PWD
 	fi
 	;;
 *)
@@ -152,18 +153,21 @@ echo $CONTROL > "$tmp_dir"/tarX
 cd "$pkg_dir"
 for file_mode in $file_modes; do
 	case $file_mode in
-	/*:*:*:*)
-	    ;;
+	/*:*:*:*) ;;
+
 	*)
-	    echo "ERROR: file modes must use absolute path and contain user:group:mode"
-	    echo "$file_mode"
-	    exit 1
-	    ;;
+		echo "ERROR: file modes must use absolute path and contain user:group:mode"
+		echo "$file_mode"
+		exit 1
+		;;
 	esac
 
-	mode=${file_mode##*:}; path=${file_mode%:*}
-	group=${path##*:};     path=${path%:*}
-	user=${path##*:};      path=${path%:*}
+	mode=${file_mode##*:}
+	path=${file_mode%:*}
+	group=${path##*:}
+	path=${path%:*}
+	user=${path##*:}
+	path=${path%:*}
 
 	if ! resolve_file_mode_id uid user "$user"; then
 		echo "ERROR: unable to resolve uid of $user" >&2
@@ -176,7 +180,7 @@ for file_mode in $file_modes; do
 	fi
 
 	chown "$uid:$gid" "$pkg_dir/$path"
-	chmod  "$mode" "$pkg_dir/$path"
+	chmod "$mode" "$pkg_dir/$path"
 done
 $TAR -X "$tmp_dir"/tarX --format=gnu --sort=name -cpf - --mtime="$TIMESTAMP" . | gzip -n - > "$tmp_dir"/data.tar.gz
 
@@ -184,14 +188,14 @@ installed_size=$(stat -c "%s" "$tmp_dir"/data.tar.gz)
 sed -i -e "s/^Installed-Size: .*/Installed-Size: $installed_size/" \
 	"$pkg_dir"/$CONTROL/control
 
-( cd "$pkg_dir"/$CONTROL && $TAR --format=gnu --sort=name -cf -  --mtime="$TIMESTAMP" . | gzip -n - > "$tmp_dir"/control.tar.gz )
+(cd "$pkg_dir"/$CONTROL && $TAR --format=gnu --sort=name -cf - --mtime="$TIMESTAMP" . | gzip -n - > "$tmp_dir"/control.tar.gz)
 rm "$tmp_dir"/tarX
 
 echo "2.0" > "$tmp_dir"/debian-binary
 
 pkg_file=$dest_dir/${pkg}_${version}_${arch}.ipk
 rm -f "$pkg_file"
-( cd "$tmp_dir" && $TAR --format=gnu --sort=name -cf -  --mtime="$TIMESTAMP" ./debian-binary ./data.tar.gz ./control.tar.gz | gzip -n - > "$pkg_file" )
+(cd "$tmp_dir" && $TAR --format=gnu --sort=name -cf - --mtime="$TIMESTAMP" ./debian-binary ./data.tar.gz ./control.tar.gz | gzip -n - > "$pkg_file")
 
 rm "$tmp_dir"/debian-binary "$tmp_dir"/data.tar.gz "$tmp_dir"/control.tar.gz
 rmdir "$tmp_dir"
