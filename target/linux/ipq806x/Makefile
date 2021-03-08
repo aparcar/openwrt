@@ -14,7 +14,6 @@ KERNEL_PATCHVER:=5.4
 
 KERNELNAME:=zImage Image dtbs
 
-include $(INCLUDE_DIR)/target.mk
 DEFAULT_PACKAGES += \
 	kmod-leds-gpio kmod-gpio-button-hotplug swconfig \
 	kmod-ata-ahci kmod-ata-ahci-platform \
@@ -22,5 +21,7 @@ DEFAULT_PACKAGES += \
 	kmod-phy-qcom-ipq806x-usb kmod-usb3 kmod-usb-dwc3-qcom \
 	kmod-ath10k-ct wpad-basic-wolfssl \
 	uboot-envtools
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

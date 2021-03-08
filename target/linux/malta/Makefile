@@ -12,8 +12,8 @@ FEATURES:=cpiogz ext4 ramdisk squashfs targz
 
 KERNEL_PATCHVER:=5.4
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += wpad-basic-wolfssl kmod-mac80211-hwsim kmod-pcnet32 mkf2fs e2fsprogs
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

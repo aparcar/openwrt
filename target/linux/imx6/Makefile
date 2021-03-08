@@ -14,10 +14,10 @@ CPU_SUBTYPE:=neon
 KERNEL_PATCHVER:=5.4
 KERNEL_TESTING_PATCHVER:=5.10
 
+DEFAULT_PACKAGES += uboot-envtools mkf2fs e2fsprogs blkid
+
 include $(INCLUDE_DIR)/target.mk
 
 KERNELNAME:=zImage dtbs
-
-DEFAULT_PACKAGES += uboot-envtools mkf2fs e2fsprogs blkid
 
 $(eval $(call BuildTarget))

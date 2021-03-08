@@ -17,8 +17,8 @@ define Target/Description
 	Build firmware images for Cavium Networks Octeon-based boards.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += mkf2fs e2fsprogs
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

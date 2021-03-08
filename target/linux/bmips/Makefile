@@ -16,8 +16,8 @@ define Target/Description
 	BCM63xx DSL chips and BCM7xxx set-top box chips.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

@@ -13,12 +13,12 @@ CPU_SUBTYPE:=24kf
 
 KERNEL_PATCHVER:=5.4
 
-include $(INCLUDE_DIR)/target.mk
-
-KERNELNAME:=vmlinux dtbs
-
 DEFAULT_PACKAGES += \
 	kmod-gpio-button-hotplug \
 	uboot-envtools
+
+include $(INCLUDE_DIR)/target.mk
+
+KERNELNAME:=vmlinux dtbs
 
 $(eval $(call BuildTarget))

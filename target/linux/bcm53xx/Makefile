@@ -18,13 +18,13 @@ define Target/Description
 	Build firmware images for Broadcom based BCM47xx/53xx routers with ARM CPU, *not* MIPS.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
-KERNELNAME:=zImage dtbs
-
 DEFAULT_PACKAGES += swconfig nvram \
 	osafeloader oseama otrx \
 	kmod-gpio-button-hotplug \
 	kmod-leds-gpio
+
+include $(INCLUDE_DIR)/target.mk
+
+KERNELNAME:=zImage dtbs
 
 $(eval $(call BuildTarget))

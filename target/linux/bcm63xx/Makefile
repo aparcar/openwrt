@@ -19,8 +19,8 @@ define Target/Description
 	(e.g. Inventel Livebox, Siemens SE515, Neufbox 4)
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += swconfig kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

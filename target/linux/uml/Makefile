@@ -21,11 +21,11 @@ FEATURES:=squashfs ext4 audio source-only
 
 KERNEL_PATCHVER:=5.4
 
+DEFAULT_PACKAGES += wpad-basic-wolfssl kmod-mac80211-hwsim mkf2fs e2fsprogs
+
 include $(INCLUDE_DIR)/target.mk
 
 LINUX_TARGET_CONFIG:=$(CURDIR)/config/$(ARCH)
-
-DEFAULT_PACKAGES += wpad-basic-wolfssl kmod-mac80211-hwsim mkf2fs e2fsprogs
 
 endif
 

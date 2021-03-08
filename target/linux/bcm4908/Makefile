@@ -16,10 +16,10 @@ define Target/Description
 	Build firmware images for Broadcom BCM4908 SoC family routers.
 endef
 
+DEFAULT_PACKAGES += kmod-usb-ohci kmod-usb2 kmod-usb3
+
 include $(INCLUDE_DIR)/target.mk
 
 KERNELNAME:=Image dtbs
-
-DEFAULT_PACKAGES += kmod-usb-ohci kmod-usb2 kmod-usb3
 
 $(eval $(call BuildTarget))

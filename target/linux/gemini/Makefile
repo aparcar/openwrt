@@ -18,12 +18,12 @@ endef
 
 KERNELNAME:=zImage dtbs
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += \
 	kmod-usb-fotg210 \
 	kmod-usb-ledtrig-usbport \
 	kmod-leds-gpio \
 	kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

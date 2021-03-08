@@ -22,9 +22,9 @@ KERNELNAME:=zImage dtbs
 # H3: quad Cortex-A7
 # R40: quad Cortex-A7
 
-include $(INCLUDE_DIR)/target.mk
+DEFAULT_PACKAGES += uboot-envtools \
+	partx-utils mkf2fs e2fsprogs
 
-DEFAULT_PACKAGES += uboot-envtools
-DEFAULT_PACKAGES += partx-utils mkf2fs e2fsprogs
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

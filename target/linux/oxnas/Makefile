@@ -10,11 +10,11 @@ DEVICE_TYPE:=nas
 KERNEL_PATCHVER:=5.4
 KERNEL_TESTING_PATCHVER:=5.10
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += \
 	kmod-button-hotplug kmod-input-gpio-keys-polled \
 	kmod-leds-gpio uboot-envtools
+
+include $(INCLUDE_DIR)/target.mk
 
 KERNELNAME:=zImage dtbs
 

@@ -17,9 +17,9 @@ define Target/Description
 	Build firmware images for Broadcom based BCM47xx/53xx routers with MIPS CPU, *not* ARM.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += swconfig nvram otrx \
 	kmod-leds-gpio kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

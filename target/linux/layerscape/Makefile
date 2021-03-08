@@ -14,9 +14,9 @@ define Target/Description
 	Build firmware images for NXP Layerscape based boards.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += kmod-usb3 kmod-usb-dwc3 kmod-usb-storage \
   mkf2fs e2fsprogs partx-utils
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

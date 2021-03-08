@@ -14,9 +14,9 @@ define Target/Description
 	Build firmware image for Rockchip SoC devices.
 endef
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += uboot-envtools partx-utils e2fsprogs mkf2fs kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 KERNELNAME:=Image dtbs
 

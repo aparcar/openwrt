@@ -16,10 +16,10 @@ KERNEL_TESTING_PATCHVER:=5.10
 
 KERNELNAME:=zImage
 
-include $(INCLUDE_DIR)/target.mk
-
 DEFAULT_PACKAGES += \
 	kmod-input-core kmod-input-gpio-keys kmod-button-hotplug \
 	kmod-leds-gpio swconfig kmod-ath9k wpad-basic-wolfssl kmod-usb2
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))

@@ -14,11 +14,11 @@ CPU_SUBTYPE := vfpv3-d16
 KERNEL_PATCHVER := 5.4
 KERNEL_TESTING_PATCHVER := 5.4
 
+DEFAULT_PACKAGES += e2fsprogs mkf2fs partx-utils
+
 include $(INCLUDE_DIR)/target.mk
 
 KERNELNAME := zImage dtbs
-
-DEFAULT_PACKAGES += e2fsprogs mkf2fs partx-utils
 
 define Target/Description
 	Build firmware image for NVIDIA Tegra SoC devices.

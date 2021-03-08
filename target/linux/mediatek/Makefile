@@ -11,8 +11,9 @@ FEATURES:=squashfs nand separate_ramdisk fpu
 KERNEL_PATCHVER:=5.4
 KERNEL_TESTING_PATCHVER:=5.10
 
-include $(INCLUDE_DIR)/target.mk
 DEFAULT_PACKAGES += \
 	kmod-leds-gpio kmod-gpio-button-hotplug
+
+include $(INCLUDE_DIR)/target.mk
 
 $(eval $(call BuildTarget))
