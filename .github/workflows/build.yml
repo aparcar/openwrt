@@ -17,7 +17,7 @@ jobs:
       id: find_targets
       run: |
         TARGETS="$(perl ./scripts/dump-target-info.pl targets 2>/dev/null | awk '{ print $1 }')"
-        JSON='{"targets":['
+        JSON='{"config": ["default"], "targets":['
         FIRST=1
         for TARGET in $TARGETS; do
           [[ $FIRST -ne 1 ]] && JSON="$JSON"','
@@ -31,6 +31,7 @@ jobs:
         echo -e "\n---- targets ----\n"
 
         echo "targets=$JSON" >> "$GITHUB_ENV"
+        echo "::set-output name=targets::$JSON"
 
   build:
     name: Build ${{ matrix.config }}/${{ matrix.targets }}
@@ -38,17 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: False
-      matrix:
-        targets:
-          - "x86/64"
-          - "mediatek/mt7622"
-        config:
-          - "default"
-          - "selinux"
-          - "nls"
-          - "gcc10"
-
-      #matrix: ${{fromJson(needs.determine_targets.outputs.targets)}}
+      matrix: ${{fromJson(needs.determine_targets.outputs.targets)}}
 
     steps:
     - name: Checkout
