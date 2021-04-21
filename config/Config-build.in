@@ -386,4 +386,12 @@ menu "Global build settings"
 
 	endchoice
 
+	config APPARMOR
+		bool "Enable AppArmor"
+		select KERNEL_SECURITY_APPARMOR
+		select PACKAGE_apparmor
+		help
+		  This option enables the AppArmor security module and
+		  selects AppArmor userspace tools.
+
 endmenu
