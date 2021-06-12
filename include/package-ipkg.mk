@@ -6,21 +6,18 @@ ifndef DUMP
   include $(INCLUDE_DIR)/feeds.mk
 endif
 
-IPKG_REMOVE:= \
-  $(SCRIPT_DIR)/ipkg-remove
-
-IPKG_STATE_DIR:=$(TARGET_DIR)/usr/lib/opkg
-
 # Generates a make statement to return a wildcard for candidate ipkg files
 # 1: package name
 define gen_ipkg_wildcard
-  $(1)$$(if $$(filter -%,$$(ABIV_$(1))),,[^a-z-])*
+  $(1)*
 endef
 
 # 1: package name
 # 2: candidate ipk files
 define remove_ipkg_files
-  $(if $(strip $(2)),$(IPKG_REMOVE) $(1) $(2))
+for pkg in $(2); do \
+  $(STAGING_DIR_HOSTPKG)/bin/apk adbdump "$$pkg" | grep "^  name: $(1)" && rm "$$pkg" || true; \
+done
 endef
 
 # 1: package name
@@ -102,7 +99,9 @@ ifeq ($(DUMP),)
     ABIV_$(1):=$(call FormatABISuffix,$(1),$(ABI_VERSION))
     PDIR_$(1):=$(call FeedPackageDir,$(1))
     IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
+    APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))-$(VERSION).apk
     IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
+    ADIR_$(1):=$(PKG_BUILD_DIR)/apk-$(PKGARCH)/$(1)
     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
 
     TARGET_VARIANT:=$$(if $(ALL_VARIANTS),$$(if $$(VARIANT),$$(filter-out *,$$(VARIANT)),$(firstword $(ALL_VARIANTS))))
@@ -199,9 +198,9 @@ $(_endef)
     $$(IPKG_$(1)) : export PATH=$$(TARGET_PATH_PKG)
     $$(IPKG_$(1)) : export PKG_SOURCE_DATE_EPOCH:=$(PKG_SOURCE_DATE_EPOCH)
     $(PKG_INFO_DIR)/$(1).provides $$(IPKG_$(1)): $(STAMP_BUILT) $(INCLUDE_DIR)/package-ipkg.mk
-	@rm -rf $$(IDIR_$(1)); \
-		$$(call remove_ipkg_files,$(1),$$(call opkg_package_files,$(call gen_ipkg_wildcard,$(1))))
-	mkdir -p $(PACKAGE_DIR) $$(IDIR_$(1))/CONTROL $(PKG_INFO_DIR)
+	rm -rf $$(IDIR_$(1)); \
+		$$(call remove_ipkg_files,$(1),$$(call apk_package_files,$(call gen_ipkg_wildcard,$(1))))
+	mkdir -p $(PACKAGE_DIR) $$(IDIR_$(1)) $(PKG_INFO_DIR)
 	$(call Package/$(1)/install,$$(IDIR_$(1)))
 	$(if $(Package/$(1)/install-overlay),mkdir -p $(PACKAGE_DIR) $$(IDIR_$(1))/rootfs-overlay)
 	$(call Package/$(1)/install-overlay,$$(IDIR_$(1))/rootfs-overlay)
@@ -227,28 +226,6 @@ $(_endef)
 		) || true \
 	)
     endif
-	(cd $$(IDIR_$(1))/CONTROL; \
-		( \
-			echo "$$$$CONTROL"; \
-			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
-		) > control; \
-		chmod 644 control; \
-		( \
-			echo "#!/bin/sh"; \
-			echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
-			echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-			echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
-			echo "default_postinst \$$$$0 \$$$$@"; \
-		) > postinst; \
-		( \
-			echo "#!/bin/sh"; \
-			echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-			echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
-			echo "default_prerm \$$$$0 \$$$$@"; \
-		) > prerm; \
-		chmod 0755 postinst prerm; \
-		$($(1)_COMMANDS) \
-	)
 
     ifneq ($$(KEEP_$(1)),)
 		@( \
@@ -263,12 +240,57 @@ $(_endef)
 		)
     endif
 
-	$(INSTALL_DIR) $$(PDIR_$(1))
-	$(FAKEROOT) $(SCRIPT_DIR)/ipkg-build -m "$(FILE_MODES)" $$(IDIR_$(1)) $$(PDIR_$(1))
-	@[ -f $$(IPKG_$(1)) ]
+	$(INSTALL_DIR) $$(PDIR_$(1))/tmp
+	mkdir -p $$(ADIR_$(1))/
+	mkdir -p $$(IDIR_$(1))/tmp/
+
+	(cd $$(ADIR_$(1)); $($(1)_COMMANDS))
+
+	( \
+		echo "#!/bin/sh"; \
+		echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
+		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
+		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo 'export root="$$$${IPKG_INSTROOT}"'; \
+		echo 'export pkgname="$(1)"'; \
+		echo "add_group_and_user"; \
+		[ ! -f $$(ADIR_$(1))/postinst-pkg ] || cat "$$(ADIR_$(1))/postinst-pkg"; \
+		echo "default_postinst"; \
+	) > $$(ADIR_$(1))/post-install;
+
+	( \
+		echo "#!/bin/sh"; \
+		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
+		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo 'export root="$$$${IPKG_INSTROOT}"'; \
+		echo 'export pkgname="$(1)"'; \
+		[ ! -f $$(ADIR_$(1))/prerm-pkg ] || cat "$$(ADIR_$(1))/prerm-pkg"; \
+		echo "default_prerm"; \
+	) > $$(ADIR_$(1))/pre-deinstall;
+
+	if [ -n "$$(USERID)" ]; then echo $$(USERID) > $$(IDIR_$(1))/tmp/$(1).rusers; fi;
+	(cd $$(IDIR_$(1)) && find . > $$(IDIR_$(1))/tmp/$(1).list)
+	#if [ -f $$(IDIR_$(1))/conffiles ]; then mv $$(IDIR_$(1))/conffiles t$$(IDIR_$(1))/mp/$(1).conffiles; fi; \
+
+	$(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk mkpkg \
+	  --info "name:$(1)$$(ABIV_$(1))" \
+	  --info "version:$(VERSION)" \
+	  --info "description:$()" \
+	  --info "arch:$(PKGARCH)" \
+	  --info "license:$(LICENSE)" \
+	  --info "origin:$(SOURCE)" \
+	  --info "maintainer:$(MAINTAINER)" \
+	  --script "post-install:$$(ADIR_$(1))/post-install" \
+	  --script "pre-deinstall:$$(ADIR_$(1))/pre-deinstall" \
+	  $$(foreach dep,$$(filter-out,libc,$$(Package/$(1)/DEPENDS)),--info "depends:$$(subst $$(comma),,$$(dep))") \
+	  --files "$$(IDIR_$(1))" \
+	  --output "$$(APK_$(1))" \
+	  --sign "$(BUILD_KEY_APK_SEC)"
+
+#	@[ -f $$(IPKG_$(1)) ]
 
     $(1)-clean:
-	$$(call remove_ipkg_files,$(1),$$(call opkg_package_files,$(call gen_ipkg_wildcard,$(1))))
+	$$(call remove_ipkg_files,$(1),$$(call apk_package_files,$(call gen_ipkg_wildcard,$(1))))
 
     clean: $(1)-clean
 

@@ -178,15 +178,6 @@ config_list_foreach() {
 }
 
 default_prerm() {
-	local root="${IPKG_INSTROOT}"
-	local pkgname="$(basename ${1%.*})"
-	local ret=0
-
-	if [ -f "$root/usr/lib/opkg/info/${pkgname}.prerm-pkg" ]; then
-		( . "$root/usr/lib/opkg/info/${pkgname}.prerm-pkg" )
-		ret=$?
-	fi
-
 	local shell="$(command -v bash)"
 	for i in $(grep -s "^/etc/init.d/" "$root/usr/lib/opkg/info/${pkgname}.list"); do
 		if [ -n "$root" ]; then
@@ -199,12 +190,13 @@ default_prerm() {
 		fi
 	done
 
-	return $ret
+	return 0
 }
 
 add_group_and_user() {
-	local pkgname="$1"
-	local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
+	if [ -f "$root/tmp/${pkgname}.rusers" ]; then
+		local rusers="$(cat $root/tmp/${pkgname}.rusers)"
+	fi
 
 	if [ -n "$rusers" ]; then
 		local tuple oIFS="$IFS"
@@ -255,17 +247,7 @@ add_group_and_user() {
 }
 
 default_postinst() {
-	local root="${IPKG_INSTROOT}"
-	local pkgname="$(basename ${1%.*})"
-	local filelist="/usr/lib/opkg/info/${pkgname}.list"
-	local ret=0
-
-	add_group_and_user "${pkgname}"
-
-	if [ -f "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" ]; then
-		( . "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" )
-		ret=$?
-	fi
+    local filelist="/tmp/${pkgname}.list"
 
 	if [ -d "$root/rootfs-overlay" ]; then
 		cp -R $root/rootfs-overlay/. $root/
@@ -304,7 +286,7 @@ default_postinst() {
 		fi
 	done
 
-	return $ret
+	return 0
 }
 
 include() {

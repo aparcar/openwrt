@@ -14,9 +14,9 @@ ifneq ($(CONFIG_PER_FEED_REPO),)
   PACKAGE_SUBDIRS += $(foreach FEED,$(FEEDS_AVAILABLE),$(OUTPUT_DIR)/packages/$(ARCH_PACKAGES)/$(FEED))
 endif
 
-opkg_package_files = $(wildcard \
+apk_package_files = $(wildcard \
 	$(foreach dir,$(PACKAGE_SUBDIRS), \
-	  $(foreach pkg,$(1), $(dir)/$(pkg)_*.ipk)))
+	  $(foreach pkg,$(1), $(dir)/$(pkg)-*.apk)))
 
 # 1: package name
 define FeedPackageDir
@@ -28,7 +28,7 @@ $(strip $(if $(CONFIG_PER_FEED_REPO), \
 endef
 
 # 1: destination file
-define FeedSourcesAppend
+define FeedSourcesAppendIpkg
 ( \
   echo 'src/gz %d_core %U/targets/%S/packages'; \
   $(strip $(if $(CONFIG_PER_FEED_REPO), \
@@ -38,6 +38,20 @@ define FeedSourcesAppend
 	$(foreach feed,$(FEEDS_AVAILABLE), \
 		$(if $(CONFIG_FEED_$(feed)), \
 			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )src/gz %d_$(feed) %U/packages/%A/$(feed)';)))) \
+) >> $(1)
+endef
+
+# 1: destination file
+define FeedSourcesAppendApk
+( \
+  echo '%U/targets/%S/packages'; \
+  $(strip $(if $(CONFIG_PER_FEED_REPO), \
+	echo '%U/packages/%A/base'; \
+	$(if $(filter %SNAPSHOT-y,$(VERSION_NUMBER)-$(CONFIG_BUILDBOT)), \
+		echo '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)';) \
+	$(foreach feed,$(FEEDS_AVAILABLE), \
+		$(if $(CONFIG_FEED_$(feed)), \
+			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )%U/packages/%A/$(feed)';)))) \
 ) >> $(1)
 endef
 

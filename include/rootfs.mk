@@ -43,6 +43,17 @@ opkg = \
 	--add-arch all:100 \
 	--add-arch $(if $(ARCH_PACKAGES),$(ARCH_PACKAGES),$(BOARD)):200
 
+apk = \
+  IPKG_INSTROOT=$(1) \
+  $(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk \
+	--root $(1) \
+	--keys-dir $(TOPDIR) \
+	--no-cache \
+	--no-logfile \
+	--force-no-chroot \
+	--preserve-env \
+	--no-network
+
 TARGET_DIR_ORIG := $(TARGET_ROOTFS_DIR)/root.orig-$(BOARD)
 
 ifdef CONFIG_CLEAN_IPKG
@@ -68,14 +79,6 @@ define prepare_rootfs
 	@mkdir -p $(1)/var/lock
 	@( \
 		cd $(1); \
-		for script in ./usr/lib/opkg/info/*.postinst; do \
-			IPKG_INSTROOT=$(1) $$(command -v bash) $$script; \
-			ret=$$?; \
-			if [ $$ret -ne 0 ]; then \
-				echo "postinst script $$script has failed with exit code $$ret" >&2; \
-				exit 1; \
-			fi; \
-		done; \
 		for script in ./etc/init.d/*; do \
 			grep '#!/bin/sh /etc/rc.common' $$script >/dev/null || continue; \
 			if ! echo " $(3) " | grep -q " $$(basename $$script) "; then \
@@ -87,13 +90,11 @@ define prepare_rootfs
 			fi; \
 		done || true \
 	)
-	$(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status)
 	@-find $(1) -name CVS -o -name .svn -o -name .git -o -name '.#*' | $(XARGS) rm -rf
+	@-find $(1)/var/cache/apk/ -name '*.apk' -delete
 	rm -rf \
 		$(1)/boot \
 		$(1)/tmp/* \
-		$(1)/usr/lib/opkg/info/*.postinst* \
-		$(1)/usr/lib/opkg/lists/* \
 		$(1)/var/lock/*.lock
 	$(call clean_ipkg,$(1))
 	$(call mklibs,$(1))
