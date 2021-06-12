@@ -1,0 +1,33 @@
+From 243552a2d3a7e75ff95d2ef3269428bc61667dda Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 7 Jan 2022 18:11:33 -0600
+Subject: [PATCH 6/9] applet: support building with an uncompressed help
+ database
+
+some operating systems, such as OpenWrt, use squashfs images for the filesystem,
+making the help database compression pointless
+
+ref #10804
+---
+ src/applet.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/applet.c b/src/applet.c
+index 3b274d7..1c4ad3d 100644
+--- a/src/applet.c
++++ b/src/applet.c
+@@ -50,7 +50,11 @@ void apk_applet_help(struct apk_applet *applet, struct apk_out *out)
+ 	unsigned long len = sizeof buf;
+ 	int num = 0;
+ 
++#ifndef APK_UNCOMPRESSED_HELP
+ 	uncompress((unsigned char*) buf, &len, compressed_help, sizeof compressed_help);
++#else
++	memcpy(buf, compressed_help, sizeof buf);
++#endif
+ 	for (ptr = buf; *ptr && ptr < &buf[len]; ptr = msg + strlen(msg) + 1) {
+ 		msg = ptr + strlen(ptr) + 1;
+ 		if (is_group(applet, ptr)) {
+-- 
+2.32.0
+

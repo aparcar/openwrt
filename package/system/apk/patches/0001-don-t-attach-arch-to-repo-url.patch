@@ -1,0 +1,83 @@
+From 4daecad7fa3f672a528af14e9a2a7c42830089cd Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Mon, 13 Dec 2021 18:57:04 +0100
+Subject: [PATCH 1/9] don't attach arch to repo url
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ src/database.c | 22 +++++++++-------------
+ 1 file changed, 9 insertions(+), 13 deletions(-)
+
+diff --git a/src/database.c b/src/database.c
+index f5d3f0f..1294ad0 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -590,24 +590,20 @@ int apk_repo_format_cache_index(apk_blob_t to, struct apk_repository *repo)
+ 	return 0;
+ }
+ 
+-int apk_repo_format_real_url(apk_blob_t *default_arch, struct apk_repository *repo,
++int apk_repo_format_real_url(struct apk_repository *repo,
+ 			     struct apk_package *pkg, char *buf, size_t len,
+ 			     struct apk_url_print *urlp)
+ {
+-	apk_blob_t arch;
+ 	int r;
+ 
+-	if (pkg && pkg->arch) arch = *pkg->arch;
+-	else arch = *default_arch;
+-
+ 	if (pkg != NULL)
+-		r = snprintf(buf, len, "%s%s" BLOB_FMT "/"  PKG_FILE_FMT,
++		r = snprintf(buf, len, "%s%s/"  PKG_FILE_FMT,
+ 			     repo->url, repo->url[strlen(repo->url)-1] == '/' ? "" : "/",
+-			     BLOB_PRINTF(arch), PKG_FILE_PRINTF(pkg));
++			     PKG_FILE_PRINTF(pkg));
+ 	else
+-		r = snprintf(buf, len, "%s%s" BLOB_FMT "/%s",
++		r = snprintf(buf, len, "%s%s/%s",
+ 			     repo->url, repo->url[strlen(repo->url)-1] == '/' ? "" : "/",
+-			     BLOB_PRINTF(arch), apkindex_tar_gz);
++			     apkindex_tar_gz);
+ 	if (r >= len)
+ 		return -ENOBUFS;
+ 
+@@ -623,7 +619,7 @@ int apk_repo_format_item(struct apk_database *db, struct apk_repository *repo, s
+ 		return apk_pkg_format_cache_pkg(APK_BLOB_PTR_LEN(buf, len), pkg);
+ 	} else {
+ 		*fd = AT_FDCWD;
+-		return apk_repo_format_real_url(db->arch, repo, pkg, buf, len, 0);
++		return apk_repo_format_real_url(repo, pkg, buf, len, 0);
+ 	}
+ }
+ 
+@@ -648,7 +644,7 @@ int apk_cache_download(struct apk_database *db, struct apk_repository *repo,
+ 		r = apk_repo_format_cache_index(APK_BLOB_BUF(cacheitem), repo);
+ 	if (r < 0) return r;
+ 
+-	r = apk_repo_format_real_url(db->arch, repo, pkg, url, sizeof(url), &urlp);
++	r = apk_repo_format_real_url(repo, pkg, url, sizeof(url), &urlp);
+ 	if (r < 0) return r;
+ 
+ 	if (autoupdate && !(db->ctx->force & APK_FORCE_REFRESH)) {
+@@ -2299,7 +2295,7 @@ int apk_db_add_repository(apk_database_t _db, apk_blob_t _repository)
+ 		if (!(db->ctx->flags & APK_NO_NETWORK))
+ 			db->available_repos |= BIT(repo_num);
+ 		if (db->ctx->flags & APK_NO_CACHE) {
+-			r = apk_repo_format_real_url(db->arch, repo, NULL, buf, sizeof(buf), &urlp);
++			r = apk_repo_format_real_url(repo, NULL, buf, sizeof(buf), &urlp);
+ 			if (r == 0) apk_msg(out, "fetch " URL_FMT, URL_PRINTF(urlp));
+ 		} else {
+ 			if (db->autoupdate) apk_repository_update(db, repo);
+@@ -2308,7 +2304,7 @@ int apk_db_add_repository(apk_database_t _db, apk_blob_t _repository)
+ 	} else {
+ 		db->local_repos |= BIT(repo_num);
+ 		db->available_repos |= BIT(repo_num);
+-		r = apk_repo_format_real_url(db->arch, repo, NULL, buf, sizeof(buf), &urlp);
++		r = apk_repo_format_real_url(repo, NULL, buf, sizeof(buf), &urlp);
+ 	}
+ 	if (r == 0) {
+ 		r = load_index(db, apk_istream_from_fd_url(db->cache_fd, buf, apk_db_url_since(db, 0)), repo_num);
+-- 
+2.32.0
+

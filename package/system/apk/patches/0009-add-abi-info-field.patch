@@ -1,0 +1,52 @@
+From 4b8f7d3889e3eb88aa61dd8b906168b855e29f88 Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Mon, 10 Jan 2022 08:30:35 +0000
+Subject: [PATCH 9/9] add `abi` info field
+
+The ABI field helps to maintain compatibility between major release
+bumps. Since it's usually attached to the filename it should be included
+in the metadata to know the actually installed package.
+
+To illustrate,, libc5 is really libc. If a new firmware is created it
+should contain libc, not libc5 specifically since it could have moved on
+to libc6 etc.
+
+The value should be a string since some ABI versions contain dashes and
+dots, i.e. openwssl1.1 got the ABI version 1.1.
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ src/apk_adb.c | 2 ++
+ src/apk_adb.h | 3 ++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/apk_adb.c b/src/apk_adb.c
+index c7fbdde..881895c 100644
+--- a/src/apk_adb.c
++++ b/src/apk_adb.c
+@@ -405,6 +405,8 @@ const struct adb_object_schema schema_pkginfo = {
+ 		ADB_FIELD(ADBI_PI_REPLACES,	"replaces",	schema_dependency_array),
+ 		ADB_FIELD(ADBI_PI_INSTALL_IF,	"install-if",	schema_dependency_array),
+ 		ADB_FIELD(ADBI_PI_RECOMMENDS,	"recommends",	schema_dependency_array),
++		ADB_FIELD(ADBI_PI_ABI,	"abi",	scalar_string),
++
+ 	},
+ };
+ 
+diff --git a/src/apk_adb.h b/src/apk_adb.h
+index 68bc92d..5cacc16 100644
+--- a/src/apk_adb.h
++++ b/src/apk_adb.h
+@@ -31,7 +31,8 @@
+ #define ADBI_PI_REPLACES	0x11
+ #define ADBI_PI_INSTALL_IF	0x12
+ #define ADBI_PI_RECOMMENDS	0x13
+-#define ADBI_PI_MAX		0x14
++#define ADBI_PI_ABI		0x14
++#define ADBI_PI_MAX		0x15
+ 
+ /* ACL entries */
+ #define ADBI_ACL_MODE		0x01
+-- 
+2.32.0
+

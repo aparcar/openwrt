@@ -1,0 +1,29 @@
+From b03ba7860f434cb02cdec5cd76f248cd41683946 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Fri, 17 Dec 2021 19:09:42 +0000
+Subject: [PATCH 4/9] context: fix 'uvol' default path
+
+'uvol' is installed to /usr/sbin by default. Assume that path if not
+set by APK_UVOL environment variable.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ src/context.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/context.c b/src/context.c
+index 3a806db..400e09b 100644
+--- a/src/context.c
++++ b/src/context.c
+@@ -50,7 +50,7 @@ int apk_ctx_prepare(struct apk_ctx *ac)
+ 		ac->flags |= APK_NO_CHROOT;
+ 
+ 		// Check uvol availability
+-		ac->uvol = getenv("APK_UVOL") ?: "/usr/bin/uvol";
++		ac->uvol = getenv("APK_UVOL") ?: "/usr/sbin/uvol";
+ 		if (access(ac->uvol, X_OK) != 0)
+ 			ac->uvol = ERR_PTR(-APKE_UVOL_NOT_AVAILABLE);
+ 	} else {
+-- 
+2.32.0
+

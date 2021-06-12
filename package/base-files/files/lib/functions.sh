@@ -178,17 +178,10 @@ config_list_foreach() {
 }
 
 default_prerm() {
-	local root="${IPKG_INSTROOT}"
-	local pkgname="$(basename ${1%.*})"
-	local ret=0
-
-	if [ -f "$root/usr/lib/opkg/info/${pkgname}.prerm-pkg" ]; then
-		( . "$root/usr/lib/opkg/info/${pkgname}.prerm-pkg" )
-		ret=$?
-	fi
+	update_alternatives remove
 
 	local shell="$(command -v bash)"
-	for i in $(grep -s "^/etc/init.d/" "$root/usr/lib/opkg/info/${pkgname}.list"); do
+	for i in $(grep -s "^/etc/init.d/" "$root/lib/apk/packages/${pkgname}.list"); do
 		if [ -n "$root" ]; then
 			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" disable
 		else
@@ -199,12 +192,13 @@ default_prerm() {
 		fi
 	done
 
-	return $ret
+	return 0
 }
 
 add_group_and_user() {
-	local pkgname="$1"
-	local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
+	if [ -f "$root/lib/apk/packages/${pkgname}.rusers" ]; then
+		local rusers="$(cat $root/lib/apk/packages/${pkgname}.rusers)"
+	fi
 
 	if [ -n "$rusers" ]; then
 		local tuple oIFS="$IFS"
@@ -254,18 +248,58 @@ add_group_and_user() {
 	fi
 }
 
-default_postinst() {
-	local root="${IPKG_INSTROOT}"
-	local pkgname="$(basename ${1%.*})"
-	local filelist="/usr/lib/opkg/info/${pkgname}.list"
-	local ret=0
+update_alternatives() {
+	local action="$1"
 
-	add_group_and_user "${pkgname}"
+	if [ -f "$root/lib/apk/packages/${pkgname}.alternatives" ]; then
+		for pkg_alt in $(cat $root/lib/apk/packages/${pkgname}.alternatives); do
+			local best_prio=0;
+			local best_src="/bin/busybox";
+			pkg_prio=${pkg_alt%%:*};
+			pkg_target=${pkg_alt#*:};
+			pkg_target=${pkg_target%:*};
+			pkg_src=${pkg_alt##*:};
 
-	if [ -f "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" ]; then
-		( . "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" )
-		ret=$?
+			if [ -e "$root/$target" ]; then
+				for alts in $root/lib/apk/packages/*.alternatives; do
+                    for alt in $(cat $alts); do
+                        prio=${alt%%:*};
+                        target=${alt#*:};
+                        target=${target%:*};
+                        src=${alt##*:};
+
+                        if [ "$target" = "$pkg_target" ] && \
+                                [ "$src" != "$pkg_src" ] && \
+                                [ "$best_prio" -lt "$prio" ]; then
+                            best_prio=$prio;
+                            best_src=$src;
+                        fi
+                    done
+				done
+			fi
+
+			case "$action" in
+				install)
+					if [ "$best_prio" -lt "$pkg_prio" ]; then
+						ln -sf "$pkg_src" "$root/$pkg_target"
+                        echo "add alternative: $pkg_target -> $pkg_src"
+					fi
+				;;
+				remove)
+					if [ "$best_prio" -lt "$pkg_prio" ]; then
+						ln -sf "$best_src" "$root/$pkg_target"
+                        echo "add alternative: $pkg_target -> $best_src"
+					fi
+				;;
+			esac
+		done
 	fi
+}
+
+default_postinst() {
+	local filelist="$root/lib/apk/packages/${pkgname}.list"
+
+	update_alternatives install
 
 	if [ -d "$root/rootfs-overlay" ]; then
 		cp -R $root/rootfs-overlay/. $root/
@@ -304,7 +338,7 @@ default_postinst() {
 		fi
 	done
 
-	return $ret
+	return 0
 }
 
 include() {
