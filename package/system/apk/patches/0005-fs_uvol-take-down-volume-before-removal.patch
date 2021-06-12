@@ -1,0 +1,37 @@
+From bc485ff318692317282dbcfbcf26e7e8e905aaf3 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Fri, 17 Dec 2021 19:10:38 +0000
+Subject: [PATCH 5/9] fs_uvol: take down volume before removal
+
+Make sure volume is in 'down' state before attempting to remove it.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ src/fs_uvol.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/fs_uvol.c b/src/fs_uvol.c
+index ec6fc35..d00cdc8 100644
+--- a/src/fs_uvol.c
++++ b/src/fs_uvol.c
+@@ -128,6 +128,7 @@ static int uvol_file_control(struct apk_fsdir *d, apk_blob_t filename, int ctrl)
+ 	struct apk_ctx *ac = d->ac;
+ 	struct apk_pathbuilder pb;
+ 	const char *uvol_name;
++	int r;
+ 
+ 	if (IS_ERR(ac->uvol)) return PTR_ERR(ac->uvol);
+ 
+@@ -140,6 +141,9 @@ static int uvol_file_control(struct apk_fsdir *d, apk_blob_t filename, int ctrl)
+ 	case APK_FS_CTRL_APKNEW:
+ 	case APK_FS_CTRL_CANCEL:
+ 	case APK_FS_CTRL_DELETE:
++		r = uvol_run(ac, "down", uvol_name, 0, 0);
++		if (r)
++			return r;
+ 		return uvol_run(ac, "remove", uvol_name, 0, 0);
+ 	default:
+ 		return -APKE_UVOL_ERROR;
+-- 
+2.32.0
+

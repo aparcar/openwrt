@@ -1,0 +1,67 @@
+From e69763e45f4087306ea2a18a4c0d65e0683741c0 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 7 Jan 2022 18:13:27 -0600
+Subject: [PATCH 7/9] genhelp: support generating uncompressed help databases
+ if --no-zlib is provided
+
+this allows genhelp to be usable without having lua-lzlib built, for scenarios
+such as OpenWrt where the entire image is already compressed, making internally
+compressing the help database pointless
+
+ref #10804
+---
+ src/genhelp.lua | 30 +++++++++++++++++++-----------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/src/genhelp.lua b/src/genhelp.lua
+index 217ec1b..f88d915 100644
+--- a/src/genhelp.lua
++++ b/src/genhelp.lua
+@@ -242,7 +242,11 @@ function scdoc:render(out)
+ 	table.insert(out, "\0")
+ end
+ 
++local do_compress = true
+ local function compress(data)
++	if not do_compress then
++		return data
++	end
+ 	local zlib = require 'zlib'
+ 	local level = 9
+ 	if type(zlib.version()) == "string" then
+@@ -275,17 +279,21 @@ end
+ 
+ local f = {}
+ for _, fn in ipairs(arg) do
+-	doc = setmetatable({
+-		width = 78,
+-		section = "HEADER",
+-		usage = {},
+-		description = {},
+-		commands = {},
+-		notes = {},
+-		optgroup = {},
+-	}, scdoc)
+-	doc:parse(fn)
+-	table.insert(f, doc)
++	if fn == '--no-zlib' then
++		do_compress = false
++	else
++		doc = setmetatable({
++			width = 78,
++			section = "HEADER",
++			usage = {},
++			description = {},
++			commands = {},
++			notes = {},
++			optgroup = {},
++		}, scdoc)
++		doc:parse(fn)
++		table.insert(f, doc)
++	end
+ end
+ table.sort(f, function(a, b) return a.applet < b.applet end)
+ 
+-- 
+2.32.0
+

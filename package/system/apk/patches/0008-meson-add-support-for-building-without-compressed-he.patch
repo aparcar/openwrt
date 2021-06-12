@@ -1,0 +1,71 @@
+From 52eee03a252e64671d7a935e2d67d646924d7066 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 7 Jan 2022 18:13:48 -0600
+Subject: [PATCH 8/9] meson: add support for building without compressed help
+ databases
+
+ref #10804
+---
+ meson_options.txt |  3 ++-
+ src/meson.build   | 18 ++++++++++++------
+ 2 files changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/meson_options.txt b/meson_options.txt
+index 9d803d9..0eaa4e5 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -1,5 +1,6 @@
+ option('docs', description: 'Build manpages with scdoc', type: 'feature', value: 'auto')
+-option('help', description: 'Build help into apk binaries, needs lua and lua-zlib', type: 'feature', value: 'auto')
++option('help', description: 'Build help into apk binaries, needs lua', type: 'feature', value: 'auto')
++option('compressed-help', description: 'Compress help database, needs lua-zlib', type: 'boolean', value: true)
+ option('lua', description: 'Build luaapk (lua bindings)', type: 'feature', value: 'auto')
+ option('lua_version', description: 'Lua version to build against', type: 'string', value: '5.3')
+ option('static_apk', description: 'Also build apk.static', type: 'boolean', value: false)
+diff --git a/src/meson.build b/src/meson.build
+index 14a4749..121ed5e 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -84,15 +84,26 @@ apk_src = [
+ 	'applet.c',
+ ]
+ 
++apk_cargs = [
++	'-DAPK_VERSION="' + meson.project_version() + '"',
++	'-D_ATFILE_SOURCE',
++]
++
+ if lua_bin.found()
+ 	genhelp_script = files('genhelp.lua')
++	genhelp_args = [lua_bin, genhelp_script, '@INPUT@']
++
++	if not get_option('compressed-help')
++		genhelp_args += ['--no-zlib']
++		apk_cargs += ['-DAPK_UNCOMPRESSED_HELP']
++	endif
+ 
+ 	generated_help = custom_target(
+ 		'help.h',
+ 		capture: true,
+ 		output: 'help.h',
+ 		input: man_files,
+-		command: [lua_bin, genhelp_script, '@INPUT@'],
++		command: genhelp_args,
+ 	)
+ else
+ 	generated_help = custom_target(
+@@ -105,11 +116,6 @@ endif
+ 
+ apk_src += [ generated_help ]
+ 
+-apk_cargs = [
+-	'-DAPK_VERSION="' + meson.project_version() + '"',
+-	'-D_ATFILE_SOURCE',
+-]
+-
+ libapk_shared = shared_library(
+ 	'apk',
+ 	libapk_src,
+-- 
+2.32.0
+

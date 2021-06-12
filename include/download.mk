@@ -10,7 +10,7 @@ LEDE_GIT = $(PROJECT_GIT)
 
 ifdef PKG_SOURCE_VERSION
   ifndef PKG_VERSION
-    PKG_VERSION := $(if $(PKG_SOURCE_DATE),$(PKG_SOURCE_DATE)-)$(call version_abbrev,$(PKG_SOURCE_VERSION))
+    PKG_VERSION := 0_git$(subst -,,$(PKG_SOURCE_DATE))
   endif
   PKG_SOURCE_SUBDIR ?= $(PKG_NAME)-$(PKG_VERSION)
   PKG_SOURCE ?= $(PKG_SOURCE_SUBDIR).tar.xz

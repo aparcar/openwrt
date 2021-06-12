@@ -73,6 +73,12 @@ OPKG:=$(call opkg,$(TARGET_DIR)) \
 	--cache $(DL_DIR) \
 	--lists-dir $(LISTS_DIR)
 
+APK:=$(call apk,$(TARGET_DIR)) \
+	--repositories-file $(TOPDIR)/repositories \
+	--cache-dir $(DL_DIR) \
+	--allow-untrusted
+
+
 include $(INCLUDE_DIR)/target.mk
 -include .profiles.mk
 
@@ -131,41 +137,36 @@ _call_manifest: FORCE
 	mkdir -p $(TARGET_DIR) $(BIN_DIR) $(TMP_DIR) $(DL_DIR)
 	$(MAKE) package_reload >/dev/null
 	$(MAKE) package_install >/dev/null
-	$(OPKG) list-installed $(if $(STRIP_ABI),--strip-abi)
+	$(APK) list --manifest 
 
 package_index: FORCE
 	@echo >&2
 	@echo Building package index... >&2
 	@mkdir -p $(TMP_DIR) $(TARGET_DIR)/tmp
-	(cd $(PACKAGE_DIR); $(SCRIPT_DIR)/ipkg-make-index.sh . > Packages && \
-		gzip -9nc Packages > Packages.gz; \
-		$(if $(CONFIG_SIGNATURE_CHECK), \
-			$(STAGING_DIR_HOST)/bin/usign -S -m Packages -s $(BUILD_KEY)) \
-	) >/dev/null 2>/dev/null
-	$(OPKG) update >&2 || true
+	$(APK) add --initdb >&2 || true
+	$(APK) update >&2 || true
 
 package_reload:
 	if [ -d "$(PACKAGE_DIR)" ] && ( \
-			[ ! -f "$(PACKAGE_DIR)/Packages" ] || \
-			[ ! -f "$(PACKAGE_DIR)/Packages.gz" ] || \
-			[ "`find $(PACKAGE_DIR) -cnewer $(PACKAGE_DIR)/Packages.gz`" ] ); then \
+			[ ! -f "$(PACKAGE_DIR)/APKINDEX.tar.gz" ] || \
+			[ "`find $(PACKAGE_DIR) -cnewer $(PACKAGE_DIR)/APKINDEX.tar.gz`" ] ); then \
 		echo "Package list missing or not up-to-date, generating it." >&2 ;\
 		$(MAKE) package_index; \
 	else \
 		mkdir -p $(TARGET_DIR)/tmp; \
-		$(OPKG) update >&2 || true; \
+		$(APK) update >&2 || true; \
 	fi
 
 package_list: FORCE
 	@$(MAKE) -s package_reload
-	@$(OPKG) list --size 2>/dev/null
+	@$(APK) list --size 2>/dev/null
 
 package_install: FORCE
 	@echo
 	@echo Installing packages...
-	$(OPKG) install $(firstword $(wildcard $(LINUX_DIR)/libc_*.ipk $(PACKAGE_DIR)/libc_*.ipk))
-	$(OPKG) install $(firstword $(wildcard $(LINUX_DIR)/kernel_*.ipk $(PACKAGE_DIR)/kernel_*.ipk))
-	$(OPKG) install $(BUILD_PACKAGES)
+	$(APK) add $(firstword $(wildcard $(LINUX_DIR)/libc-*.apk $(PACKAGE_DIR)/libc_*.apk))
+	$(APK) add $(firstword $(wildcard $(LINUX_DIR)/kernel-*.apk $(PACKAGE_DIR)/kernel_*.apk))
+	$(APK) add $(BUILD_PACKAGES)
 
 prepare_rootfs: FORCE
 	@echo
@@ -237,7 +238,7 @@ endif
 
 image:
 	$(MAKE) -s _check_profile
-	$(MAKE) -s _check_keys
+	#$(MAKE) -s _check_keys
 	(unset PROFILE FILES PACKAGES MAKEFLAGS; \
 	$(MAKE) -s _call_image \
 		$(if $(PROFILE),USER_PROFILE="$(PROFILE_FILTER)") \
@@ -248,7 +249,7 @@ image:
 
 manifest: FORCE
 	$(MAKE) -s _check_profile
-	$(MAKE) -s _check_keys
+	#$(MAKE) -s _check_keys
 	(unset PROFILE FILES PACKAGES MAKEFLAGS; \
 	$(MAKE) -s _call_manifest \
 		$(if $(PROFILE),USER_PROFILE="$(PROFILE_FILTER)") \
@@ -260,6 +261,6 @@ ifeq ($(PACKAGE),)
 	@exit 1
 endif
 	@$(MAKE) -s package_reload
-	@$(OPKG) whatdepends -A $(PACKAGE)
+	@$(APK) list --depends $(PACKAGE)
 
 .SILENT: help info image manifest whatdepends
