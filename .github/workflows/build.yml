@@ -16,7 +16,7 @@ jobs:
     - name: Find targets
       id: find_targets
       run: |
-        TARGETS="$(perl ./scripts/dump-target-info.pl targets 2>/dev/null | awk '{ print $1 }')"
+        TARGETS="$(perl ./scripts/dump-target-info.pl targets 2>/dev/null | awk '{ print $1 }' | grep -v tiny)"
         JSON='{"config": ["default"], "targets":['
         FIRST=1
         for TARGET in $TARGETS; do
