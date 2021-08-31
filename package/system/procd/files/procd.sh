@@ -261,7 +261,7 @@ _procd_set_param() {
 			json_add_int "$type" $(kill -l "$1")
 		;;
 		pidfile|user|group|seccomp|capabilities|facility|\
-		extroot|overlaydir|tmpoverlaysize)
+		extroot|overlaydir|tmpoverlaysize|context)
 			json_add_string "$type" "$1"
 		;;
 		stdout|stderr|no_new_privs)
