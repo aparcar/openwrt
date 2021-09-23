@@ -136,3 +136,9 @@ menuconfig DEVEL
 		default "-fno-caller-saves"
 		help
 		  Extra target-independent optimizations to use when building for the target.
+
+	config DL_CLEANUP
+		bool "Cleanup download folder after building" if DEVEL
+		help
+		  Run ./scripts/dl_cleanup.py to remove outdated archives from
+		  the download folder.

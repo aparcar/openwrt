@@ -132,6 +132,9 @@ world: prepare $(target/stamp-compile) $(package/stamp-compile) $(package/stamp-
 ifneq ($(CONFIG_CCACHE),)
 	$(STAGING_DIR_HOST)/bin/ccache -s
 endif
+ifneq ($(CONFIG_DL_CLEANUP),)
+	$(SCRIPT_DIR)/dl_cleanup.py $(DL_DIR)
+endif
 
 .PHONY: clean dirclean prereq prepare world package/symlinks package/symlinks-install package/symlinks-clean
 
