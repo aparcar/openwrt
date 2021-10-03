@@ -85,6 +85,26 @@ For a list of supported devices see the [OpenWrt Hardware Database](https://open
 * [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
 * [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
 
+### Donate
+
+The OpenWrt Project is maintained by a global community of volunteers and it
+incurs some monthly infrastructure costs.
+
+If you wish to support the OpenWrt Project, you can do so by donating via the
+button below. All collected money minus the transaction fees and some
+maintenance fees is controlled by Software Freedom Conservancy in the name of
+the OpenWrt project and will be used to support the OpenWrt project (e.g. server
+infrastructure, legal fees to manage the OpenWrt trademark, travel support for
+meetings, …).
+
+<code html>
+    <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+    <input type="hidden" name="cmd" value="_s-xclick" />
+    <input type="hidden" name="hosted_button_id" value="MLJ3HZD7TWK88" />
+    <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
+    </form>
+</code>
+
 ## License
 
 OpenWrt is licensed under GPL-2.0
