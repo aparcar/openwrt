@@ -32,7 +32,7 @@ $(strip $(if $(CONFIG_PER_FEED_REPO), \
 endef
 
 # 1: destination file
-define FeedSourcesAppend
+define FeedSourcesAppendIpkg
 ( \
   echo 'src/gz %d_core %U/targets/%S/packages'; \
   $(strip $(if $(CONFIG_PER_FEED_REPO), \
@@ -42,6 +42,20 @@ define FeedSourcesAppend
 	$(foreach feed,$(FEEDS_AVAILABLE), \
 		$(if $(CONFIG_FEED_$(feed)), \
 			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )src/gz %d_$(feed) %U/packages/%A/$(feed)';)))) \
+) >> $(1)
+endef
+
+# 1: destination file
+define FeedSourcesAppendApk
+( \
+  echo '%U/targets/%S/packages'; \
+  $(strip $(if $(CONFIG_PER_FEED_REPO), \
+	echo '%U/packages/%A/base'; \
+	$(if $(filter %SNAPSHOT-y,$(VERSION_NUMBER)-$(CONFIG_BUILDBOT)), \
+		echo '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)';) \
+	$(foreach feed,$(FEEDS_AVAILABLE), \
+		$(if $(CONFIG_FEED_$(feed)), \
+			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )%U/packages/%A/$(feed)';)))) \
 ) >> $(1)
 endef
 

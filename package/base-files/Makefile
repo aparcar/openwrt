@@ -223,13 +223,17 @@ endif
 
 	$(if $(CONFIG_CLEAN_IPKG),, \
 		mkdir -p $(1)/etc/opkg; \
-		$(call FeedSourcesAppend,$(1)/etc/opkg/distfeeds.conf); \
+		$(call FeedSourcesAppendIpkg,$(1)/etc/opkg/distfeeds.conf); \
 		$(VERSION_SED_SCRIPT) $(1)/etc/opkg/distfeeds.conf)
 	$(if $(CONFIG_IPK_FILES_CHECKSUMS),, \
 		rm -f $(1)/sbin/pkg_check)
 
 	$(if $(CONFIG_TARGET_PREINIT_DISABLE_FAILSAFE), \
 		rm -f $(1)/etc/banner.failsafe,)
+
+	mkdir -p $(1)/etc/apk/
+	$(call FeedSourcesAppendApk,$(1)/etc/apk/repositories)
+	$(VERSION_SED_SCRIPT) $(1)/etc/apk/repositories
 endef
 
 ifneq ($(DUMP),1)
