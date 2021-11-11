@@ -87,7 +87,13 @@ $(curdir)/index: FORCE
 	@for d in $(PACKAGE_SUBDIRS); do ( \
 		mkdir -p $$d; \
 		cd $$d || continue; \
-		$(STAGING_DIR_HOSTPKG)/bin/apk mkndx --output packages.db *.apk; \
+		$(STAGING_DIR_HOSTPKG)/bin/apk mkndx \
+			--root $(TOPDIR) \
+			--keys-dir $(TOPDIR) \
+			--sign $(BUILD_KEY_APK_SEC) \
+			--output APKINDEX.tar.gz \
+			*.apk; \
+		ln -sf . $(ARCH); \
 		$(SCRIPT_DIR)/ipkg-make-index.sh . 2>&1 > Packages.manifest; \
 		grep -vE '^(Maintainer|LicenseFiles|Source|SourceName|Require|SourceDateEpoch)' Packages.manifest > Packages; \
 		case "$$(((64 + $$(stat -L -c%s Packages)) % 128))" in 110|111) \

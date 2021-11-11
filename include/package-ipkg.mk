@@ -102,7 +102,7 @@ ifeq ($(DUMP),)
     ABIV_$(1):=$(call FormatABISuffix,$(1),$(ABI_VERSION))
     PDIR_$(1):=$(call FeedPackageDir,$(1))
     IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
-    APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).apk
+    APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))-$(VERSION).apk
     IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
 
@@ -245,14 +245,14 @@ $(_endef)
 	$(INSTALL_DIR) $$(PDIR_$(1))
 
 	$(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk mkpkg \
-	  --info "name:$(1)" \
+	  --info "name:$(1)$$(ABIV_$(1))" \
 	  --info "version:$(VERSION)" \
 	  --info "description:$()" \
 	  --info "arch:$(PKGARCH)" \
 	  --info "license:$(LICENSE)" \
 	  --info "origin:$(SOURCE)" \
 	  --info "maintainer:$(MAINTAINER)" \
-	  $$(foreach dep,$$(Package/$(1)/DEPENDS),--info "depends:$$(subst $$(comma),,$$(dep))") \
+	  $$(foreach dep,$$(filter-out,libc,$$(Package/$(1)/DEPENDS)),--info "depends:$$(subst $$(comma),,$$(dep))") \
 	  --files "$$(IDIR_$(1))" \
 	  --output "$$(APK_$(1))" \
 	  --sign "$(BUILD_KEY_APK_SEC)"
