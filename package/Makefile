@@ -67,6 +67,7 @@ $(curdir)/install: $(TMP_DIR)/.build $(curdir)/merge $(if $(CONFIG_TARGET_PER_DE
 	- find $(STAGING_DIR_ROOT) -type d | $(XARGS) chmod 0755
 	rm -rf $(TARGET_DIR) $(TARGET_DIR_ORIG)
 	mkdir -p $(TARGET_DIR)/tmp
+ifdef OPKG_PLS
 	$(file >$(TMP_DIR)/opkg_install_list,\
 	  $(call opkg_package_files,\
 	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
@@ -77,6 +78,17 @@ $(curdir)/install: $(TMP_DIR)/.build $(curdir)/merge $(if $(CONFIG_TARGET_PER_DE
 			$(call opkg,$(TARGET_DIR)) flag $$flag `cat $$file`; \
 		done; \
 	done || true
+	mkdir -p $(TARGET_DIR)/var/log/ $(TARGET_DIR)/lib/apk/db/ $(TARGET_DIR)/etc/apk/
+	touch $(TARGET_DIR)/lib/apk/db/lock
+	touch $(TARGET_DIR)/lib/apk/db/installed
+	touch $(TARGET_DIR)/etc/apk/world
+endif
+
+
+	$(file >$(TMP_DIR)/apk_install_list,\
+	  $(call apk_package_files,\
+	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
+	$(call apk,$(TARGET_DIR)) --force extract --no-chown $$(cat $(TMP_DIR)/apk_install_list)
 
 	$(CP) $(TARGET_DIR) $(TARGET_DIR_ORIG)
 

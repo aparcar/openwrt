@@ -18,6 +18,10 @@ opkg_package_files = $(wildcard \
 	$(foreach dir,$(PACKAGE_SUBDIRS), \
 	  $(foreach pkg,$(1), $(dir)/$(pkg)_*.ipk)))
 
+apk_package_files = $(wildcard \
+	$(foreach dir,$(PACKAGE_SUBDIRS), \
+	  $(foreach pkg,$(1), $(dir)/$(pkg)-*.apk)))
+
 # 1: package name
 define FeedPackageDir
 $(strip $(if $(CONFIG_PER_FEED_REPO), \

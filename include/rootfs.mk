@@ -43,6 +43,14 @@ opkg = \
 	--add-arch all:100 \
 	--add-arch $(if $(ARCH_PACKAGES),$(ARCH_PACKAGES),$(BOARD)):200
 
+apk = \
+  $(STAGING_DIR_HOSTPKG)/bin/apk \
+	--destination $(1) \
+	--root $(1) \
+	--keys-dir $(TOPDIR) \
+	--no-cache \
+	--no-network
+
 TARGET_DIR_ORIG := $(TARGET_ROOTFS_DIR)/root.orig-$(BOARD)
 
 ifdef CONFIG_CLEAN_IPKG
