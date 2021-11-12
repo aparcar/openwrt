@@ -44,9 +44,8 @@ opkg = \
 	--add-arch $(if $(ARCH_PACKAGES),$(ARCH_PACKAGES),$(BOARD)):200
 
 apk = \
-  $(STAGING_DIR_HOSTPKG)/bin/apk \
+  $(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk \
 	--destination $(1) \
-	--root $(1) \
 	--keys-dir $(TOPDIR) \
 	--no-cache \
 	--no-network
@@ -76,6 +75,7 @@ define prepare_rootfs
 	@mkdir -p $(1)/var/lock
 	@( \
 		cd $(1); \
+		$(if $(OPKG_PLS), \
 		for script in ./usr/lib/opkg/info/*.postinst; do \
 			IPKG_INSTROOT=$(1) $$(command -v bash) $$script; \
 			ret=$$?; \
@@ -83,7 +83,7 @@ define prepare_rootfs
 				echo "postinst script $$script has failed with exit code $$ret" >&2; \
 				exit 1; \
 			fi; \
-		done; \
+		done;) \
 		for script in ./etc/init.d/*; do \
 			grep '#!/bin/sh /etc/rc.common' $$script >/dev/null || continue; \
 			if ! echo " $(3) " | grep -q " $$(basename $$script) "; then \
@@ -95,7 +95,7 @@ define prepare_rootfs
 			fi; \
 		done || true \
 	)
-	$(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status)
+	$(if $(OPKG_PLS), $(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status))
 	@-find $(1) -name CVS -o -name .svn -o -name .git -o -name '.#*' | $(XARGS) rm -rf
 	rm -rf \
 		$(1)/boot \
