@@ -88,7 +88,8 @@ endif
 	$(file >$(TMP_DIR)/apk_install_list,\
 	  $(call apk_package_files,\
 	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
-	$(call apk,$(TARGET_DIR)) --force extract --no-chown $$(cat $(TMP_DIR)/apk_install_list)
+	$(call apk,$(TARGET_DIR)) --force extract $$(cat $(TMP_DIR)/apk_install_list)
+	#$(call apk,$(TARGET_DIR)) add $$(cat $(TMP_DIR)/apk_install_list)
 
 	$(CP) $(TARGET_DIR) $(TARGET_DIR_ORIG)
 
