@@ -15,6 +15,9 @@ PKG_LICENSE:=GPL-2.0-only
 PKG_LICENSE_FILES:=LICENSE
 PKG_INSTALL:=1
 
+HOST_BUILD_DEPENDS:=lua/host lua-lzlib/host
+PKG_BUILD_DEPENDS:=$(HOST_BUILD_DEPENDS)
+
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/host-build.mk
 include $(INCLUDE_DIR)/meson.mk
@@ -28,11 +31,13 @@ define Package/apk
 endef
 
 MESON_HOST_ARGS += \
-	-Ddocs=disabled
+	-Ddocs=disabled \
+	-Dlua_version=5.1 \
+	-Dlua=disabled
 
 MESON_ARGS += \
 	-Ddocs=disabled \
-	-Dlua=disabled
+	-Dlua_version=5.1
 
 HOST_LDFLAGS += \
 	-Wl,-rpath=$(STAGING_DIR_HOSTPKG)/lib \
