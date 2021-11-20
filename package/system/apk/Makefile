@@ -1,14 +1,17 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=apk
-PKG_VERSION:=3cb5ce2a37a08dc41c88dc1d767226e5cab6032f
 PKG_RELEASE:=$(AUTORELEASE)
 
-PKG_SOURCE:=apk-tools-v$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://gitlab.alpinelinux.org/alpine/apk-tools/-/archive/$(PKG_VERSION)
-PKG_HASH:=ce883b4daf0b6c62034e6177b11acb4ddabcb1d60360988ba4d47d6f884a5fc8
-PKG_BUILD_DIR:=$(BUILD_DIR)/apk-tools-$(PKG_VERSION)
-HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/apk-tools-$(PKG_VERSION)
+PKG_SOURCE_DATE:=2021-11-15
+PKG_SOURCE_VERSION:=83b71f0bafeac4b2e7d48cba408014d13a89d614
+PKG_HASH:=158929b7a443b11eda7394069168722c6ffff0016777e998c184ccf73f88d422
+
+PKG_VERSION:=3.0.0~pre0-$(PKG_SOURCE_DATE)
+PKG_SOURCE:=apk-tools-v$(PKG_SOURCE_VERSION).tar.gz
+PKG_SOURCE_URL:=https://gitlab.alpinelinux.org/alpine/apk-tools/-/archive/$(PKG_SOURCE_VERSION)
+PKG_BUILD_DIR:=$(BUILD_DIR)/apk-tools-$(PKG_SOURCE_VERSION)
+HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/apk-tools-$(PKG_SOURCE_VERSION)
 
 PKG_MAINTAINER:=Paul Spooren <mail@aparcar.org>
 PKG_LICENSE:=GPL-2.0-only
