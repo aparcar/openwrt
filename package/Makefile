@@ -78,18 +78,15 @@ ifdef OPKG_PLS
 			$(call opkg,$(TARGET_DIR)) flag $$flag `cat $$file`; \
 		done; \
 	done || true
-	mkdir -p $(TARGET_DIR)/var/log/ $(TARGET_DIR)/lib/apk/db/ $(TARGET_DIR)/etc/apk/
-	touch $(TARGET_DIR)/lib/apk/db/lock
-	touch $(TARGET_DIR)/lib/apk/db/installed
-	touch $(TARGET_DIR)/etc/apk/world
 endif
 
 
 	$(file >$(TMP_DIR)/apk_install_list,\
 	  $(call apk_package_files,\
 	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
-	$(call apk,$(TARGET_DIR)) --force extract $$(cat $(TMP_DIR)/apk_install_list)
-	#$(call apk,$(TARGET_DIR)) add $$(cat $(TMP_DIR)/apk_install_list)
+
+	# TODO: https://gitlab.alpinelinux.org/alpine/apk-tools/-/issues/10785#note_196110
+	-$(call apk,$(TARGET_DIR)) add --initdb $$(cat $(TMP_DIR)/apk_install_list)
 
 	$(CP) $(TARGET_DIR) $(TARGET_DIR_ORIG)
 
