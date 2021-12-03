@@ -280,33 +280,7 @@ $(_endef)
 	  --output "$$(APK_$(1))" \
 	  --sign "$(BUILD_KEY_APK_SEC)"
 
-	mkdir -p $$(IDIR_$(1))/CONTROL
-
-	(cd $$(IDIR_$(1))/CONTROL; \
-		( \
-			echo "$$$$CONTROL"; \
-			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
-		) > control; \
-		chmod 644 control; \
-		( \
-			echo "#!/bin/sh"; \
-			echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
-			echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-			echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
-			echo "default_postinst \$$$$0 \$$$$@"; \
-		) > postinst; \
-		( \
-			echo "#!/bin/sh"; \
-			echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-			echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
-			echo "default_prerm \$$$$0 \$$$$@"; \
-		) > prerm; \
-		chmod 0755 postinst prerm; \
-		$($(1)_COMMANDS) \
-	)
-
-	$(FAKEROOT) $(SCRIPT_DIR)/ipkg-build -m "$(FILE_MODES)" $$(IDIR_$(1)) $$(PDIR_$(1))
-	@[ -f $$(IPKG_$(1)) ]
+#	@[ -f $$(IPKG_$(1)) ]
 
     $(1)-clean:
 	$$(call remove_ipkg_files,$(1),$$(call opkg_package_files,$(call gen_ipkg_wildcard,$(1))))
