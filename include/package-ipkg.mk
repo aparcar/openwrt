@@ -104,6 +104,7 @@ ifeq ($(DUMP),)
     IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
     APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))-$(VERSION).apk
     IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
+    ADIR_$(1):=$(PKG_BUILD_DIR)/apk-$(PKGARCH)/$(1)
     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
 
     TARGET_VARIANT:=$$(if $(ALL_VARIANTS),$$(if $$(VARIANT),$$(filter-out *,$$(VARIANT)),$(firstword $(ALL_VARIANTS))))
@@ -242,7 +243,27 @@ $(_endef)
 		)
     endif
 
-	$(INSTALL_DIR) $$(PDIR_$(1))
+	$(INSTALL_DIR) $$(PDIR_$(1))/tmp
+	mkdir -p $$(ADIR_$(1))/
+	mkdir -p $$(IDIR_$(1))/tmp/
+	( \
+		echo "#!/bin/sh"; \
+		echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
+		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
+		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo "default_postinst $(1)"; \
+	) > $$(ADIR_$(1))/post-install;
+
+	( \
+		echo "#!/bin/sh"; \
+		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
+		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo "default_prerm $(1)"; \
+	) > $$(ADIR_$(1))/pre-deinstall;
+
+	if [ -n "$$(USERID)" ]; then echo $$(USERID) > $$(IDIR_$(1))/tmp/$(1).rusers; fi;
+	(cd $$(IDIR_$(1)) && find . > $$(IDIR_$(1))/tmp/$(1).list)
+	#if [ -f $$(IDIR_$(1))/conffiles ]; then mv $$(IDIR_$(1))/conffiles t$$(IDIR_$(1))/mp/$(1).conffiles; fi; \
 
 	$(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk mkpkg \
 	  --info "name:$(1)$$(ABIV_$(1))" \
@@ -252,6 +273,8 @@ $(_endef)
 	  --info "license:$(LICENSE)" \
 	  --info "origin:$(SOURCE)" \
 	  --info "maintainer:$(MAINTAINER)" \
+	  --script "post-install:$$(ADIR_$(1))/post-install" \
+	  --script "pre-deinstall:$$(ADIR_$(1))/pre-deinstall" \
 	  $$(foreach dep,$$(filter-out,libc,$$(Package/$(1)/DEPENDS)),--info "depends:$$(subst $$(comma),,$$(dep))") \
 	  --files "$$(IDIR_$(1))" \
 	  --output "$$(APK_$(1))" \
