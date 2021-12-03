@@ -204,7 +204,13 @@ default_prerm() {
 
 add_group_and_user() {
 	local pkgname="$1"
-	local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
+       if [ -f "$root/usr/lib/opkg/info/${pkgname}.control" ]; then
+               # opkg style
+               local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
+       else
+               # apk style
+               local rusers="$(cat $root/tmp/${pkgname}.rusers)"
+       fi
 
 	if [ -n "$rusers" ]; then
 		local tuple oIFS="$IFS"
@@ -256,8 +262,13 @@ add_group_and_user() {
 
 default_postinst() {
 	local root="${IPKG_INSTROOT}"
-	local pkgname="$(basename ${1%.*})"
-	local filelist="/usr/lib/opkg/info/${pkgname}.list"
+	local pkgname="$1"
+       if [ -f "/usr/lib/opkg/info/${pkgname}.list" ]; then
+               local filelist="/usr/lib/opkg/info/${pkgname}.list"
+       else
+               local filelist="/tmp/${pkgname}.list"
+       fi
+
 	local ret=0
 
 	add_group_and_user "${pkgname}"
