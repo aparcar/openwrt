@@ -1,15 +1,15 @@
-From fbc1716a0e1126cef278885cb7452d542b7e2faa Mon Sep 17 00:00:00 2001
+From bba6212702564b248ae410a1e3ae85e1ab238ead Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
-Date: Thu, 2 Dec 2021 16:09:40 -1000
-Subject: [PATCH] Preserve environment
+Date: Wed, 8 Dec 2021 12:05:21 -1000
+Subject: [PATCH 1/2] preserver environment for post-install scripts
 
-Signed-off-by: Paul Spooren <mail@aparcar.org>
+don't overwrite e.g. IPKG_INSTROOT
 ---
  src/database.c | 7 ++-----
  1 file changed, 2 insertions(+), 5 deletions(-)
 
 diff --git a/src/database.c b/src/database.c
-index 3776bb1..05cd883 100644
+index 589a505..5570977 100644
 --- a/src/database.c
 +++ b/src/database.c
 @@ -1874,10 +1874,6 @@ int apk_db_run_script(struct apk_database *db, char *fn, char **argv)
@@ -28,7 +28,7 @@ index 3776bb1..05cd883 100644
  		}
  
 -		execve(fn, argv, environment);
-+		extern char** environ;
++		extern char **environ;
 +		execve(fn, argv, environ);
  		exit(127); /* should not get here */
  	}
