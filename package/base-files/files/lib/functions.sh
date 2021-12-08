@@ -204,13 +204,15 @@ default_prerm() {
 
 add_group_and_user() {
 	local pkgname="$1"
-       if [ -f "$root/usr/lib/opkg/info/${pkgname}.control" ]; then
-               # opkg style
-               local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
-       else
-               # apk style
-               local rusers="$(cat $root/tmp/${pkgname}.rusers)"
-       fi
+	if [ -f "$root/usr/lib/opkg/info/${pkgname}.control" ]; then
+		# opkg style
+		local rusers="$(sed -ne 's/^Require-User: *//p' $root/usr/lib/opkg/info/${pkgname}.control 2>/dev/null)"
+	else
+		# apk style
+		if [ -f "$root/tmp/${pkgname}.rusers" ]; then
+			local rusers="$(cat $root/tmp/${pkgname}.rusers)"
+		fi
+	fi
 
 	if [ -n "$rusers" ]; then
 		local tuple oIFS="$IFS"
