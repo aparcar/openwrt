@@ -98,6 +98,7 @@ define prepare_rootfs
 	)
 	$(if $(OPKG_PLS), $(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status))
 	@-find $(1) -name CVS -o -name .svn -o -name .git -o -name '.#*' | $(XARGS) rm -rf
+	@-find $(1)/var/cache/apk/ -name '*.apk' -delete
 	rm -rf \
 		$(1)/boot \
 		$(1)/tmp/* \
