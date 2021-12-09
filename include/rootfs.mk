@@ -44,7 +44,7 @@ opkg = \
 	--add-arch $(if $(ARCH_PACKAGES),$(ARCH_PACKAGES),$(BOARD)):200
 
 apk = \
-  fakechroot $(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk \
+  $(STAGING_DIR_HOST)/bin/fakechroot $(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk \
 	--root $(1) \
 	--keys-dir $(TOPDIR) \
 	--no-cache \
