@@ -30,7 +30,6 @@ ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SUID),)
 endif
 
 include $(INCLUDE_DIR)/package.mk
-include $(INCLUDE_DIR)/host-build.mk
 
 ifeq ($(DUMP),)
   STAMP_CONFIGURED:=$(strip $(STAMP_CONFIGURED))_$(shell grep '^CONFIG_BUSYBOX_' $(TOPDIR)/.config | $(MKHASH) md5)
@@ -161,15 +160,5 @@ endef
 
 Package/busybox-selinux/install = $(Package/busybox/install)
 
-define Host/Configure
-	cd $(HOST_BUILD_DIR) && make defconfig
-	$(call Host/Configure/Default)
-endef
-
-define Host/Install
-	 $(CP) $(HOST_BUILD_DIR)/busybox $(STAGING_DIR_HOSTPKG)/bin/
-endef
-
 $(eval $(call BuildPackage,busybox))
 $(eval $(call BuildPackage,busybox-selinux))
-$(eval $(call HostBuild))
