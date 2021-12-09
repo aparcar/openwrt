@@ -49,6 +49,7 @@ apk = \
 	--root $(1) \
 	--keys-dir $(TOPDIR) \
 	--no-cache \
+	--no-logfile \
 	--no-network
 
 TARGET_DIR_ORIG := $(TARGET_ROOTFS_DIR)/root.orig-$(BOARD)

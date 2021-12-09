@@ -85,8 +85,7 @@ endif
 	  $(call apk_package_files,\
 	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
 
-	# TODO: https://gitlab.alpinelinux.org/alpine/apk-tools/-/issues/10785#note_196110
-	-$(call apk,$(TARGET_DIR)) add --initdb $$(cat $(TMP_DIR)/apk_install_list)
+	$(call apk,$(TARGET_DIR)) add --initdb $$(cat $(TMP_DIR)/apk_install_list)
 
 	$(CP) $(TARGET_DIR) $(TARGET_DIR_ORIG)
 

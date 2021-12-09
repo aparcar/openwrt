@@ -1,7 +1,7 @@
-From af22dcb71b3de45a2451b958636c08c2d1e28503 Mon Sep 17 00:00:00 2001
+From 3e072b38428c0f466162f277a58e62af8e50b56d Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Wed, 8 Dec 2021 12:06:48 -1000
-Subject: [PATCH 2/2] post-install: don't chroot
+Subject: [PATCH 4/5] post-install: don't chroot
 
 chrooting into a different architecture doesn't make sense
 
@@ -11,7 +11,7 @@ Signed-off-by: Paul Spooren <mail@aparcar.org>
  1 file changed, 5 deletions(-)
 
 diff --git a/src/database.c b/src/database.c
-index 5570977..d83fb7b 100644
+index d314435..290d20b 100644
 --- a/src/database.c
 +++ b/src/database.c
 @@ -1888,11 +1888,6 @@ int apk_db_run_script(struct apk_database *db, char *fn, char **argv)
