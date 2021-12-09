@@ -248,16 +248,13 @@ $(_endef)
 	mkdir -p $$(IDIR_$(1))/tmp/
 	( \
 		echo "#!/bin/sh"; \
-		echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
-		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo ". /lib/functions.sh"; \
 		echo "default_postinst $(1)"; \
 	) > $$(ADIR_$(1))/post-install;
 
 	( \
 		echo "#!/bin/sh"; \
-		echo "[ -s "\$$$${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0"; \
-		echo ". \$$$${IPKG_INSTROOT}/lib/functions.sh"; \
+		echo ". /lib/functions.sh"; \
 		echo "default_prerm $(1)"; \
 	) > $$(ADIR_$(1))/pre-deinstall;
 
