@@ -1,0 +1,61 @@
+From 29fd16d7f384762ec3d8cb3606d0282a974d49c9 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Thu, 9 Dec 2021 15:52:09 +0000
+Subject: [PATCH 1/5] add option --no-logfile
+
+---
+ src/apk.c         | 4 ++++
+ src/apk_context.h | 1 +
+ src/context.c     | 2 +-
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/apk.c b/src/apk.c
+index 2da1788..73b6320 100644
+--- a/src/apk.c
++++ b/src/apk.c
+@@ -70,6 +70,7 @@ static void version(struct apk_out *out, const char *prefix)
+ 	OPT(OPT_GLOBAL_interactive,		APK_OPT_SH("i") "interactive") \
+ 	OPT(OPT_GLOBAL_keys_dir,		APK_OPT_ARG "keys-dir") \
+ 	OPT(OPT_GLOBAL_no_cache,		"no-cache") \
++	OPT(OPT_GLOBAL_no_logfile,		"no-logfile") \
+ 	OPT(OPT_GLOBAL_no_network,		"no-network") \
+ 	OPT(OPT_GLOBAL_no_progress,		"no-progress") \
+ 	OPT(OPT_GLOBAL_print_arch,		"print-arch") \
+@@ -168,6 +169,9 @@ static int option_parse_global(void *ctx, struct apk_ctx *ac, int opt, const cha
+ 	case OPT_GLOBAL_wait:
+ 		ac->lock_wait = atoi(optarg);
+ 		break;
++	case OPT_GLOBAL_no_logfile:
++		ac->flags |= APK_NO_LOGFILE;
++		break;
+ 	case OPT_GLOBAL_no_network:
+ 		ac->flags |= APK_NO_NETWORK;
+ 		break;
+diff --git a/src/apk_context.h b/src/apk_context.h
+index 7aae61b..5071404 100644
+--- a/src/apk_context.h
++++ b/src/apk_context.h
+@@ -28,6 +28,7 @@
+ #define APK_NO_CACHE			BIT(9)
+ #define APK_NO_COMMIT_HOOKS		BIT(10)
+ #define APK_NO_CHROOT			BIT(11)
++#define APK_NO_LOGFILE			BIT(12)
+ 
+ #define APK_FORCE_OVERWRITE		BIT(0)
+ #define APK_FORCE_OLD_APK		BIT(1)
+diff --git a/src/context.c b/src/context.c
+index 7afb579..3a806db 100644
+--- a/src/context.c
++++ b/src/context.c
+@@ -69,7 +69,7 @@ int apk_ctx_prepare(struct apk_ctx *ac)
+ 	}
+ 	ac->dest_fd = ac->root_fd;
+ 
+-	if (ac->open_flags & APK_OPENF_WRITE) {
++	if ((ac->open_flags & APK_OPENF_WRITE) && !(ac->flags & APK_NO_LOGFILE)) {
+ 		const char *log_path = "var/log/apk.log";
+ 		const int lflags = O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC;
+ 		int fd = openat(ac->root_fd, log_path, lflags, 0644);
+-- 
+2.30.2
+

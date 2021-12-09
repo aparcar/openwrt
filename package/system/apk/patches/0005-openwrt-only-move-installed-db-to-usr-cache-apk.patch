@@ -1,0 +1,38 @@
+From bb77b43a0526c30d6cb4cb87783fab1a1180f6eb Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Thu, 9 Dec 2021 15:45:11 +0000
+Subject: [PATCH 5/5] openwrt-only: move installed-db to /usr/cache/apk
+
+---
+ src/database.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/database.c b/src/database.c
+index cc952d6..9a96b27 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -50,7 +50,7 @@ enum {
+ };
+ 
+ static const char * const apkindex_tar_gz = "APKINDEX.tar.gz";
+-static const char * const apk_static_cache_dir = "var/cache/apk";
++static const char * const apk_static_cache_dir = "usr/cache/apk";
+ static const char * const apk_world_file = "etc/apk/world";
+ static const char * const apk_arch_file = "etc/apk/arch";
+ static const char * const apk_lock_file = "lib/apk/db/lock";
+@@ -1613,9 +1613,9 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 		db->cache_dir = apk_static_cache_dir;
+ 		db->cache_fd = openat(db->root_fd, db->cache_dir, O_RDONLY | O_CLOEXEC);
+ 		if (db->cache_fd < 0) {
+-			mkdirat(db->root_fd, "var", 0755);
+-			mkdirat(db->root_fd, "var/cache", 0755);
+-			mkdirat(db->root_fd, "var/cache/apk", 0755);
++			mkdirat(db->root_fd, "usr", 0755);
++			mkdirat(db->root_fd, "usr/cache", 0755);
++			mkdirat(db->root_fd, "usr/cache/apk", 0755);
+ 			db->cache_fd = openat(db->root_fd, db->cache_dir, O_RDONLY | O_CLOEXEC);
+ 			if (db->cache_fd < 0) {
+ 				if (ac->open_flags & APK_OPENF_WRITE) goto ret_errno;
+-- 
+2.30.2
+
