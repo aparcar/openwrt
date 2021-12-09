@@ -85,17 +85,8 @@ endif
 	  $(call apk_package_files,\
 	    $(foreach pkg,$(shell cat $(PACKAGE_INSTALL_FILES) 2>/dev/null),$(pkg)$(call GetABISuffix,$(pkg)))))
 
-	-$(call apk,$(TARGET_DIR)) add --initdb --no-scripts \
-		$$(cat $(TMP_DIR)/apk_install_list | tr ' ' '\n' | grep -E "apk-|base-files|busybox" | tr '\n' ' ')
-
-	mv $(TARGET_DIR)/bin/busybox $(TARGET_DIR)/bin/busybox_org
-
-	$(CP) $(STAGING_DIR_HOSTPKG)/bin/busybox $(TARGET_DIR)/bin/busybox
-
-	$(call apk,$(TARGET_DIR)) add \
-		$$(cat $(TMP_DIR)/apk_install_list | tr ' ' '\n' | grep -vE "apk-|base-files|busybox" | tr '\n' ' ')
-
-	mv $(TARGET_DIR)/bin/busybox_org $(TARGET_DIR)/bin/busybox
+	# TODO: https://gitlab.alpinelinux.org/alpine/apk-tools/-/issues/10785#note_196110
+	-$(call apk,$(TARGET_DIR)) add --initdb $$(cat $(TMP_DIR)/apk_install_list)
 
 	$(CP) $(TARGET_DIR) $(TARGET_DIR_ORIG)
 
