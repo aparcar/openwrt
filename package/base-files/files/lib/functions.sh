@@ -278,6 +278,9 @@ default_postinst() {
 	if [ -f "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" ]; then
 		( . "$root/usr/lib/opkg/info/${pkgname}.postinst-pkg" )
 		ret=$?
+	elif [ -f "$root/tmp/${pkgname}.postinst-pkg" ]; then
+		( . "$root/tmp/${pkgname}.postinst-pkg" )
+		ret=$?
 	fi
 
 	if [ -d "$root/rootfs-overlay" ]; then

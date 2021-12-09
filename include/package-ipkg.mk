@@ -246,6 +246,13 @@ $(_endef)
 	$(INSTALL_DIR) $$(PDIR_$(1))/tmp
 	mkdir -p $$(ADIR_$(1))/
 	mkdir -p $$(IDIR_$(1))/tmp/
+
+	(cd $$(ADIR_$(1)); $($(1)_COMMANDS))
+
+	if [ -f $$(ADIR_$(1))/postinst-pkg ]; then \
+		mv $$(ADIR_$(1))/postinst-pkg $$(IDIR_$(1))/tmp/$(1).postinst-pkg; \
+	fi
+
 	( \
 		echo "#!/bin/sh"; \
 		echo "[ \"\$$$${IPKG_NO_SCRIPT}\" = \"1\" ] && exit 0"; \
