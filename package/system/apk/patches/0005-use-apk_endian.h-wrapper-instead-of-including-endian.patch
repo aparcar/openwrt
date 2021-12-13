@@ -1,7 +1,7 @@
 From 2bba47479302808445b442bcb539ad8e8842e180 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 13:26:04 -0600
-Subject: [PATCH 05/16] use apk_endian.h wrapper instead of including endian.h
+Subject: [PATCH 05/17] use apk_endian.h wrapper instead of including endian.h
  directly.
 
 endian.h is a GNU extension.  sys/endian.h and machine/endian.h are incompatible

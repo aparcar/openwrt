@@ -1,7 +1,7 @@
 From 309752c09bf6e69465661ad98cae7c075e45d274 Mon Sep 17 00:00:00 2001
 From: Daniel Golle <daniel@makrotopia.org>
 Date: Thu, 9 Dec 2021 15:52:09 +0000
-Subject: [PATCH 11/16] add option --no-logfile
+Subject: [PATCH 11/17] add option --no-logfile
 
 ---
  src/apk.c         | 4 ++++

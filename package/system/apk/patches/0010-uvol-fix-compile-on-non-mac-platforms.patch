@@ -1,7 +1,7 @@
 From fda19a47dfc9d846bc68648a2050b22da9935f35 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 14:48:34 -0600
-Subject: [PATCH 10/16] uvol: fix compile on non-mac platforms
+Subject: [PATCH 10/17] uvol: fix compile on non-mac platforms
 
 ---
  src/fs_uvol.c | 4 ++++

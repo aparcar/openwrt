@@ -1,7 +1,7 @@
 From 5dd7a14013dbce2bad0368cdb321810e388773f3 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 14:04:21 -0600
-Subject: [PATCH 08/16] libfetch: use static_deps when compiling libfetch under
+Subject: [PATCH 08/17] libfetch: use static_deps when compiling libfetch under
  meson
 
 ---

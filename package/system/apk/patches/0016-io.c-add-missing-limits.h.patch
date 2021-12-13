@@ -1,7 +1,7 @@
 From 7c7d913d15ce61cba76e5c9d9b03c37912e95227 Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Sat, 11 Dec 2021 00:56:40 +0100
-Subject: [PATCH 16/16] io.c: add missing limits.h
+Subject: [PATCH 16/17] io.c: add missing limits.h
 
 Fixes compilation on MacOS X
 ---

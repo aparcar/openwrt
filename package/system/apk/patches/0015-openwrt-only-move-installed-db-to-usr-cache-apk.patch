@@ -1,7 +1,7 @@
 From bf1ceb113aac01b606411c6971cea2ae884f78a8 Mon Sep 17 00:00:00 2001
 From: Daniel Golle <daniel@makrotopia.org>
 Date: Thu, 9 Dec 2021 15:45:11 +0000
-Subject: [PATCH 15/16] openwrt-only: move installed-db to /usr/cache/apk
+Subject: [PATCH 15/17] openwrt-only: move installed-db to /usr/cache/apk
 
 ---
  src/database.c | 8 ++++----

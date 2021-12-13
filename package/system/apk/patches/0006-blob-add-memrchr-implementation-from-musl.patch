@@ -1,7 +1,7 @@
 From fdb76e2f21f3a9bdae96566df5d13cbc7417492d Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 13:35:00 -0600
-Subject: [PATCH 06/16] blob: add memrchr implementation from musl
+Subject: [PATCH 06/17] blob: add memrchr implementation from musl
 
 ---
  src/apk_blob.h |  4 ++++

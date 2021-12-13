@@ -1,7 +1,7 @@
 From e4d04c44837e8eb4b724e597319b4dc251b90cff Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Thu, 9 Dec 2021 07:34:34 -1000
-Subject: [PATCH 13/16] add --scripts-keep-env option
+Subject: [PATCH 13/17] add --scripts-keep-env option
 
 This options is useful for (post)install scripts to run with the same
 environment variables as apk is executed.

@@ -1,7 +1,7 @@
 From 683e2d77403e440d9b5c1f7d5167b495cf47d89c Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Thu, 9 Dec 2021 06:14:27 -1000
-Subject: [PATCH 14/16] package: store scripts in tmp
+Subject: [PATCH 14/17] package: store scripts in tmp
 
 Signed-off-by: Paul Spooren <mail@aparcar.org>
 ---

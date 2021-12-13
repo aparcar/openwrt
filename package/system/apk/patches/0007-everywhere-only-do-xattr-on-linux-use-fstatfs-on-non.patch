@@ -1,7 +1,7 @@
 From 68f3b77f1b1f90cfabdacb22f53bcf6a6ad02226 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 14:03:45 -0600
-Subject: [PATCH 07/16] everywhere: only do xattr on linux, use fstatfs on
+Subject: [PATCH 07/17] everywhere: only do xattr on linux, use fstatfs on
  non-linux instead of fstatfs64
 
 ---
