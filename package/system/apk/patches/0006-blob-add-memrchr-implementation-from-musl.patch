@@ -1,0 +1,47 @@
+From fdb76e2f21f3a9bdae96566df5d13cbc7417492d Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 13:35:00 -0600
+Subject: [PATCH 06/16] blob: add memrchr implementation from musl
+
+---
+ src/apk_blob.h |  4 ++++
+ src/blob.c     | 10 ++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/apk_blob.h b/src/apk_blob.h
+index 4286fbe..fa307a9 100644
+--- a/src/apk_blob.h
++++ b/src/apk_blob.h
+@@ -131,4 +131,8 @@ int apk_blob_pull_blob_match(apk_blob_t *b, apk_blob_t match);
+ extern size_t strlcpy(char *dest, const char *src, size_t size);
+ #endif
+ 
++#if defined(__APPLE__)
++extern void *memrchr(const void *m, int c, size_t n);
++#endif
++
+ #endif
+diff --git a/src/blob.c b/src/blob.c
+index 8413a3b..f5d793b 100644
+--- a/src/blob.c
++++ b/src/blob.c
+@@ -156,6 +156,16 @@ int apk_blob_cspn(apk_blob_t blob, const apk_spn_match reject, apk_blob_t *l, ap
+ }
+ #endif
+ 
++#if defined(__APPLE__)
++void *memrchr(const void *m, int c, size_t n)
++{
++	const unsigned char *s = m;
++	c = (unsigned char)c;
++	while (n--) if (s[n]==c) return (void *)(s+n);
++	return 0;
++}
++#endif
++
+ int apk_blob_rsplit(apk_blob_t blob, char split, apk_blob_t *l, apk_blob_t *r)
+ {
+ 	char *sep;
+-- 
+2.34.1
+

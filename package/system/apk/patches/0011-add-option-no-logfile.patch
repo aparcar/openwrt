@@ -1,7 +1,7 @@
-From 29fd16d7f384762ec3d8cb3606d0282a974d49c9 Mon Sep 17 00:00:00 2001
+From 309752c09bf6e69465661ad98cae7c075e45d274 Mon Sep 17 00:00:00 2001
 From: Daniel Golle <daniel@makrotopia.org>
 Date: Thu, 9 Dec 2021 15:52:09 +0000
-Subject: [PATCH 1/5] add option --no-logfile
+Subject: [PATCH 11/16] add option --no-logfile
 
 ---
  src/apk.c         | 4 ++++
@@ -57,5 +57,5 @@ index 7afb579..3a806db 100644
  		const int lflags = O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC;
  		int fd = openat(ac->root_fd, log_path, lflags, 0644);
 -- 
-2.30.2
+2.34.1
 

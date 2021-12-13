@@ -1,0 +1,28 @@
+From f7e3408b7b15366c33acaade1feb7bea2191b164 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 13:23:56 -0600
+Subject: [PATCH 04/16] adb: use sys/uio.h for iovec operations
+
+readv/writev and struct iovec are declared in sys/uio.h per POSIX.
+using it without sys/uio.h is a GNU extension.
+
+ref #10794
+---
+ src/adb.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/adb.c b/src/adb.c
+index 2df34b4..4f313cd 100644
+--- a/src/adb.c
++++ b/src/adb.c
+@@ -5,6 +5,7 @@
+ #include <errno.h>
+ #include <sys/mman.h>
+ #include <sys/stat.h>
++#include <sys/uio.h>
+ #include <openssl/pem.h>
+ #include <openssl/err.h>
+ 
+-- 
+2.34.1
+

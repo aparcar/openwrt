@@ -1,0 +1,118 @@
+From 2bba47479302808445b442bcb539ad8e8842e180 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 13:26:04 -0600
+Subject: [PATCH 05/16] use apk_endian.h wrapper instead of including endian.h
+ directly.
+
+endian.h is a GNU extension.  sys/endian.h and machine/endian.h are incompatible
+BSD equivalents.
+
+assume Linux systems have endian.h, provide macOS wrapper on Apple systems.
+
+ref #10794
+---
+ src/adb.h         |  2 +-
+ src/apk_defines.h |  3 ++-
+ src/apk_endian.h  | 33 +++++++++++++++++++++++++++++++++
+ src/io.c          |  2 +-
+ 4 files changed, 37 insertions(+), 3 deletions(-)
+ create mode 100644 src/apk_endian.h
+
+diff --git a/src/adb.h b/src/adb.h
+index a306d05..de68c00 100644
+--- a/src/adb.h
++++ b/src/adb.h
+@@ -1,11 +1,11 @@
+ #ifndef ADB_H
+ #define ADB_H
+ 
+-#include <endian.h>
+ #include <stdint.h>
+ #include <sys/types.h>
+ #include "apk_io.h"
+ #include "apk_trust.h"
++#include "apk_endian.h"
+ 
+ struct adb;
+ struct adb_obj;
+diff --git a/src/apk_defines.h b/src/apk_defines.h
+index 0a50284..4f8a87c 100644
+--- a/src/apk_defines.h
++++ b/src/apk_defines.h
+@@ -10,12 +10,13 @@
+ #ifndef APK_DEFINES_H
+ #define APK_DEFINES_H
+ 
+-#include <endian.h>
+ #include <stdint.h>
+ #include <string.h>
+ #include <errno.h>
+ #include <time.h>
+ 
++#include "apk_endian.h"
++
+ #define ARRAY_SIZE(x)	(sizeof(x) / sizeof((x)[0]))
+ #define BIT(x)		(1 << (x))
+ #define min(a, b)	((a) < (b) ? (a) : (b))
+diff --git a/src/apk_endian.h b/src/apk_endian.h
+new file mode 100644
+index 0000000..d4ff516
+--- /dev/null
++++ b/src/apk_endian.h
+@@ -0,0 +1,33 @@
++/* apk_endian.h - Alpine Package Keeper (APK)
++ *
++ * Copyright (C) 2005-2008 Natanael Copa <n@tanael.org>
++ * Copyright (C) 2008-2011 Timo Teräs <timo.teras@iki.fi>
++ * All rights reserved.
++ *
++ * SPDX-License-Identifier: GPL-2.0-only
++ */
++
++#ifndef APK_ENDIAN_H
++#define APK_ENDIAN_H
++
++#ifdef __linux__
++# include <endian.h>
++#endif
++
++#ifdef __APPLE__
++# include <libkern/OSByteOrder.h>
++# define htobe16(x) OSSwapHostToBigInt16(x)
++# define htole16(x) OSSwapHostToLittleInt16(x)
++# define be16toh(x) OSSwapBigToHostInt16(x)
++# define le16toh(x) OSSwapLittleToHostInt16(x)
++# define htobe32(x) OSSwapHostToBigInt32(x)
++# define htole32(x) OSSwapHostToLittleInt32(x)
++# define be32toh(x) OSSwapBigToHostInt32(x)
++# define le32toh(x) OSSwapLittleToHostInt32(x)
++# define htobe64(x) OSSwapHostToBigInt64(x)
++# define htole64(x) OSSwapHostToLittleInt64(x)
++# define be64toh(x) OSSwapBigToHostInt64(x)
++# define le64toh(x) OSSwapLittleToHostInt64(x)
++#endif
++
++#endif
+diff --git a/src/io.c b/src/io.c
+index 8a9646a..1b3e7b4 100644
+--- a/src/io.c
++++ b/src/io.c
+@@ -10,7 +10,6 @@
+ #include <errno.h>
+ #include <stdio.h>
+ #include <fcntl.h>
+-#include <endian.h>
+ #include <unistd.h>
+ #include <dirent.h>
+ #include <stdint.h>
+@@ -24,6 +23,7 @@
+ #include "apk_defines.h"
+ #include "apk_io.h"
+ #include "apk_crypto.h"
++#include "apk_endian.h"
+ 
+ #if defined(__GLIBC__) || defined(__UCLIBC__)
+ #define HAVE_FGETPWENT_R
+-- 
+2.34.1
+

@@ -1,7 +1,7 @@
-From 239efe9892a9bfecaadff10c37095eff81cd33cd Mon Sep 17 00:00:00 2001
+From a942fcfb1a428c71d4100b455c6deaa8f5adf15c Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Thu, 9 Dec 2021 07:17:42 -1000
-Subject: [PATCH 2/5] add --no-chroot option
+Subject: [PATCH 12/16] add --no-chroot option
 
 Signed-off-by: Paul Spooren <mail@aparcar.org>
 ---
@@ -43,5 +43,5 @@ index d12d2a3..e949065 100644
  		actx->solver_flags |= APK_SOLVERF_UPGRADE;
  		break;
 -- 
-2.30.2
+2.34.1
 

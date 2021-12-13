@@ -1,0 +1,25 @@
+From 7c7d913d15ce61cba76e5c9d9b03c37912e95227 Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Sat, 11 Dec 2021 00:56:40 +0100
+Subject: [PATCH 16/16] io.c: add missing limits.h
+
+Fixes compilation on MacOS X
+---
+ src/io.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/io.c b/src/io.c
+index 5c871bd..6d7a9b4 100644
+--- a/src/io.c
++++ b/src/io.c
+@@ -19,6 +19,7 @@
+ #include <sys/xattr.h>
+ #include <pwd.h>
+ #include <grp.h>
++#include <limits.h>
+ 
+ #include "apk_defines.h"
+ #include "apk_io.h"
+-- 
+2.34.1
+

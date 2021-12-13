@@ -1,0 +1,28 @@
+From fda19a47dfc9d846bc68648a2050b22da9935f35 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 14:48:34 -0600
+Subject: [PATCH 10/16] uvol: fix compile on non-mac platforms
+
+---
+ src/fs_uvol.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/fs_uvol.c b/src/fs_uvol.c
+index d42d022..4dbb2ab 100644
+--- a/src/fs_uvol.c
++++ b/src/fs_uvol.c
+@@ -121,7 +121,11 @@ static int uvol_file_extract(struct apk_ctx *ac, const struct apk_file_info *fi,
+ 	uvol_name = strrchr(fi->name, '/');
+ 	uvol_name = uvol_name ? uvol_name + 1 : fi->name;
+ 
++#ifndef __APPLE__
++	snprintf(size, sizeof size, "%ju", fi->size);
++#else
+ 	snprintf(size, sizeof size, "%llu", fi->size);
++#endif
+ 	r = uvol_run(ac, "create", uvol_name, size, "ro");
+ 	if (r != 0) return r;
+ 
+-- 
+2.34.1
+

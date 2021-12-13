@@ -1,0 +1,31 @@
+From 4846c498c7cec6c7de4c5edbd44552e49b926fbb Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Thu, 9 Dec 2021 10:34:28 -0600
+Subject: [PATCH 01/16] libfetch: avoid use of strdupa GNU extension
+
+ref #10794
+---
+ libfetch/http.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/libfetch/http.c b/libfetch/http.c
+index abc3ae6..51f1316 100644
+--- a/libfetch/http.c
++++ b/libfetch/http.c
+@@ -480,11 +480,12 @@ http_parse_mtime(const char *p, time_t *mtime)
+ 	char *locale, *r;
+ 	struct tm tm;
+ 
+-	locale = strdupa(setlocale(LC_TIME, NULL));
++	locale = strdup(setlocale(LC_TIME, NULL));
+ 	setlocale(LC_TIME, "C");
+ 	r = strptime(p, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+ 	/* XXX should add support for date-2 and date-3 */
+ 	setlocale(LC_TIME, locale);
++	free(locale);
+ 	if (r == NULL)
+ 		return (-1);
+ 	*mtime = timegm(&tm);
+-- 
+2.34.1
+

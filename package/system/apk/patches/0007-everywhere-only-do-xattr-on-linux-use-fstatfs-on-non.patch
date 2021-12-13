@@ -1,0 +1,452 @@
+From 68f3b77f1b1f90cfabdacb22f53bcf6a6ad02226 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 14:03:45 -0600
+Subject: [PATCH 07/16] everywhere: only do xattr on linux, use fstatfs on
+ non-linux instead of fstatfs64
+
+---
+ src/database.c | 32 ++++++++++++++++++++++++++------
+ src/fs_fsys.c  |  8 ++++++++
+ src/fs_uvol.c  | 13 ++++++++++++-
+ src/io.c       | 25 +++++++++++++++++++++++--
+ src/io_url.c   |  4 ++++
+ src/package.c  |  6 +++++-
+ src/print.c    |  2 ++
+ src/tar.c      |  7 ++++++-
+ 8 files changed, 86 insertions(+), 11 deletions(-)
+
+diff --git a/src/database.c b/src/database.c
+index be7a0a1..7c72f00 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -10,7 +10,6 @@
+ #include <errno.h>
+ #include <stdio.h>
+ #include <fcntl.h>
+-#include <mntent.h>
+ #include <libgen.h>
+ #include <limits.h>
+ #include <unistd.h>
+@@ -18,13 +17,17 @@
+ #include <stdlib.h>
+ #include <signal.h>
+ #include <fnmatch.h>
+-#include <sys/vfs.h>
+ #include <sys/file.h>
+ #include <sys/wait.h>
+ #include <sys/stat.h>
+-#include <sys/mount.h>
+-#include <sys/statvfs.h>
+-#include <linux/magic.h>
++
++#ifdef __linux__
++# include <mntent.h>
++# include <sys/vfs.h>
++# include <sys/mount.h>
++# include <sys/statvfs.h>
++# include <linux/magic.h>
++#endif
+ 
+ #include "apk_defines.h"
+ #include "apk_package.h"
+@@ -1335,6 +1338,7 @@ static void handle_alarm(int sig)
+ {
+ }
+ 
++#ifdef __linux__
+ static char *find_mountpoint(int atfd, const char *rel_path)
+ {
+ 	struct mntent *me;
+@@ -1363,6 +1367,7 @@ static char *find_mountpoint(int atfd, const char *rel_path)
+ 
+ 	return ret;
+ }
++#endif
+ 
+ static void mark_in_cache(struct apk_database *db, int dirfd, const char *name, struct apk_package *pkg)
+ {
+@@ -1460,6 +1465,7 @@ static int apk_db_name_rdepends(apk_hash_item item, void *pctx)
+ }
+ 
+ 
++#ifdef __linux__
+ static unsigned long map_statfs_flags(unsigned long f_flag)
+ {
+ 	unsigned long mnt_flags = 0;
+@@ -1476,6 +1482,7 @@ static unsigned long map_statfs_flags(unsigned long f_flag)
+ 	if (f_flag & ST_MANDLOCK) mnt_flags |= ST_MANDLOCK;
+ 	return mnt_flags;
+ }
++#endif
+ 
+ void apk_db_init(struct apk_database *db)
+ {
+@@ -1497,7 +1504,9 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ {
+ 	struct apk_out *out = &ac->out;
+ 	const char *msg = NULL;
++#ifdef __linux__
+ 	struct statfs stfs;
++#endif
+ 	apk_blob_t blob;
+ 	int r, fd;
+ 
+@@ -1518,9 +1527,11 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 	apk_db_setup_repositories(db, ac->cache_dir);
+ 	db->root_fd = apk_ctx_fd_root(ac);
+ 
++#ifdef __linux__
+ 	if (fstatfs(db->root_fd, &stfs) == 0 &&
+ 	    stfs.f_type == TMPFS_MAGIC)
+ 		db->permanent = 0;
++#endif
+ 
+ 	if (ac->root && ac->arch) {
+ 		db->arch = apk_atomize(&db->atoms, APK_BLOB_STR(ac->arch));
+@@ -1554,7 +1565,9 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 			apk_msg(out, "Waiting for repository lock");
+ 			memset(&sa, 0, sizeof sa);
+ 			sa.sa_handler = handle_alarm;
++#ifdef SA_ONESHOT
+ 			sa.sa_flags   = SA_ONESHOT;
++#endif
+ 			sigaction(SIGALRM, &sa, &old_sa);
+ 
+ 			alarm(ac->lock_wait);
+@@ -1565,6 +1578,7 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 			sigaction(SIGALRM, &old_sa, NULL);
+ 		}
+ 
++#ifdef __linux__
+ 		/* mount /proc */
+ 		if (asprintf(&db->root_proc_dir, "%s/proc", db->ctx->root) == -1)
+ 			goto ret_errno;
+@@ -1579,6 +1593,7 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 			free(db->root_proc_dir);
+ 			db->root_proc_dir = NULL;
+ 		}
++#endif
+ 	}
+ 
+ 	blob = APK_BLOB_STR("+etc\n" "@etc/init.d\n" "!etc/apk\n");
+@@ -1589,6 +1604,7 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 
+ 	/* figure out where to have the cache */
+ 	fd = openat(db->root_fd, ac->cache_dir, O_RDONLY | O_CLOEXEC);
++#ifdef __linux__
+ 	if (fd >= 0 && fstatfs(fd, &stfs) == 0) {
+ 		db->cache_dir = ac->cache_dir;
+ 		db->cache_fd = fd;
+@@ -1607,7 +1623,9 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 				goto ret_r;
+ 			}
+ 		}
+-	} else {
++	} else
++#endif
++	{
+ 		if (fd >= 0) close(fd);
+ 		db->cache_dir = apk_static_cache_dir;
+ 		db->cache_fd = openat(db->root_fd, db->cache_dir, O_RDONLY | O_CLOEXEC);
+@@ -1776,6 +1794,7 @@ void apk_db_close(struct apk_database *db)
+ 	apk_hash_free(&db->installed.dirs);
+ 	apk_atom_free(&db->atoms);
+ 
++#ifdef __linux__
+ 	if (db->root_proc_dir) {
+ 		umount2(db->root_proc_dir, MNT_DETACH|UMOUNT_NOFOLLOW);
+ 		free(db->root_proc_dir);
+@@ -1787,6 +1806,7 @@ void apk_db_close(struct apk_database *db)
+ 		free(db->cache_remount_dir);
+ 		db->cache_remount_dir = NULL;
+ 	}
++#endif
+ 
+ 	if (db->cache_fd > 0) close(db->cache_fd);
+ 	if (db->lock_fd > 0) close(db->lock_fd);
+diff --git a/src/fs_fsys.c b/src/fs_fsys.c
+index 3dad4e0..142af18 100644
+--- a/src/fs_fsys.c
++++ b/src/fs_fsys.c
+@@ -97,7 +97,9 @@ static int fsys_file_extract(struct apk_ctx *ac, const struct apk_file_info *fi,
+ {
+ 	char tmpname_file[TMPNAME_MAX], tmpname_linktarget[TMPNAME_MAX];
+ 	struct apk_out *out = &ac->out;
++#ifdef __linux__
+ 	struct apk_xattr *xattr;
++#endif
+ 	int fd, r = -1, atflags = 0, ret = 0;
+ 	int atfd = apk_ctx_fd_dest(ac);
+ 	const char *fn = fi->name, *link_target = fi->link_target;
+@@ -152,8 +154,12 @@ static int fsys_file_extract(struct apk_ctx *ac, const struct apk_file_info *fi,
+ 	case S_IFBLK:
+ 	case S_IFCHR:
+ 	case S_IFIFO:
++#ifdef __linux__
+ 		r = mknodat(atfd, fn, fi->mode, fi->device);
+ 		if (r < 0) ret = -errno;
++#else
++		ret = -ENOTSUP;
++#endif
+ 		break;
+ 	}
+ 	if (ret) {
+@@ -185,12 +191,14 @@ static int fsys_file_extract(struct apk_ctx *ac, const struct apk_file_info *fi,
+ 		r = 0;
+ 		fd = openat(atfd, fn, O_RDWR);
+ 		if (fd >= 0) {
++#ifdef __linux__
+ 			foreach_array_item(xattr, fi->xattrs) {
+ 				if (fsetxattr(fd, xattr->name, xattr->value.ptr, xattr->value.len, 0) < 0) {
+ 					r = -errno;
+ 					if (r != -ENOTSUP) break;
+ 				}
+ 			}
++#endif
+ 			close(fd);
+ 		} else {
+ 			r = -errno;
+diff --git a/src/fs_uvol.c b/src/fs_uvol.c
+index f2ba3f1..d42d022 100644
+--- a/src/fs_uvol.c
++++ b/src/fs_uvol.c
+@@ -15,6 +15,11 @@
+ #include "apk_context.h"
+ #include "apk_fs.h"
+ 
++#ifdef __APPLE__
++# include <crt_externs.h>
++# define environ (*_NSGetEnviron())
++#endif
++
+ static int uvol_run(struct apk_ctx *ac, char *action, const char *volname, char *arg1, char *arg2)
+ {
+ 	struct apk_out *out = &ac->out;
+@@ -49,7 +54,13 @@ static int uvol_extract(struct apk_ctx *ac, const char *volname, char *arg1, off
+ 	char *argv[] = { (char*)apk_ctx_get_uvol(ac), "write", (char*) volname, arg1, 0 };
+ 	posix_spawn_file_actions_t act;
+ 
++#ifdef __linux__
+ 	if (pipe2(pipefds, O_CLOEXEC) != 0) return -errno;
++#else
++	if (pipe(pipefds) != 0) return -errno;
++	fcntl(pipefds[0], F_SETFL, O_CLOEXEC);
++	fcntl(pipefds[1], F_SETFL, O_CLOEXEC);
++#endif
+ 
+ 	posix_spawn_file_actions_init(&act);
+ 	posix_spawn_file_actions_adddup2(&act, pipefds[0], STDIN_FILENO);
+@@ -110,7 +121,7 @@ static int uvol_file_extract(struct apk_ctx *ac, const struct apk_file_info *fi,
+ 	uvol_name = strrchr(fi->name, '/');
+ 	uvol_name = uvol_name ? uvol_name + 1 : fi->name;
+ 
+-	snprintf(size, sizeof size, "%ju", fi->size);
++	snprintf(size, sizeof size, "%llu", fi->size);
+ 	r = uvol_run(ac, "create", uvol_name, size, "ro");
+ 	if (r != 0) return r;
+ 
+diff --git a/src/io.c b/src/io.c
+index 1b3e7b4..5c871bd 100644
+--- a/src/io.c
++++ b/src/io.c
+@@ -751,7 +751,11 @@ void apk_fileinfo_hash_xattr(struct apk_file_info *fi, uint8_t alg)
+ int apk_fileinfo_get(int atfd, const char *filename, unsigned int flags,
+ 		     struct apk_file_info *fi, struct apk_atom_pool *atoms)
+ {
++#ifdef __linux__
+ 	struct stat64 st;
++#else
++	struct stat st;
++#endif
+ 	unsigned int hash_alg = flags & 0xff;
+ 	unsigned int xattr_hash_alg = (flags >> 8) & 0xff;
+ 	int atflags = 0;
+@@ -762,8 +766,13 @@ int apk_fileinfo_get(int atfd, const char *filename, unsigned int flags,
+ 	if (flags & APK_FI_NOFOLLOW)
+ 		atflags |= AT_SYMLINK_NOFOLLOW;
+ 
++#ifdef __linux__
+ 	if (fstatat64(atfd, filename, &st, atflags) != 0)
+ 		return -errno;
++#else
++	if (fstatat(atfd, filename, &st, atflags) != 0)
++		return -errno;
++#endif
+ 
+ 	*fi = (struct apk_file_info) {
+ 		.size = st.st_size,
+@@ -775,13 +784,16 @@ int apk_fileinfo_get(int atfd, const char *filename, unsigned int flags,
+ 	};
+ 
+ 	if (xattr_hash_alg != APK_DIGEST_NONE) {
++#ifdef __linux__
+ 		ssize_t len, vlen;
+-		int fd, i, r;
+ 		char val[1024], buf[1024];
++#endif
++		int fd, i, r;
+ 
+-		r = 0;
++		i = r = 0;
+ 		fd = openat(atfd, filename, O_RDONLY);
+ 		if (fd >= 0) {
++#ifdef __linux__
+ 			len = flistxattr(fd, buf, sizeof(buf));
+ 			if (len > 0) {
+ 				struct apk_xattr_array *xattrs = NULL;
+@@ -801,6 +813,7 @@ int apk_fileinfo_get(int atfd, const char *filename, unsigned int flags,
+ 				apk_fileinfo_hash_xattr_array(xattrs, xattr_hash_alg, &fi->xattr_digest);
+ 				apk_xattr_array_free(&xattrs);
+ 			} else if (r < 0) r = errno;
++#endif
+ 			close(fd);
+ 		} else r = errno;
+ 
+@@ -1094,6 +1107,7 @@ static void idhash_reset(struct apk_id_hash *idh)
+ 	idhash_init(idh);
+ }
+ 
++#ifndef __APPLE__
+ static void idcache_add(struct apk_id_hash *hash, apk_blob_t name, unsigned long id)
+ {
+ 	struct cache_item *ci;
+@@ -1110,6 +1124,7 @@ static void idcache_add(struct apk_id_hash *hash, apk_blob_t name, unsigned long
+ 	hlist_add_head(&ci->by_id, &hash->by_id[id % ARRAY_SIZE(hash->by_id)]);
+ 	hlist_add_head(&ci->by_name, &hash->by_name[h % ARRAY_SIZE(hash->by_name)]);
+ }
++#endif
+ 
+ static struct cache_item *idcache_by_name(struct apk_id_hash *hash, apk_blob_t name)
+ {
+@@ -1152,6 +1167,7 @@ void apk_id_cache_free(struct apk_id_cache *idc)
+ 	idc->root_fd = 0;
+ }
+ 
++#ifndef __APPLE__
+ static FILE *fopenat(int dirfd, const char *pathname)
+ {
+ 	FILE *f;
+@@ -1164,9 +1180,11 @@ static FILE *fopenat(int dirfd, const char *pathname)
+ 	if (!f) close(fd);
+ 	return f;
+ }
++#endif
+ 
+ static void idcache_load_users(int root_fd, struct apk_id_hash *idh)
+ {
++#ifndef __APPLE__
+ #ifdef HAVE_FGETPWENT_R
+ 	char buf[1024];
+ 	struct passwd pwent;
+@@ -1193,10 +1211,12 @@ static void idcache_load_users(int root_fd, struct apk_id_hash *idh)
+ #ifndef HAVE_FGETPWENT_R
+ 	endpwent();
+ #endif
++#endif
+ }
+ 
+ static void idcache_load_groups(int root_fd, struct apk_id_hash *idh)
+ {
++#ifndef __APPLE__
+ #ifdef HAVE_FGETGRENT_R
+ 	char buf[1024];
+ 	struct group grent;
+@@ -1223,6 +1243,7 @@ static void idcache_load_groups(int root_fd, struct apk_id_hash *idh)
+ #ifndef HAVE_FGETGRENT_R
+ 	endgrent();
+ #endif
++#endif
+ }
+ 
+ uid_t apk_id_cache_resolve_uid(struct apk_id_cache *idc, apk_blob_t username, uid_t default_uid)
+diff --git a/src/io_url.c b/src/io_url.c
+index 3cfc27a..44896a4 100644
+--- a/src/io_url.c
++++ b/src/io_url.c
+@@ -52,7 +52,11 @@ static int fetch_maperror(int ec)
+ 		/* [FETCH_OK] = , */
+ 		[FETCH_PROTO] = -EPROTO,
+ 		[FETCH_RESOLV] = -APKE_DNS,
++#ifdef EREMOTEIO
+ 		[FETCH_SERVER] = -EREMOTEIO,
++#else
++		[FETCH_SERVER] = -EIO,
++#endif
+ 		[FETCH_TEMP] = -EAGAIN,
+ 		[FETCH_TIMEOUT] = -ETIMEDOUT,
+ 		[FETCH_UNAVAIL] = -ENOENT,
+diff --git a/src/package.c b/src/package.c
+index 0e6a23a..b40284c 100644
+--- a/src/package.c
++++ b/src/package.c
+@@ -17,7 +17,9 @@
+ #include <unistd.h>
+ #include <sys/wait.h>
+ #include <sys/stat.h>
+-#include <sys/sysmacros.h>
++#ifdef __linux__
++# include <sys/sysmacros.h>
++#endif
+ 
+ #include "apk_openssl.h"
+ #include <openssl/pem.h>
+@@ -784,11 +786,13 @@ void apk_ipkg_run_script(struct apk_installed_package *ipkg,
+ 			mkdirat(db->root_fd, "tmp", 01777);
+ 		if (faccessat(db->root_fd, "dev", F_OK, 0) != 0) {
+ 			mkdirat(db->root_fd, "dev", 0755);
++#ifdef __linux__
+ 			mknodat(db->root_fd, "dev/null", S_IFCHR | 0666, makedev(1, 3));
+ 			mknodat(db->root_fd, "dev/zero", S_IFCHR | 0666, makedev(1, 5));
+ 			mknodat(db->root_fd, "dev/random", S_IFCHR | 0666, makedev(1, 8));
+ 			mknodat(db->root_fd, "dev/urandom", S_IFCHR | 0666, makedev(1, 9));
+ 			mknodat(db->root_fd, "dev/console", S_IFCHR | 0600, makedev(5, 1));
++#endif
+ 		}
+ 		if (faccessat(db->root_fd, "var/cache/misc", F_OK, 0) != 0) {
+ 			mkdirat(root_fd, "var", 0755);
+diff --git a/src/print.c b/src/print.c
+index a177cd5..bf9b4db 100644
+--- a/src/print.c
++++ b/src/print.c
+@@ -27,7 +27,9 @@ const char *apk_error_str(int error)
+ 	case ECONNABORTED:			return "network connection aborted";
+ 	case ECONNREFUSED:			return "could not connect to server (check repositories file)";
+ 	case ENETUNREACH:			return "network error (check Internet connection and firewall)";
++#ifdef EREMOTEIO
+ 	case EREMOTEIO:				return "remote server returned error (try 'apk update')";
++#endif
+ 	case EAGAIN:				return "temporary error (try again later)";
+ 	case APKE_EOF:				return "unexpected end of file";
+ 	case APKE_DNS:				return "DNS error (try again later)";
+diff --git a/src/tar.c b/src/tar.c
+index e682dda..eb0bad9 100644
+--- a/src/tar.c
++++ b/src/tar.c
+@@ -8,9 +8,12 @@
+  */
+ 
+ #include <sys/stat.h>
+-#include <sys/sysmacros.h>
+ #include <limits.h>
+ 
++#ifdef __linux__
++# include <sys/sysmacros.h>
++#endif
++
+ #include "apk_defines.h"
+ #include "apk_tar.h"
+ 
+@@ -150,8 +153,10 @@ int apk_tar_parse(struct apk_istream *is, apk_archive_entry_parser parser,
+ 			.name  = entry.name,
+ 			.uname = buf.uname,
+ 			.gname = buf.gname,
++#ifdef __linux__
+ 			.device = makedev(GET_OCTAL(buf.devmajor, &r),
+ 					  GET_OCTAL(buf.devminor, &r)),
++#endif
+ 			.xattrs = entry.xattrs,
+ 		};
+ 		if (r != 0) goto err;
+-- 
+2.34.1
+

@@ -1,0 +1,121 @@
+From 59241f6d770c526e32ff94a451745727b5b9bc7d Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 11:41:52 -0600
+Subject: [PATCH 02/16] everywhere: use stdlib.h for malloc(3) definition, not
+ GNU-specific malloc.h
+
+musl implements support for malloc.h, but it is only a stub.  we do not use
+any of the GNU-specific malloc interfaces, so just use POSIX stdlib.h instead.
+
+ref #10794
+---
+ src/adb.c       | 1 -
+ src/blob.c      | 2 +-
+ src/common.c    | 1 -
+ src/database.c  | 1 -
+ src/io.c        | 1 -
+ src/io_gunzip.c | 1 -
+ src/package.c   | 1 -
+ src/print.c     | 1 -
+ 8 files changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/src/adb.c b/src/adb.c
+index ee992cf..2df34b4 100644
+--- a/src/adb.c
++++ b/src/adb.c
+@@ -1,7 +1,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <malloc.h>
+ #include <assert.h>
+ #include <errno.h>
+ #include <sys/mman.h>
+diff --git a/src/blob.c b/src/blob.c
+index d515961..8413a3b 100644
+--- a/src/blob.c
++++ b/src/blob.c
+@@ -7,7 +7,7 @@
+  * SPDX-License-Identifier: GPL-2.0-only
+  */
+ 
+-#include <malloc.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+ #include <stdint.h>
+diff --git a/src/common.c b/src/common.c
+index 580e6d5..2b0fe7e 100644
+--- a/src/common.c
++++ b/src/common.c
+@@ -6,7 +6,6 @@
+  * SPDX-License-Identifier: GPL-2.0-only
+  */
+ 
+-#include <malloc.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+diff --git a/src/database.c b/src/database.c
+index 589a505..be7a0a1 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -14,7 +14,6 @@
+ #include <libgen.h>
+ #include <limits.h>
+ #include <unistd.h>
+-#include <malloc.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <signal.h>
+diff --git a/src/io.c b/src/io.c
+index cf30bb6..8a9646a 100644
+--- a/src/io.c
++++ b/src/io.c
+@@ -12,7 +12,6 @@
+ #include <fcntl.h>
+ #include <endian.h>
+ #include <unistd.h>
+-#include <malloc.h>
+ #include <dirent.h>
+ #include <stdint.h>
+ #include <sys/mman.h>
+diff --git a/src/io_gunzip.c b/src/io_gunzip.c
+index e3ff178..ce29592 100644
+--- a/src/io_gunzip.c
++++ b/src/io_gunzip.c
+@@ -10,7 +10,6 @@
+ #include <stdio.h>
+ #include <fcntl.h>
+ #include <unistd.h>
+-#include <malloc.h>
+ #include <zlib.h>
+ 
+ #include "apk_defines.h"
+diff --git a/src/package.c b/src/package.c
+index 6003c5b..0e6a23a 100644
+--- a/src/package.c
++++ b/src/package.c
+@@ -12,7 +12,6 @@
+ #include <ctype.h>
+ #include <stdio.h>
+ #include <limits.h>
+-#include <malloc.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+diff --git a/src/print.c b/src/print.c
+index 31a9fbb..a177cd5 100644
+--- a/src/print.c
++++ b/src/print.c
+@@ -11,7 +11,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+-#include <malloc.h>
+ #include <errno.h>
+ #include <sys/ioctl.h>
+ #include <sys/types.h>
+-- 
+2.34.1
+

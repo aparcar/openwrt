@@ -1,0 +1,53 @@
+From c4d0bc1b394177d019598086ff327949d21b65b0 Mon Sep 17 00:00:00 2001
+From: Ariadne Conill <ariadne@dereferenced.org>
+Date: Fri, 10 Dec 2021 14:33:52 -0600
+Subject: [PATCH 09/16] applet: support mach-o sections
+
+---
+ src/apk_applet.h | 10 ++++++++++
+ src/applet.c     |  5 +++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/src/apk_applet.h b/src/apk_applet.h
+index c3d5978..5203d2f 100644
+--- a/src/apk_applet.h
++++ b/src/apk_applet.h
+@@ -62,8 +62,18 @@ void apk_applet_help(struct apk_applet *applet, struct apk_out *out);
+ typedef void (*apk_init_func_t)(void);
+ 
+ 
++#ifndef __APPLE__
++
+ #define APK_DEFINE_APPLET(x) \
+ static void __register_##x(void) { apk_applet_register(&x); } \
+ static apk_init_func_t __regfunc_##x __attribute__((__section__("initapplets"))) __attribute((used)) = __register_##x;
+ 
++#else
++
++#define APK_DEFINE_APPLET(x) \
++static void __register_##x(void) { apk_applet_register(&x); } \
++static apk_init_func_t __regfunc_##x __attribute__((__section__("__DATA,initapplets"))) __attribute((used)) = __register_##x;
++
++#endif
++
+ #endif
+diff --git a/src/applet.c b/src/applet.c
+index 1d47662..7e74261 100644
+--- a/src/applet.c
++++ b/src/applet.c
+@@ -22,7 +22,12 @@ void apk_applet_register(struct apk_applet *applet)
+ 
+ void apk_applet_register_builtin(void)
+ {
++#ifndef __APPLE__
+ 	extern apk_init_func_t __start_initapplets[], __stop_initapplets[];
++#else
++	extern apk_init_func_t __start_initapplets[] __asm("section$start$__DATA$initapplets");
++	extern apk_init_func_t __stop_initapplets[] __asm("section$end$__DATA$initapplets");
++#endif
+ 	apk_init_func_t *p;
+ 
+ 	list_init(&apk_applet_list);
+-- 
+2.34.1
+
