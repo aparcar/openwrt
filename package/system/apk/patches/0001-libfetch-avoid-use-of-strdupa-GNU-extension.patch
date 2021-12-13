@@ -1,7 +1,7 @@
 From 4846c498c7cec6c7de4c5edbd44552e49b926fbb Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Thu, 9 Dec 2021 10:34:28 -0600
-Subject: [PATCH 01/17] libfetch: avoid use of strdupa GNU extension
+Subject: [PATCH 01/24] libfetch: avoid use of strdupa GNU extension
 
 ref #10794
 ---

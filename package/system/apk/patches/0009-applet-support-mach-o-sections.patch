@@ -1,7 +1,7 @@
 From c4d0bc1b394177d019598086ff327949d21b65b0 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 14:33:52 -0600
-Subject: [PATCH 09/17] applet: support mach-o sections
+Subject: [PATCH 09/24] applet: support mach-o sections
 
 ---
  src/apk_applet.h | 10 ++++++++++

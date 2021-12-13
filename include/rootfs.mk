@@ -45,7 +45,7 @@ opkg = \
 
 apk = \
   IPKG_INSTROOT=$(1) \
-  $(FAKEROOT) /Users/user/src/openwrt/apk-tools/build/src/apk \
+  $(FAKEROOT) $(STAGING_DIR_HOSTPKG)/bin/apk \
 	--root $(1) \
 	--keys-dir $(TOPDIR) \
 	--no-cache \

@@ -1,7 +1,7 @@
 From 59241f6d770c526e32ff94a451745727b5b9bc7d Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 11:41:52 -0600
-Subject: [PATCH 02/17] everywhere: use stdlib.h for malloc(3) definition, not
+Subject: [PATCH 02/24] everywhere: use stdlib.h for malloc(3) definition, not
  GNU-specific malloc.h
 
 musl implements support for malloc.h, but it is only a stub.  we do not use

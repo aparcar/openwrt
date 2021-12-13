@@ -1,7 +1,7 @@
 From be47d6406a715aaba4664b1a01a64491e0b75056 Mon Sep 17 00:00:00 2001
 From: Ariadne Conill <ariadne@dereferenced.org>
 Date: Fri, 10 Dec 2021 12:46:37 -0600
-Subject: [PATCH 03/17] libfetch: use pkg-config to find openssl cflags
+Subject: [PATCH 03/24] libfetch: use pkg-config to find openssl cflags
 
 on mac, openssl is usually provided by Homebrew or some other third-party
 package management system, which means pkg-config is needed to find it.
