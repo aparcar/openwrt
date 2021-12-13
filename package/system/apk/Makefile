@@ -35,15 +35,13 @@ endef
 
 MESON_HOST_ARGS += \
 	-Ddocs=disabled \
-	-Dlua_version=5.1 \
 	-Dlua=disabled
 
 MESON_ARGS += \
-	-Ddocs=disabled \
-	-Dlua_version=5.1
+	-Ddocs=disabled
 
 HOST_LDFLAGS += \
-	-Wl,-rpath=$(STAGING_DIR_HOSTPKG)/lib \
+	-Wl,-rpath $(STAGING_DIR_HOSTPKG)/lib \
 	-lpthread
 
 define Package/apk/install
