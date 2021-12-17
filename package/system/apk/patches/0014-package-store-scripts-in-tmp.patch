@@ -1,0 +1,41 @@
+From 683e2d77403e440d9b5c1f7d5167b495cf47d89c Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Thu, 9 Dec 2021 06:14:27 -1000
+Subject: [PATCH 14/17] package: store scripts in tmp
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ src/package.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/package.c b/src/package.c
+index b40284c..80d08bc 100644
+--- a/src/package.c
++++ b/src/package.c
+@@ -773,7 +773,7 @@ void apk_ipkg_run_script(struct apk_installed_package *ipkg,
+ 	argv[0] = (char *) apk_script_types[type];
+ 
+ 	/* Avoid /tmp as it can be mounted noexec */
+-	snprintf(fn, sizeof(fn), "var/cache/misc/" PKG_VER_FMT ".%s",
++	snprintf(fn, sizeof(fn), "tmp/cache/misc/" PKG_VER_FMT ".%s",
+ 		PKG_VER_PRINTF(pkg),
+ 		apk_script_types[type]);
+ 
+@@ -794,10 +794,10 @@ void apk_ipkg_run_script(struct apk_installed_package *ipkg,
+ 			mknodat(db->root_fd, "dev/console", S_IFCHR | 0600, makedev(5, 1));
+ #endif
+ 		}
+-		if (faccessat(db->root_fd, "var/cache/misc", F_OK, 0) != 0) {
+-			mkdirat(root_fd, "var", 0755);
+-			mkdirat(root_fd, "var/cache", 0755);
+-			mkdirat(root_fd, "var/cache/misc", 0755);
++		if (faccessat(db->root_fd, "tmp/cache/misc", F_OK, 0) != 0) {
++			mkdirat(root_fd, "tmp", 0755);
++			mkdirat(root_fd, "tmp/cache", 0755);
++			mkdirat(root_fd, "tmp/cache/misc", 0755);
+ 		}
+ 	}
+ 
+-- 
+2.34.1
+

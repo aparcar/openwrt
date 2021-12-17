@@ -1,0 +1,82 @@
+From e4d04c44837e8eb4b724e597319b4dc251b90cff Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Thu, 9 Dec 2021 07:34:34 -1000
+Subject: [PATCH 13/17] add --scripts-keep-env option
+
+This options is useful for (post)install scripts to run with the same
+environment variables as apk is executed.
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ doc/apk-add.8.scd | 3 +++
+ src/apk_context.h | 1 +
+ src/app_add.c     | 4 ++++
+ src/database.c    | 9 ++++++++-
+ 4 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/doc/apk-add.8.scd b/doc/apk-add.8.scd
+index 52b339e..bd213bd 100644
+--- a/doc/apk-add.8.scd
++++ b/doc/apk-add.8.scd
+@@ -56,3 +56,6 @@ following options:
+ 
+ *--no-chroot*
+ 	Do not run chroot for scripts.
++
++*--scripts-keep-env*
++	Pass environmental variables down to (post)install scripts
+diff --git a/src/apk_context.h b/src/apk_context.h
+index 5071404..7532df8 100644
+--- a/src/apk_context.h
++++ b/src/apk_context.h
+@@ -29,6 +29,7 @@
+ #define APK_NO_COMMIT_HOOKS		BIT(10)
+ #define APK_NO_CHROOT			BIT(11)
+ #define APK_NO_LOGFILE			BIT(12)
++#define APK_SCRIPTS_KEEP_ENV		BIT(13)
+ 
+ #define APK_FORCE_OVERWRITE		BIT(0)
+ #define APK_FORCE_OLD_APK		BIT(1)
+diff --git a/src/app_add.c b/src/app_add.c
+index e949065..7160114 100644
+--- a/src/app_add.c
++++ b/src/app_add.c
+@@ -29,6 +29,7 @@ struct add_ctx {
+ 	OPT(OPT_ADD_latest,	APK_OPT_SH("l") "latest") \
+ 	OPT(OPT_ADD_no_chown,	"no-chown") \
+ 	OPT(OPT_ADD_no_chroot,	"no-chroot") \
++	OPT(OPT_ADD_scripts_keep_env,	"scripts-keep-env") \
+ 	OPT(OPT_ADD_upgrade,	APK_OPT_SH("u") "upgrade") \
+ 	OPT(OPT_ADD_virtual,	APK_OPT_ARG APK_OPT_SH("t") "virtual")
+ 
+@@ -51,6 +52,9 @@ static int option_parse_applet(void *ctx, struct apk_ctx *ac, int opt, const cha
+ 	case OPT_ADD_no_chroot:
+ 		ac->flags |= APK_NO_CHROOT;
+ 		break;
++	case OPT_ADD_scripts_keep_env:
++		ac->flags |= APK_SCRIPTS_KEEP_ENV;
++		break;
+ 	case OPT_ADD_upgrade:
+ 		actx->solver_flags |= APK_SOLVERF_UPGRADE;
+ 		break;
+diff --git a/src/database.c b/src/database.c
+index 7c72f00..af9df2e 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -1916,7 +1918,12 @@ int apk_db_run_script(struct apk_database *db, char *fn, char **argv)
+ 			exit(127);
+ 		}
+ 
+-		execve(fn, argv, environment);
++	  if (db->ctx->flags & APK_SCRIPTS_KEEP_ENV) {
++		  execv(fn, argv);
++	  } else {
++		  execve(fn, argv, environment);
++	  }
++
+ 		exit(127); /* should not get here */
+ 	}
+ 	while (waitpid(pid, &status, 0) < 0 && errno == EINTR);
+-- 
+2.34.1
+
