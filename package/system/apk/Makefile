@@ -35,10 +35,12 @@ endef
 
 MESON_HOST_ARGS += \
 	-Ddocs=disabled \
+	-Dlua_version=5.1 \
 	-Dlua=disabled
 
 MESON_ARGS += \
-	-Ddocs=disabled
+	-Ddocs=disabled \
+	-Dlua_version=5.1
 
 HOST_LDFLAGS += \
 	-Wl,-rpath $(STAGING_DIR_HOSTPKG)/lib \
