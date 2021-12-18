@@ -53,10 +53,10 @@ define Package/apk/install
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/apk $(1)/usr/bin/apk
 
 	$(INSTALL_DIR) $(1)/usr/lib
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/lib/libapk.so.* $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libapk.so.* $(1)/usr/lib/
 
 	$(INSTALL_DIR) $(1)/etc/apk/
-	echo $(PKGARCH) > $(1)/etc/apk/arch
+	echo $(ARCH_PACKAGES) > $(1)/etc/apk/arch
 	touch $(1)/etc/apk/world
 endef
 
