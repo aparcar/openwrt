@@ -121,7 +121,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get -y install libncurses-dev qemu-utils clang-12
+          sudo apt-get -y install libncurses-dev qemu-utils clang-12 lua5.3 liblua5.3-dev
           echo "WORKPATH=$GITHUB_WORKSPACE/openwrt/" >> "$GITHUB_ENV"
           cd "$WORKPATH"
           pwd
@@ -178,6 +178,11 @@ jobs:
           cd "$WORKPATH"
           make tools/install -j$(nproc) || \
             make tools/install V=s
+
+      - name: Build APK
+        run: |
+          cd "$WORKPATH"
+          make package/apk/host/compile V=s
 
       - name: Build toolchain
         run: |
