@@ -125,7 +125,7 @@ endif
 
 define Host/Compile
 	$(MAKE) -C $(HOST_BUILD_DIR) \
-		CC="$(HOSTCC) -std=gnu99" \
+		CC="$(HOSTCC) $(HOST_FPIC) -std=gnu99" \
 		$(LUA_OS)
 endef
 
