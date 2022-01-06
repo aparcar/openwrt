@@ -102,8 +102,8 @@ Build/Compile = $(Build/Compile/Default)
 
 ifndef CONFIG_BUILDBOT
   define Package/base-files/install-key
-	mkdir -p $(1)/etc/opkg/keys
-	$(CP) $(BUILD_KEY).pub $(1)/etc/opkg/keys/`$(STAGING_DIR_HOST)/bin/usign -F -p $(BUILD_KEY).pub`
+	mkdir -p $(1)/etc/usign/keys
+	$(CP) $(BUILD_KEY).pub $(1)/etc/usign/keys/`$(STAGING_DIR_HOST)/bin/usign -F -p $(BUILD_KEY).pub`
 
 	mkdir -p $(1)/etc/apk/keys
 	$(CP) $(BUILD_KEY_APK_PUB) $(1)/etc/apk/keys/
