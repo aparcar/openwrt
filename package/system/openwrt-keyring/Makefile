@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=openwrt-keyring
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=$(PROJECT_GIT)/keyring.git
@@ -31,9 +31,9 @@ endef
 Build/Compile=
 
 define Package/openwrt-keyring/install
-	$(INSTALL_DIR) $(1)/etc/opkg/keys/
+	$(INSTALL_DIR) $(1)/etc/usign/keys/
 	# Public usign key for unattended snapshot builds
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/usign/b5043e70f9a75cde $(1)/etc/opkg/keys/
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/usign/b5043e70f9a75cde $(1)/etc/usign/keys/
 endef
 
 $(eval $(call BuildPackage,openwrt-keyring))
