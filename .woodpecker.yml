@@ -1,0 +1,7 @@
+pipeline:
+  build:
+    image: debian
+    commands: |
+      make defconfig
+      make -j "$(nproc)"
+
