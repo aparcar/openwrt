@@ -133,6 +133,30 @@ ifneq ($(CONFIG_CCACHE),)
 	$(STAGING_DIR_HOST)/bin/ccache -s
 endif
 
+generate_keys: package/system/apk/host/compile package/system/ucert/host/compile
+	if [ -s $(BUILD_KEY) ] && [ -s $(BUILD_KEY).pub ]; then \
+		printf "$(_R)WARNING: $(BUILD_KEY) already exists$(_N)\n" >&2; \
+	else \
+		$(STAGING_DIR_HOST)/bin/usign -G -s $(BUILD_KEY) -p $(BUILD_KEY).pub -c "Local build key"; \
+		printf "$(_G)SUCCESS: $(BUILD_KEY) generated$(_N)\n" >&2; \
+	fi
+
+	if [ -s $(BUILD_KEY).ucert ]; then \
+		printf "$(_R)WARNING: $(BUILD_KEY).ucert already exists$(_N)\n" >&2; \
+	else \
+		$(STAGING_DIR_HOST)/bin/ucert -I -c $(BUILD_KEY).ucert -p $(BUILD_KEY).pub -s $(BUILD_KEY); \
+		printf "$(_G)SUCCESS: $(BUILD_KEY) generated$(_N)\n" >&2; \
+	fi
+
+	if [ -s $(BUILD_KEY_APK_SEC) -a -s $(BUILD_KEY_APK_PUB) ]; then \
+		printf "$(_R)WARNING: $(BUILD_KEY_APK_SEC) already exists$(_N)\n" >&2; \
+	else \
+		openssl ecparam -name prime256v1 -genkey -noout -out $(BUILD_KEY_APK_SEC); \
+		printf "$(_G)SUCCESS: $(BUILD_KEY_APK_SEC) generated$(_N)\n" >&2; \
+		openssl ec -in $(BUILD_KEY_APK_SEC) -pubout > $(BUILD_KEY_APK_PUB); \
+		printf "$(_G)SUCCESS: $(BUILD_KEY_APK_PUB) generated$(_N)\n" >&2; \
+	fi
+
 .PHONY: clean dirclean prereq prepare world package/symlinks package/symlinks-install package/symlinks-clean
 
 endif
