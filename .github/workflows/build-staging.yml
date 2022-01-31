@@ -159,6 +159,12 @@ jobs:
           echo "CONFIG_IB=n" >> .config
           echo "CONFIG_SDK=n" >> .config
 
+          # enable custom backend
+          echo "CONFIG_IMAGEOPT=y" >> .config
+          echo "CONFIG_VERSIONOPT=y" >> .config
+          echo "CONFIG_VERSION_DIST=ApkWrt" >> .config
+          echo 'CONFIG_VERSION_REPO="https://s3.aparcar.org/openwrt-ci/apkwrt/"' >> .config
+
           echo -e "\n---- config input ----\n"
           cat .config
           echo -e "\n---- config input ----\n"
