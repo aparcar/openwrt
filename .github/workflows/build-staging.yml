@@ -204,8 +204,7 @@ jobs:
       - name: Build packages
         run: |
           cd "$WORKPATH"
-          make package/compile -j$(nproc) IGNORE_ERRORS='n m' || \
-            make package/compile IGNORE_ERRORS='n m' V=s
+          make package/compile IGNORE_ERRORS='n m' V=s
 
           make package/install -j$(nproc) || \
             make package/install V=s
