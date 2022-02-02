@@ -257,7 +257,7 @@ int write_phy(u32 port, u32 page, u32 reg, u32 val)
 static int __init rtl83xx_mdio_probe(struct rtl838x_switch_priv *priv)
 {
 	struct device *dev = priv->dev;
-	struct device_node *dn, *mii_np = dev->of_node;
+	struct device_node *dn, *phy_node, *mii_np = dev->of_node;
 	struct mii_bus *bus;
 	int ret;
 	u32 pn;
@@ -303,29 +303,54 @@ static int __init rtl83xx_mdio_probe(struct rtl838x_switch_priv *priv)
 		return ret;
 	}
 
-	dn = mii_np;
-	for_each_node_by_name(dn, "ethernet-phy") {
+	dn = of_find_compatible_node(NULL, NULL, "realtek,rtl83xx-switch");
+	if (!dn) {
+		dev_err(priv->dev, "No RTL switch node in DTS\n");
+		return -ENODEV;
+	}
+
+	for_each_node_by_name(dn, "port") {
 		if (of_property_read_u32(dn, "reg", &pn))
 			continue;
 
+		pr_info("%s found port %d\n", __func__, pn);
+		phy_node = of_parse_phandle(dn, "phy-handle", 0);
+		if (!phy_node) {
+			if (pn != priv->cpu_port)
+				dev_err(priv->dev, "Port node %d misses phy-handle\n", pn);
+			continue;
+		}
+
 		// Check for the integrated SerDes of the RTL8380M first
-		if (of_property_read_bool(dn, "phy-is-integrated") && priv->id == 0x8380 && pn >= 24) {
+		if (of_property_read_bool(phy_node, "phy-is-integrated")
+		    && priv->id == 0x8380 && pn >= 24) {
 			pr_debug("----> FÓUND A SERDES\n");
 			priv->ports[pn].phy = PHY_RTL838X_SDS;
 			continue;
 		}
 
-		if (of_property_read_bool(dn, "phy-is-integrated") && !of_property_read_bool(dn, "sfp")) {
-			priv->ports[pn].phy = PHY_RTL8218B_INT;
-			continue;
+		if (priv->id >= 0x9300) {
+			priv->ports[pn].phy_is_integrated = false;
+			if (of_property_read_bool(phy_node, "phy-is-integrated")) {
+				priv->ports[pn].phy_is_integrated = true;
+				priv->ports[pn].phy = PHY_RTL930X_SDS;
+			}
+		} else {
+			if (of_property_read_bool(phy_node, "phy-is-integrated")
+				&& !of_property_read_bool(phy_node, "sfp")) {
+				priv->ports[pn].phy = PHY_RTL8218B_INT;
+				continue;
+			}
 		}
 
-		if (!of_property_read_bool(dn, "phy-is-integrated") && of_property_read_bool(dn, "sfp")) {
+		if (!of_property_read_bool(phy_node, "phy-is-integrated")
+		    && of_property_read_bool(phy_node, "sfp")) {
 			priv->ports[pn].phy = PHY_RTL8214FC;
 			continue;
 		}
 
-		if (!of_property_read_bool(dn, "phy-is-integrated") && !of_property_read_bool(dn, "sfp")) {
+		if (!of_property_read_bool(phy_node, "phy-is-integrated")
+		    && !of_property_read_bool(phy_node, "sfp")) {
 			priv->ports[pn].phy = PHY_RTL8218B_EXT;
 			continue;
 		}
@@ -377,11 +402,15 @@ static int __init rtl83xx_get_l2aging(struct rtl838x_switch_priv *priv)
 }
 
 /* Caller must hold priv->reg_mutex */
-int rtl83xx_lag_add(struct dsa_switch *ds, int group, int port)
+int rtl83xx_lag_add(struct dsa_switch *ds, int group, int port, struct netdev_lag_upper_info *info)
 {
 	struct rtl838x_switch_priv *priv = ds->priv;
 	int i;
-
+	u32 algomsk = 0;
+	u32 algoidx = 0;
+	if (info->tx_type != NETDEV_LAG_TX_TYPE_HASH) {
+		return -EINVAL;
+	}
 	pr_info("%s: Adding port %d to LA-group %d\n", __func__, port, group);
 	if (group >= priv->n_lags) {
 		pr_err("Link Agrregation group too large.\n");
@@ -394,18 +423,40 @@ int rtl83xx_lag_add(struct dsa_switch *ds, int group, int port)
 	}
 
 	for (i = 0; i < priv->n_lags; i++) {
-		if (priv->lags_port_members[i] & BIT_ULL(i))
+		if (priv->lags_port_members[i] & BIT_ULL(port))
 			break;
 	}
 	if (i != priv->n_lags) {
 		pr_err("%s: Port already member of LAG: %d\n", __func__, i);
 		return -ENOSPC;
 	}
-
+	switch(info->hash_type) {
+	case NETDEV_LAG_HASH_L2:
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_DMAC_BIT; //DMAC
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_SMAC_BIT; //DMAC
+	break;
+	case NETDEV_LAG_HASH_L23:
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_DMAC_BIT; //DMAC
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_SMAC_BIT; //DMAC
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_SIP_BIT; //source ip
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_DIP_BIT; //dest ip
+		algoidx = 1;
+	break;
+	case NETDEV_LAG_HASH_L34:
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_SRC_L4PORT_BIT; //sport
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_DST_L4PORT_BIT; //dport
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_SIP_BIT; //source ip
+		algomsk |= TRUNK_DISTRIBUTION_ALGO_DIP_BIT; //dest ip
+		algoidx = 2;
+	break;
+	default:
+		algomsk |= 0x7f;
+	}
+	priv->r->set_distribution_algorithm(group, algoidx, algomsk);
 	priv->r->mask_port_reg_be(0, BIT_ULL(port), priv->r->trk_mbr_ctr(group));
 	priv->lags_port_members[group] |= BIT_ULL(port);
 
-	pr_info("lags_port_members %d now %016llx\n", group, priv->lags_port_members[group]);
+	pr_debug("lags_port_members %d now %016llx\n", group, priv->lags_port_members[group]);
 	return 0;
 }
 
@@ -415,7 +466,7 @@ int rtl83xx_lag_del(struct dsa_switch *ds, int group, int port)
 	struct rtl838x_switch_priv *priv = ds->priv;
 
 	pr_info("%s: Removing port %d from LA-group %d\n", __func__, port, group);
-
+	
 	if (group >= priv->n_lags) {
 		pr_err("Link Agrregation group too large.\n");
 		return -EINVAL;
@@ -428,11 +479,10 @@ int rtl83xx_lag_del(struct dsa_switch *ds, int group, int port)
 
 
 	if (!(priv->lags_port_members[group] & BIT_ULL(port))) {
-		pr_err("%s: Port not member of LAG: %d\n", __func__, group
-		);
+		pr_err("%s: Port not member of LAG: %d\n", __func__, group);
 		return -ENOSPC;
 	}
-
+	// 0x7f algo mask all
 	priv->r->mask_port_reg_be(BIT_ULL(port), 0, priv->r->trk_mbr_ctr(group));
 	priv->lags_port_members[group] &= ~BIT_ULL(port);
 
@@ -600,6 +650,7 @@ static int rtl83xx_handle_changeupper(struct rtl838x_switch_priv *priv,
 				      struct netdev_notifier_changeupper_info *info)
 {
 	struct net_device *upper = info->upper_dev;
+	struct netdev_lag_upper_info *lag_upper_info = NULL;
 	int i, j, err;
 
 	if (!netif_is_lag_master(upper))
@@ -621,9 +672,10 @@ static int rtl83xx_handle_changeupper(struct rtl838x_switch_priv *priv,
 	}
 
 	if (info->linking) {
+		lag_upper_info = info->upper_info;
 		if (!priv->lag_devs[i])
 			priv->lag_devs[i] = upper;
-		err = rtl83xx_lag_add(priv->ds, i, priv->ports[j].dp->index);
+		err = rtl83xx_lag_add(priv->ds, i, priv->ports[j].dp->index, lag_upper_info);
 		if (err) {
 			err = -EINVAL;
 			goto out;
