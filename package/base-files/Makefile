@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2007-2021 OpenWrt.org
+# Copyright (C) 2007-2022 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 #
 # This is free software, licensed under the GNU General Public License v2.
@@ -39,10 +39,11 @@ endif
 define Package/base-files
   SECTION:=base
   CATEGORY:=Base system
-  DEPENDS:=+netifd +libc +jsonfilter usign openwrt-keyring +NAND_SUPPORT:ubi-utils +fstools +fwtool
+  DEPENDS:=+netifd +libc +jsonfilter +usign +openwrt-keyring +NAND_SUPPORT:ubi-utils +fstools +fwtool
   TITLE:=Base filesystem for OpenWrt
   URL:=http://openwrt.org/
-  VERSION:=$(PKG_RELEASE)-$(REVISION)
+  VERSION:=$(PKG_RELEASE)
+  PROVIDES:=base-files-$(REVISION)
 endef
 
 define Package/base-files/conffiles
