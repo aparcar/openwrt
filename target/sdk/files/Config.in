@@ -14,10 +14,6 @@ menu "Global build settings"
 		bool "Select all userspace packages by default"
 		default y
 
-	config SIGNED_PACKAGES
-		bool "Cryptographically sign package lists"
-		default y
-
 	comment "Package build options"
 
 	config DEBUG
