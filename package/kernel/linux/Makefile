@@ -47,7 +47,7 @@ define Package/kernel
   CATEGORY:=Kernel
   DEFAULT:=y
   TITLE:=Virtual kernel package
-  VERSION:=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)
+  VERSION:=$(LINUX_VERSION)_p$(LINUX_RELEASE)-r$(COMMITCOUNT)
   PROVIDES:="kernel-$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)"
   URL:=http://www.kernel.org/
   PKG_FLAGS:=nonshared
