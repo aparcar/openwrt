@@ -50,6 +50,14 @@ menu "Global build settings"
 		  - Enabling per-device rootfs support
 		  ...
 
+	config ADD_KMOD_FEED
+		bool "Add extra feed for Kernel modules (kmods)"
+		default BUILDBOT
+		help
+		  Add extra feed to /etc/apk/repositories containing all compatible
+		  kmods. This allows to install kmods even after the tree moved on
+		  to a new Kernel version or configuration.
+
 
 	comment "General build options"
 

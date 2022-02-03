@@ -33,7 +33,7 @@ define FeedSourcesAppend
   echo '%U/targets/%S/packages/packages.adb'; \
   $(strip $(if $(CONFIG_PER_FEED_REPO), \
 	echo '%U/packages/%A/base/packages.adb'; \
-	$(if $(filter %SNAPSHOT-y,$(VERSION_NUMBER)-$(CONFIG_BUILDBOT)), \
+	$(if $(CONFIG_ADD_KMOD_FEED), \
 		echo '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb';) \
 	$(foreach feed,$(FEEDS_AVAILABLE), \
 		$(if $(CONFIG_FEED_$(feed)), \
