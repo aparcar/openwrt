@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2007-2015 OpenWrt.org
+# Copyright (C) 2007-2022 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -10,13 +10,15 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=mac80211
 
-PKG_VERSION:=5.15.8-1
+PKG_KERNEL:=5.15.8
+PKG_PATCHVER:=1
+PKG_VERSION:=$(PKG_KERNEL)_p$(PKG_PATCHVER)
 PKG_RELEASE:=1
 PKG_SOURCE_URL:=@KERNEL/linux/kernel/projects/backports/stable/v5.15.8/
 PKG_HASH:=9f71b659c034f19d156532ec780fcb606cee3c4ccc42e2f8ef18dd3e9f1b6820
 
-PKG_SOURCE:=backports-$(PKG_VERSION).tar.xz
-PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/backports-$(PKG_VERSION)
+PKG_SOURCE:=backports-$(PKG_KERNEL)-$(PKG_PATCHVER).tar.xz
+PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/backports-$(PKG_KERNEL)-$(PKG_PATCHVER)
 PKG_BUILD_PARALLEL:=1
 
 PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
