@@ -8,8 +8,8 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=mt7623n-preloader
-PKG_VERSION:=2020-03-11
-PKG_RELEASE:=b27114e184449a33b5d875fda14198f5e6fee2bb
+PKG_VERSION:=2020.03.11
+PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_MAINTAINER:=David Woodhouse <dwmw2@infradead.org>
 
