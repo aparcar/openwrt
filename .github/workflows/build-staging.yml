@@ -11,9 +11,6 @@ on:
         description: "Extra lines to append to the config"
         required: false
         default: ""
-  push:
-    branches:
-      - apk
 
 jobs:
   determine_targets:

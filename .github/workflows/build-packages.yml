@@ -1,0 +1,36 @@
+name: Build latest updated packages
+
+on: [push]
+
+jobs:
+  build:
+    name: Build packages for ${{ matrix.arch }}
+    runs-on: self-hosted
+    timeout-minutes: 1200
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+
+    steps:
+      - name: Build
+        uses: aparcar/gh-action-sdk@master
+        env:
+          NO_REPO_FEED: 1
+          ARCH: ${{ matrix.arch }}
+          CONTAINER: ghcr.io/${{ github.repository_owner }}/sdk
+          PUBLIC_KEY_PEM: ${{ secrets.PUBLIC_KEY_PEM }}
+          PRIVATE_KEY_PEM: ${{ secrets.PRIVATE_KEY_PEM }}
+          IGNORE_ERRORS: "y m n"
+
+      - name: Upload packages
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks
+        env:
+          AWS_S3_BUCKET: openwrt-ci
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_ENDPOINT: https://s3.aparcar.org
+          SOURCE_DIR: bin/
+          DEST_DIR: apkwrt/
