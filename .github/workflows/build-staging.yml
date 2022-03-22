@@ -11,25 +11,107 @@ on:
         description: "Extra lines to append to the config"
         required: false
         default: ""
+  push: {}
 
 jobs:
-  determine_targets:
-    name: Set targets
+  setup:
+    name: Setup cache
     runs-on: ubuntu-latest
     outputs:
       target: ${{ steps.find_targets.outputs.target }}
 
     steps:
+      - name: Setup Ubuntu
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libncurses-dev qemu-utils clang-12
+
+      - name: Cache openwrt.git
+        uses: actions/cache@v3
+        with:
+          path: |
+            openwrt/
+          key: openwrt-repo-${{ github.sha }}
+
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          path: openwrt
+
+      - name: Link caches
+        run: |
+          mkdir -p dl/
+          ln -sf "$GITHUB_WORKSPACE/dl" "$GITHUB_WORKSPACE/openwrt/dl"
+
+          mkdir -p feeds/
+          ln -sf "$GITHUB_WORKSPACE/feeds" "$GITHUB_WORKSPACE/openwrt/feeds"
+
+      - name: Determine cache keys
+        run: |
+          cd openwrt/
+          echo "DL_CACHE_KEY=$(git log --pretty=%h -1 package/ tools/)" >> "$GITHUB_ENV"
+          echo "FEEDS_CACHE_KEY=$(date +'%m/%d/%Y')" >> "$GITHUB_ENV"
+
+      - name: Cache dl/
+        uses: actions/cache@v3
+        with:
+          path: |
+            dl/
+          key: dl-${{ env.DL_CACHE_KEY }}
+          restore-keys: |
+            dl-
+
+      - name: Cache feeds/
+        uses: actions/cache@v3
+        with:
+          path: |
+            feeds/
+          key: feeds-${{ env.FEEDS_CACHE_KEY }}
+          restore-keys: |
+            feeds-
+
+      - name: Make prereq
+        run: |
+          cd openwrt/
+          make defconfig
+
+      - name: Download sources
+        run: |
+          cd openwrt/
+          make download -j$(nproc)
+
+      - name: Cleanup
+        run: |
+          cd openwrt/
+          rm -rf .config* staging_dir/toolchain-*
+
+      - name: Update & Install feeds
+        run: |
+          cd openwrt/
+
+          echo "src-git-full packages https://github.com/openwrt/packages.git" > feeds.conf
+          echo "src-git-full luci https://github.com/openwrt/luci.git" >> feeds.conf
+          echo "src-git-full routing https://github.com/openwrt/routing.git" >> feeds.conf
+          echo "src-git-full telephony https://github.com/openwrt/telephony.git" >> feeds.conf
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
       - name: Set targets
         id: find_targets
         run: |
+          cd openwrt/
           if [ "${{ github.event.inputs.target }}" = "all" ]; then
             export TARGETS="$(perl ./scripts/dump-target-info.pl targets 2>/dev/null | awk '{ print $1 }')"
           else
-            export TARGETS="${{ github.event.inputs.target }}"
+            if [ -n "${{ github.event.inputs.target }}" ]; then
+              export TARGETS="${{ github.event.inputs.target }}"
+            else
+              export TARGETS="x86/64 ath79/generic mediatek/mt7622"
+            fi
           fi
 
           JSON='['
@@ -49,74 +131,48 @@ jobs:
 
   build:
     name: Build ${{ matrix.os }}/${{ matrix.target }}
-    needs: determine_targets
+    needs:
+      - setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: False
       matrix:
         os: [ubuntu-latest]
-        target: ${{fromJson(needs.determine_targets.outputs.target)}}
-        include:
-          - os: macos-latest
-            target: "x86/64"
+        target: ${{fromJson(needs.setup.outputs.target)}}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      - name: Cache openwrt.git
+        uses: actions/cache@v3
         with:
-          fetch-depth: 0
-          path: openwrt
+          path: |
+            openwrt/
+          key: openwrt-repo-${{ github.sha }}
 
-
-      - name: Setup MacOS
-        if: ${{ matrix.os == 'macos-latest' }}
+      - name: Link caches
         run: |
-          echo "WORKPATH=/Volumes/OpenWrt/openwrt/" >> "$GITHUB_ENV"
-          hdiutil create -size 20g -type SPARSE -fs "Case-sensitive HFS+" -volname OpenWrt OpenWrt.sparseimage
-          hdiutil attach OpenWrt.sparseimage
-          mv "$GITHUB_WORKSPACE/openwrt" /Volumes/OpenWrt/
-          cd "$WORKPATH"
+          mkdir -p dl/
+          ln -sf "$GITHUB_WORKSPACE/dl" "$GITHUB_WORKSPACE/openwrt/dl"
 
-          brew install \
-            autoconf \
-            automake \
-            coreutils \
-            diffutils \
-            findutils \
-            gawk \
-            gettext \
-            git-extras \
-            gmp \
-            gnu-getopt \
-            gnu-sed \
-            gnu-tar \
-            grep \
-            libidn2 \
-            libunistring \
-            m4 \
-            make \
-            mpfr \
-            ncurses \
-            openssl@1.1 \
-            pcre \
-            pkg-config \
-            quilt \
-            readline \
-            wget \
-            zstd
+          mkdir -p feeds/
+          ln -sf "$GITHUB_WORKSPACE/feeds" "$GITHUB_WORKSPACE/openwrt/feeds"
 
-            echo "/bin" >> "$GITHUB_PATH"
-            echo "/sbin/Library/Apple/usr/bin" >> "$GITHUB_PATH"
-            echo "/usr/bin" >> "$GITHUB_PATH"
-            echo "/usr/local/bin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/coreutils/bin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/findutils/libexec/gnubin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/gettext/bin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/gnu-getopt/bin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/make/libexec/gnubin" >> "$GITHUB_PATH"
-            echo "/usr/local/opt/make/libexec/gnubin" >> "$GITHUB_PATH"
-            echo "/usr/sbin" >> "$GITHUB_PATH"
-            pwd
+      - name: Cache dl/
+        uses: actions/cache@v3
+        with:
+          path: |
+            dl/
+          key: dl-${{ env.DL_CACHE_KEY }}
+          restore-keys: |
+            dl-
+
+      - name: Cache feeds/
+        uses: actions/cache@v3
+        with:
+          path: |
+            feeds/
+          key: feeds-${{ env.FEEDS_CACHE_KEY }}
+          restore-keys: |
+            feeds-
 
       - name: Setup Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -124,16 +180,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get -y install libncurses-dev qemu-utils
-          echo "WORKPATH=$GITHUB_WORKSPACE/openwrt/" >> "$GITHUB_ENV"
-          cd "$WORKPATH"
-          pwd
-
-      - name: Make prereq
-        run: |
-          cd "$WORKPATH"
-          pwd
-          make defconfig
+          sudo apt-get -y install libncurses-dev qemu-utils clang-12 tree
 
       - name: Initialization environment
         run: |
@@ -142,25 +189,16 @@ jobs:
           echo "TARGET=$TARGET" >> "$GITHUB_ENV"
           echo "SUBTARGET=$SUBTARGET" >> "$GITHUB_ENV"
 
-      - name: Update & Install feeds
-        run: |
-          cd "$WORKPATH"
-
-          echo "src-git-full packages https://github.com/openwrt/packages.git" > feeds.conf
-          echo "src-git-full luci https://github.com/openwrt/luci.git" >> feeds.conf
-          echo "src-git-full routing https://github.com/openwrt/routing.git" >> feeds.conf
-          echo "src-git-full telephony https://github.com/openwrt/telephony.git" >> feeds.conf
-
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
       - name: Set configuration
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
+
           curl "https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/config.buildinfo" > .config
           for CONFIG in ${{ github.event.inputs.config }}; do
             echo "CONFIG_$CONFIG" >> .config
           done
+
+          echo "CONFIG_BPF_TOOLCHAIN_HOST=y" >> .config
 
           echo -e "\n---- config input ----\n"
           cat .config
@@ -172,32 +210,41 @@ jobs:
           cat .config
           echo -e "\n---- config post-defconfig ----\n"
 
-      - name: Download package
+      - name: Propagate toolchain
         run: |
-          cd "$WORKPATH"
-          make download -j$(nproc)
+          TOOLCHAIN_FILE=$(curl "https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/sha256sums" \
+            | sed -n -e 's/.*\(openwrt-toolchain.*\).tar.xz/\1/p')
+
+          echo "TOOLCHAIN_FILE=$TOOLCHAIN_FILE" >> "$GITHUB_ENV"
+           
+          wget -O - https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/${TOOLCHAIN_FILE}.tar.xz \
+            | tar --xz -xf -
+
+          mkdir -p openwrt/staging_dir/
+          ls -1 "$TOOLCHAIN_FILE"
+          mv -f "$TOOLCHAIN_FILE/$(ls -1 $TOOLCHAIN_FILE | grep toolchain)" openwrt/staging_dir/
 
       - name: Build tools
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make tools/install -j$(nproc) || \
             make tools/install V=s
 
       - name: Build toolchain
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make toolchain/install -j$(nproc) || \
             make toolchain/install V=s
 
       - name: Build target
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make target/compile -j$(nproc) IGNORE_ERRORS='n m' || \
             make target/compile IGNORE_ERRORS='n m' V=s
 
       - name: Build packages
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make package/compile -j$(nproc) IGNORE_ERRORS='n m' || \
             make package/compile IGNORE_ERRORS='n m' V=s
 
@@ -206,62 +253,37 @@ jobs:
 
           make package/index CONFIG_SIGNED_PACKAGES= V=s
 
-      - name: Add kmods feed
-        run: |
-          cd "$WORKPATH"
-          TOPDIR=$(pwd)
-          export TOPDIR
-          STAGE_ROOT="$(make --no-print-directory val.STAGING_DIR_ROOT)"
-          KERNEL_VERSION="$(make --no-print-directory -C target/linux \
-              val.LINUX_VERSION val.LINUX_RELEASE val.LINUX_VERMAGIC | \
-              tr '\n' '-' | head -c -1)"
-
-          mkdir -p files/etc/opkg/
-          sed -e 's#^\(src/gz .*\)_core \(.*\)/packages$#&\n\1_kmods \2/kmods/'"${KERNEL_VERSION}#" \
-            "${STAGE_ROOT}/etc/opkg/distfeeds.conf" > files/etc/opkg/distfeeds.conf
-
-          echo -e "\n---- distfeeds.conf ----\n"
-          cat files/etc/opkg/distfeeds.conf
-          echo -e "\n---- distfeeds.conf ----\n"
-
       - name: Build firmware
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make target/install -j$(nproc) || \
             make target/install V=s
 
       - name: Buildinfo
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make buildinfo V=s
 
       - name: JSON overview
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make json_overview_image_info V=s
 
       - name: Checksum
         run: |
-          cd "$WORKPATH"
+          cd openwrt/
           make checksum V=s
 
-      - name: Sanitize target
-        run: echo "target_sani=$(echo ${{ matrix.target }} | tr '/' '-')" >> "$GITHUB_ENV"
-
-      - name: Move everything back in place
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: mv "$WORKPATH" "$GITHUB_WORKSPACE"
-  
       - name: Upload images
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.target_sani }}-images
+          name: ${{ env.TARGET }}-${{ env.TARGET }}-images
           path: openwrt/bin/targets/${{ matrix.target }}/openwrt-${{ env.TARGET }}-*
-  
+
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.target_sani }}-packages
+          name: ${{ env.TARGET }}-${{ env.TARGET }}-packages
           path: |
             openwrt/bin/targets/${{ matrix.target }}/packages/*.ipk
             !openwrt/bin/targets/${{ matrix.target }}/packages/kmod-*.ipk
@@ -269,13 +291,13 @@ jobs:
       - name: Upload kmods
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.target_sani }}-kmods
+          name: ${{ env.TARGET }}-${{ env.TARGET }}-kmods
           path: openwrt/bin/targets/${{ matrix.target }}/packages/kmod-*.ipk
-  
+
       - name: Upload supplementary
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.target_sani }}-supplementary
+          name: ${{ env.TARGET }}-${{ env.TARGET }}-supplementary
           path: |
             openwrt/bin/targets/${{ matrix.target }}/*.buildinfo
             openwrt/bin/targets/${{ matrix.target }}/*.json
@@ -288,5 +310,5 @@ jobs:
       - name: Upload logs
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.target_sani }}-logs
+          name: ${{ env.TARGET }}-${{ env.TARGET }}-logs
           path: openwrt/logs/
