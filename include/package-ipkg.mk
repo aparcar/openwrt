@@ -98,7 +98,7 @@ ifeq ($(DUMP),)
   define BuildTarget/ipkg
     ABIV_$(1):=$(call FormatABISuffix,$(1),$(ABI_VERSION))
     PDIR_$(1):=$(call FeedPackageDir,$(1))
-    APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION).apk
+    APK_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).apk
     IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
     ADIR_$(1):=$(PKG_BUILD_DIR)/apk-$(PKGARCH)/$(1)
     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))

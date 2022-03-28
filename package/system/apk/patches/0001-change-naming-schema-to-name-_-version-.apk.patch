@@ -1,4 +1,4 @@
-From df89bd698376adb35fc7e690ba7776e6260f8a5c Mon Sep 17 00:00:00 2001
+From 3187d9a7c057f31dd1c31e9042839bc27bf152bd Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Tue, 1 Feb 2022 09:30:20 +0100
 Subject: [PATCH 1/4] change naming schema to <name>_<version>.apk
@@ -28,7 +28,7 @@ index 8d9cba4..eb97095 100644
  #define PKG_FILE_FMT		PKG_VER_FMT ".apk"
  #define PKG_FILE_PRINTF(pkg)	PKG_VER_PRINTF(pkg)
 diff --git a/src/app_mkpkg.c b/src/app_mkpkg.c
-index afbc150..731acd5 100644
+index e085090..a238250 100644
 --- a/src/app_mkpkg.c
 +++ b/src/app_mkpkg.c
 @@ -213,7 +213,7 @@ static char *pkgi_filename(struct adb_obj *pkgi, char *buf, size_t n)
@@ -41,7 +41,7 @@ index afbc150..731acd5 100644
  	apk_blob_push_blob(&to, APK_BLOB_STR(".apk"));
  	apk_blob_push_blob(&to, APK_BLOB_PTR_LEN("", 1));
 diff --git a/src/database.c b/src/database.c
-index 1e674d7..5198bad 100644
+index 79a5c4a..0c04409 100644
 --- a/src/database.c
 +++ b/src/database.c
 @@ -561,9 +561,9 @@ struct apk_package *apk_db_pkg_add(struct apk_database *db, struct apk_package *
