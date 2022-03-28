@@ -1,0 +1,49 @@
+From 1069ef503a2a8c0826bbf66d1b298e93c091324a Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Sun, 13 Feb 2022 18:56:28 +0100
+Subject: [PATCH 4/4] Don't create cache folder with --no-cache
+
+Prevent the --initdb command to create cache folder if it's explicitly
+disabled. This is relevant since other tooling may provide the /var
+folder, specifically in OpenWrt it's a symlink to /tmp/
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ src/database.c | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/src/database.c b/src/database.c
+index 788a230..2e1e3f7 100644
+--- a/src/database.c
++++ b/src/database.c
+@@ -1722,9 +1722,11 @@ int apk_db_open(struct apk_database *db, struct apk_ctx *ac)
+ 			     add_protected_paths_from_file, db);
+ 
+ 	/* figure out where to have the cache */
+-	if ((r = setup_cache(db, ac)) < 0) {
+-		apk_err(out, "Unable to remount cache read/write");
+-		goto ret_r;
++	if (!(db->ctx->flags & APK_NO_CACHE)) {
++		if ( (r = setup_cache(db, ac)) < 0) {
++			apk_err(out, "Unable to remount cache read/write");
++			goto ret_r;
++		}
+ 	}
+ 
+ 	if (db->ctx->flags & APK_OVERLAY_FROM_STDIN) {
+@@ -1900,8 +1902,10 @@ int apk_db_write_config(struct apk_database *db)
+ 	r = apk_db_write_layers(db);
+ 	if (!rr ) rr = r;
+ 
+-	r = apk_db_index_write_nr_cache(db);
+-	if (r < 0 && !rr) rr = r;
++	if (!(db->ctx->flags & APK_NO_CACHE)) {
++		r = apk_db_index_write_nr_cache(db);
++		if (r < 0 && !rr) rr = r;
++	}
+ 
+ 	if (rr) {
+ 		apk_err(out, "System state may be inconsistent: failed to write database: %s",
+-- 
+2.35.1
+
