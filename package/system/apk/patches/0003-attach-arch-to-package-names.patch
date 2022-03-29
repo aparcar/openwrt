@@ -1,7 +1,7 @@
 From b42ccd4ee32ba514d11a74f0bd69fb98d7f10f0f Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Mon, 28 Mar 2022 23:52:25 +0100
-Subject: [PATCH 3/4] attach arch to package names
+Subject: [PATCH 3/5] attach arch to package names
 
 Signed-off-by: Paul Spooren <mail@aparcar.org>
 ---

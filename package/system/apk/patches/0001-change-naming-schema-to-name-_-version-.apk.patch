@@ -1,7 +1,7 @@
 From 3681ead47fa4b46453d9e5e9d4887bfa6d976e83 Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Tue, 1 Feb 2022 09:30:20 +0100
-Subject: [PATCH 1/4] change naming schema to <name>_<version>.apk
+Subject: [PATCH 1/5] change naming schema to <name>_<version>.apk
 
 OpenWrt allows dashes in package names but no underlines. The current
 cleanup mechanism in the build system uses those underlines to find
