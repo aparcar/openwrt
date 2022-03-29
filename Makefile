@@ -38,7 +38,7 @@ else
   include tools/Makefile
   include toolchain/Makefile
 
-$(toolchain/stamp-compile): $(tools/stamp-compile) $(if $(CONFIG_BUILDBOT),toolchain_rebuild_check)
+$(toolchain/stamp-compile): $(tools/stamp-compile)
 $(target/stamp-compile): $(toolchain/stamp-compile) $(tools/stamp-compile) $(BUILD_DIR)/.prepared
 $(package/stamp-compile): $(target/stamp-compile) $(package/stamp-cleanup)
 $(package/stamp-install): $(package/stamp-compile)
