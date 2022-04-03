@@ -1,7 +1,9 @@
-From 59a47077913e08f75a5b6f574e7796a1fd0cdcc5 Mon Sep 17 00:00:00 2001
+From e8a0ba5f340954300f2d7087a4a2f0ec89f9f572 Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Sat, 19 Feb 2022 17:20:37 +0100
-Subject: [PATCH 2/5] openwrt: move layer db to temp folder
+Subject: [PATCH] openwrt: move layer db to temp folder
+
+Fixes: 9e4dd29f "db: prepare database reading for layers"
 
 Signed-off-by: Paul Spooren <mail@aparcar.org>
 ---
@@ -9,10 +11,10 @@ Signed-off-by: Paul Spooren <mail@aparcar.org>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/database.c b/src/database.c
-index 0c04409..32928c8 100644
+index 6758e98..d8bcdfa 100644
 --- a/src/database.c
 +++ b/src/database.c
-@@ -1618,7 +1618,7 @@ const char *apk_db_layer_name(int layer)
+@@ -1621,7 +1621,7 @@ const char *apk_db_layer_name(int layer)
  {
  	switch (layer) {
  	case APK_DB_LAYER_ROOT: return "lib/apk/db";
