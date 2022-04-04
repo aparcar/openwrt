@@ -1,9 +1,7 @@
-From e8a0ba5f340954300f2d7087a4a2f0ec89f9f572 Mon Sep 17 00:00:00 2001
+From 9918c683fcc2f148328332d58d030ec5750a1473 Mon Sep 17 00:00:00 2001
 From: Paul Spooren <mail@aparcar.org>
 Date: Sat, 19 Feb 2022 17:20:37 +0100
-Subject: [PATCH] openwrt: move layer db to temp folder
-
-Fixes: 9e4dd29f "db: prepare database reading for layers"
+Subject: [PATCH 1/4] openwrt: move layer db to temp folder
 
 Signed-off-by: Paul Spooren <mail@aparcar.org>
 ---
