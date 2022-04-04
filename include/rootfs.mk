@@ -38,7 +38,7 @@ apk = \
 	--keys-dir $(TOPDIR) \
 	--no-cache \
 	--no-logfile \
-	--force-no-chroot \
+	--no-scripts \
 	--preserve-env \
 	--repository file://$(PACKAGE_DIR_ALL)/packages.adb
 
@@ -67,6 +67,9 @@ define prepare_rootfs
 	@mkdir -p $(1)/var/lock
 	@( \
 		cd $(1); \
+		$(STAGING_DIR_HOST)/bin/tar -xf ./lib/apk/db/scripts.tar --wildcards "*.post-install" -O > script.sh; \
+		chmod +x script.sh; \
+		IPKG_INSTROOT=$(1) $$(command -v bash) script.sh; \
 		for script in ./etc/init.d/*; do \
 			grep '#!/bin/sh /etc/rc.common' $$script >/dev/null || continue; \
 			if ! echo " $(3) " | grep -q " $$(basename $$script) "; then \
