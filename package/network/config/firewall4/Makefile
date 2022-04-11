@@ -26,7 +26,7 @@ define Package/firewall4
 	+kmod-nft-nat +kmod-nft-nat6 \
 	+nftables-json \
 	+ucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci
-  EXTRA_DEPENDS:=ucode (>= 2022-03-22)
+  EXTRA_DEPENDS:=ucode>=2022-03-22
   PROVIDES:=uci-firewall
 endef
 
