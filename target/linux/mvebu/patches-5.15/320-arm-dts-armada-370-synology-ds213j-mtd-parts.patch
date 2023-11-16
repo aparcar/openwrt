@@ -1,0 +1,96 @@
+--- a/arch/arm/boot/dts/armada-370-synology-ds213j.dts
++++ b/arch/arm/boot/dts/armada-370-synology-ds213j.dts
+@@ -94,6 +94,8 @@
+ 			       status = "okay";
+ 			       phy = <&phy1>;
+ 			       phy-mode = "sgmii";
++		               nvmem-cells = <&macaddr_vendor_0>;
++        		       nvmem-cell-names = "mac-address";
+ 			};
+ 
+ 			sata@a0000 {
+@@ -175,6 +177,24 @@
+ 			gpio = <&gpio1 30 GPIO_ACTIVE_HIGH>;
+ 		};
+ 	};
++
++        virtual_flash {
++                compatible = "mtd-concat";
++
++                devices = <&mtd_kernel &mtd_gap>;
++
++                partitions {
++                        compatible = "fixed-partitions";
++                        #address-cells = <1>;
++                        #size-cells = <1>;
++
++                        partition@0 {
++                                compatible = "openwrt,uimage", "denx,uimage";
++                                label = "firmware";
++                                reg = <0x0 0x0>;
++                        };
++                };
++        };
+ };
+ 
+ &mdio {
+@@ -280,33 +300,52 @@
+ 		 * what you are doing.
+ 		 */
+ 		partition@0 { /* u-boot */
+-			label = "RedBoot";
++			label = "u-boot";
+ 			reg = <0x00000000 0x000c0000>; /* 768KB */
++			read-only;
+ 		};
+ 
+-		partition@c0000 { /* uImage */
+-			label = "zImage";
+-			reg = <0x000c0000 0x002d0000>; /* 2880KB */
++		mtd_gap: partition@c0000 { /* gap */
++			label = "gap";
++			reg = <0x000c0000 0x00040000>; /* 256KB */
+ 		};
+ 
+-		partition@390000 { /* uInitramfs */
+-			label = "rd.gz";
+-			reg = <0x00390000 0x00440000>; /* 4250KB */
++		partition@100000 { /* u-boot-env */
++			label = "u-boot-env";
++			reg = <0x00100000 0x00010000>; /* 64KB */
++		};
++
++		mtd_kernel: partition@110000 {
++			label = "kernel";
++			reg = <0x00110000 0x006c0000>; /* 6912KB */
+ 		};
+ 
+ 		partition@7d0000 { /* MAC address and serial number */
+ 			label = "vendor";
+ 			reg = <0x007d0000 0x00010000>; /* 64KB */
++			compatible = "nvmem-cells";
++			read-only;
++                       nvmem-layout {
++                               compatible = "fixed-layout";
++                               #address-cells = <1>;
++                               #size-cells = <1>;
++
++				macaddr_vendor_0: macaddr@0 {
++					reg = <0x0 0x6>;
++				};
++			};
+ 		};
+ 
+ 		partition@7e0000 {
+ 			label = "RedBoot config";
+ 			reg = <0x007e0000 0x00010000>; /* 64KB */
++			read-only;
+ 		};
+ 
+ 		partition@7f0000 {
+ 			label = "FIS directory";
+ 			reg = <0x007f0000 0x00010000>; /* 64KB */
++			read-only;
+ 		};
+ 	};
+ };
