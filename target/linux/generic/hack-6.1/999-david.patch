@@ -1,0 +1,97 @@
+From fe05b37bf89842f3fc0cca12e0924ead2566f4a1 Mon Sep 17 00:00:00 2001
+From: David Bauer <mail@david-bauer.net>
+Date: Thu, 8 Feb 2024 15:51:03 +0100
+Subject: [PATCH] mt76 mt7915: lock TXQ when altering block-ack settings
+
+When there is a low of traffic fed to the HW from the kernel,
+de-establishing a BlockAck session will lead to the HW output corrupted
+frames where TA and RA contain the same client MAC-address.
+
+Stopping TX from the OS seems to mitigate this issue.
+
+[Patch contains commented out TX drainage, as tested first]
+
+Signed-off-by: David Bauer <mail@david-bauer.net>
+---
+ mt7915/mcu.c | 50 ++++++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 40 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7615/mcu.c b/drivers/net/wireless/mediatek/mt76/mt7615/mcu.c
+index 8224f8be..5215abb2 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7915/mcu.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7915/mcu.c
+@@ -681,32 +681,62 @@ out:
+ 				     MCU_EXT_CMD(BSS_INFO_UPDATE), true);
+ }
+ 
++static int mt7915_mcu_add_ba(struct mt7915_dev *dev,
++			     struct ieee80211_ampdu_params *params,
++			     bool enable,
++			     bool tx)
++{
++	struct mt7915_sta *msta = (struct mt7915_sta *)params->sta->drv_priv;
++	struct mt7915_vif *mvif = msta->vif;
++	struct mt76_queue *q = mvif->phy->mt76->q_tx[MT_TXQ_BE];
++	struct mt76_phy *pri_phy = dev->mt76.phys[MT_BAND0];
++	struct mt76_phy *ext_phy = dev->mt76.phys[MT_BAND1];
++	int ret;
++
++	pr_warn("Scheduling all pending txq queued=%d ndesc=%d\n", q->queued, q->ndesc);
++	/* Schedule pending TX */
++	mt76_txq_schedule_all(pri_phy);
++	if (ext_phy)
++		mt76_txq_schedule_all(ext_phy);
++	/* Disable TX worker */
++	pr_warn("Scheduling all pending txq queued=%d ndesc=%d\n", q->queued, q->ndesc);
++
++	mt76_worker_disable(&dev->mt76.tx_worker);
++
++	pr_warn("Disabled tx worker queued=%d ndesc=%d\n", q->queued, q->ndesc);
++#if 1
++	/* Drain TX Queues before tearing down block-ack with client */
++	mt76_queue_tx_cleanup(dev, q, true);
++	pr_warn("Cleaned tx Queues queued=%d ndesc=%d\n", q->queued, q->ndesc);
++#endif
++	ret = mt76_connac_mcu_sta_ba(&dev->mt76, &mvif->mt76, params,
++				      MCU_EXT_CMD(STA_REC_UPDATE),
++				      enable, tx);
++	pr_warn("Sent BA update queued=%d ndesc=%d\n", q->queued, q->ndesc);
++	mt76_worker_enable(&dev->mt76.tx_worker);
++	pr_warn("Enabled tx worker queued=%d ndesc=%d\n", q->queued, q->ndesc);
++
++	return ret;
++}
++
+ /** starec & wtbl **/
+ int mt7915_mcu_add_tx_ba(struct mt7915_dev *dev,
+ 			 struct ieee80211_ampdu_params *params,
+ 			 bool enable)
+ {
+ 	struct mt7915_sta *msta = (struct mt7915_sta *)params->sta->drv_priv;
+-	struct mt7915_vif *mvif = msta->vif;
+ 
+ 	if (enable && !params->amsdu)
+ 		msta->wcid.amsdu = false;
+ 
+-	return mt76_connac_mcu_sta_ba(&dev->mt76, &mvif->mt76, params,
+-				      MCU_EXT_CMD(STA_REC_UPDATE),
+-				      enable, true);
++	return mt7915_mcu_add_ba(dev, params, enable, true);
+ }
+ 
+ int mt7915_mcu_add_rx_ba(struct mt7915_dev *dev,
+ 			 struct ieee80211_ampdu_params *params,
+ 			 bool enable)
+ {
+-	struct mt7915_sta *msta = (struct mt7915_sta *)params->sta->drv_priv;
+-	struct mt7915_vif *mvif = msta->vif;
+-
+-	return mt76_connac_mcu_sta_ba(&dev->mt76, &mvif->mt76, params,
+-				      MCU_EXT_CMD(STA_REC_UPDATE),
+-				      enable, false);
++	return mt7915_mcu_add_ba(dev, params, enable, false);
+ }
+ 
+ static void
+-- 
+2.43.0
