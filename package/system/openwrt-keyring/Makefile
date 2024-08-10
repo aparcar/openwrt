@@ -31,9 +31,10 @@ endef
 Build/Compile=
 
 define Package/openwrt-keyring/install
-	$(INSTALL_DIR) $(1)/etc/opkg/keys/
+	$(INSTALL_DIR) $(1)/etc/opkg/keys/ $(1)/etc/apk/keys/
 	# Public usign key for unattended snapshot builds
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/usign/b5043e70f9a75cde $(1)/etc/opkg/keys/
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/apk/buildbot.aparcar.org.pem $(1)/etc/apk/keys/
 endef
 
 $(eval $(call BuildPackage,openwrt-keyring))
