@@ -3,7 +3,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=cypress-firmware
-PKG_VERSION:=5.10.9-2022_0909
+PKG_VERSION_REAL:=5.10.9-2022_0909
+PKG_VERSION:=$(subst _,.,$(subst -,.,$(PKG_VERSION_REAL)))
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
