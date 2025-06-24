@@ -1,0 +1,135 @@
+name: Build on Comment
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  check-and-build:
+    if: github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check if user is in CODEOWNERS
+        id: check-codeowners
+        run: |
+          if [ -f .github/CODEOWNERS ]; then
+            USERNAME="${{ github.event.comment.user.login }}"
+            if grep -w "@$USERNAME" .github/CODEOWNERS || grep -w "$USERNAME" .github/CODEOWNERS; then
+              echo "authorized=true" >> $GITHUB_OUTPUT
+            else
+              echo "authorized=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "authorized=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Parse build command
+        if: steps.check-codeowners.outputs.authorized == 'true'
+        id: parse-command
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          if echo "$COMMENT" | grep -q "build [a-zA-Z0-9_-]\+/[a-zA-Z0-9_-]\+/[a-zA-Z0-9_-]\+"; then
+            BUILD_PATH=$(echo "$COMMENT" | grep -o "build [a-zA-Z0-9_-]\+/[a-zA-Z0-9_-]\+/[a-zA-Z0-9_-]\+" | sed 's/build //')
+            TARGET=$(echo "$BUILD_PATH" | cut -d'/' -f1)
+            SUBTARGET=$(echo "$BUILD_PATH" | cut -d'/' -f2)
+            PROFILE=$(echo "$BUILD_PATH" | cut -d'/' -f3)
+            echo "build_requested=true" >> $GITHUB_OUTPUT
+            echo "target=$TARGET" >> $GITHUB_OUTPUT
+            echo "subtarget=$SUBTARGET" >> $GITHUB_OUTPUT
+            echo "profile=$PROFILE" >> $GITHUB_OUTPUT
+            echo "build_path=$BUILD_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "build_requested=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup build environment
+        if: steps.parse-command.outputs.build_requested == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext zlib1g-dev swig unzip time rsync
+
+      - name: Build target
+        if: steps.parse-command.outputs.build_requested == 'true'
+        id: build
+        run: |
+          # Initialize build system
+          make defconfig
+
+          # Configure build for specific target/subtarget/profile
+          echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}=y" > .config
+          echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}_${{ steps.parse-command.outputs.subtarget }}=y" >> .config
+          echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}_${{ steps.parse-command.outputs.subtarget }}_DEVICE_${{ steps.parse-command.outputs.profile }}=y" >> .config
+
+          make defconfig
+          make -j$(nproc) V=s
+
+          # Check if build succeeded and files exist
+          if [ -d "bin/" ] && [ "$(ls -A bin/)" ]; then
+            echo "build_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "build_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create artifact archive
+        if: steps.build.outputs.build_success == 'true'
+        run: |
+          cd bin/
+          tar -czf ../build-artifacts-${{ steps.parse-command.outputs.build_path }}.tar.gz *
+          cd ..
+
+      - name: Upload build artifacts
+        if: steps.build.outputs.build_success == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ steps.parse-command.outputs.target }}-${{ steps.parse-command.outputs.subtarget }}-${{ steps.parse-command.outputs.profile }}
+          path: build-artifacts-${{ steps.parse-command.outputs.build_path }}.tar.gz
+
+      - name: Find existing bot comment
+        if: steps.build.outputs.build_success == 'true'
+        id: find-comment
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "Build Results for"
+
+      - name: Create or update comment with build results
+        if: steps.build.outputs.build_success == 'true'
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          body: |
+            ## Build Results for `${{ steps.parse-command.outputs.build_path }}`
+
+            ✅ **Build completed successfully!**
+
+            **Target:** `${{ steps.parse-command.outputs.target }}`
+            **Subtarget:** `${{ steps.parse-command.outputs.subtarget }}`
+            **Profile:** `${{ steps.parse-command.outputs.profile }}`
+
+            📦 **Artifacts:** [Download build-${{ steps.parse-command.outputs.target }}-${{ steps.parse-command.outputs.subtarget }}-${{ steps.parse-command.outputs.profile }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            *Build triggered by: @${{ github.event.comment.user.login }}*
+            *Last updated: ${{ github.event.comment.created_at }}*
+
+      - name: Comment on build failure
+        if: steps.parse-command.outputs.build_requested == 'true' && steps.build.outputs.build_success == 'false'
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          body: |
+            ## Build Results for `${{ steps.parse-command.outputs.build_path }}`
+
+            ❌ **Build failed!**
+
+            Please check the [action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more details.
+
+            *Build triggered by: @${{ github.event.comment.user.login }}*
