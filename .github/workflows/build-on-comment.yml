@@ -4,36 +4,33 @@ on:
   issue_comment:
     types: [created, edited]
 
+concurrency:
+  group: build-on-comment-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   check-and-build:
     if: github.event.issue.pull_request != null
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-          ref: refs/pull/${{ github.event.issue.number }}/merge
-
-      - name: Check if user is in CODEOWNERS
-        id: check-codeowners
+      - name: Check if user is in reviewers team
+        id: check-reviewer
         run: |
-          if [ -f .github/CODEOWNERS ]; then
-            USERNAME="${{ github.event.comment.user.login }}"
-            if grep -w "@$USERNAME" .github/CODEOWNERS || grep -w "$USERNAME" .github/CODEOWNERS; then
-              echo "authorized=true" >> $GITHUB_OUTPUT
-            else
-              echo "authorized=false" >> $GITHUB_OUTPUT
-            fi
+          USERNAME="${{ github.event.comment.user.login }}"
+
+          STATUS_CODE=$(curl -s -H "Authorization: token ${{ secrets.LOOKUP_MEMBERS }}" \
+                -o response.json -w "%{http_code}" \
+                https://api.github.com/orgs/openwrt/teams/reviewers/memberships/$USERNAME)
+
+          if grep -q '"state": "active"' response.json && [ "$STATUS_CODE" -eq 200 ]; then
+            echo "authorized=true" >> $GITHUB_OUTPUT
           else
-            echo "Not authorized"
-            exit 1
+            echo "authorized=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Parse build command
-        if: steps.check-codeowners.outputs.authorized == 'true'
+        if: steps.check-reviewer.outputs.authorized == 'true'
         id: parse-command
         run: |
           COMMENT="${{ github.event.comment.body }}"
@@ -51,18 +48,36 @@ jobs:
             echo "build_requested=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Find existing build comment
+        if: steps.parse-command.outputs.build_requested == 'true'
+        id: find-comment
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          comment-author: "github-actions[bot]"
+
       - name: Create early build comment
         if: steps.parse-command.outputs.build_requested == 'true'
         id: start-comment
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
           body: |
             🚧 **Build in progress for** `${{ steps.parse-command.outputs.build_path }}`...
 
             You can follow progress [here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             *Triggered by: @${{ github.event.comment.user.login }}*
+          edit-mode: replace
+
+      - name: Checkout repository
+        if: steps.parse-command.outputs.build_requested == 'true'
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.issue.number }}/merge
 
       - name: Setup build environment
         if: steps.parse-command.outputs.build_requested == 'true'
@@ -92,6 +107,7 @@ jobs:
 
       - name: Upload log
         uses: actions/upload-artifact@v4
+        if: steps.check-reviewer.outputs.authorized == 'true' && (success() || failure())
         with:
           name: build-log-${{ steps.parse-command.outputs.target }}-${{ steps.parse-command.outputs.subtarget }}-${{ steps.parse-command.outputs.profile }}
           path: logs/
@@ -129,6 +145,7 @@ jobs:
 
             *Build triggered by: @${{ github.event.comment.user.login }}*
             *Last updated: ${{ github.event.comment.created_at }}*
+          edit-mode: replace
 
       - name: Update comment on build failure
         if: steps.parse-command.outputs.build_requested == 'true' && steps.build.outputs.build_success == 'false'
@@ -144,3 +161,4 @@ jobs:
             Please check the [action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more details.
 
             *Build triggered by: @${{ github.event.comment.user.login }}*
+          edit-mode: replace
