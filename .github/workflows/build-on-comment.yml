@@ -51,6 +51,19 @@ jobs:
             echo "build_requested=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Create early build comment
+        if: steps.parse-command.outputs.build_requested == 'true'
+        id: start-comment
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          body: |
+            🚧 **Build in progress for** `${{ steps.parse-command.outputs.build_path }}`...
+
+            You can follow progress [here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            *Triggered by: @${{ github.event.comment.user.login }}*
+
       - name: Setup build environment
         if: steps.parse-command.outputs.build_requested == 'true'
         continue-on-error: true
@@ -62,10 +75,8 @@ jobs:
         if: steps.parse-command.outputs.build_requested == 'true'
         id: build
         run: |
-          # Initialize build system
           make defconfig
 
-          # Configure build for specific target/subtarget/profile
           echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}=y" > .config
           echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}_${{ steps.parse-command.outputs.subtarget }}=y" >> .config
           echo "CONFIG_TARGET_${{ steps.parse-command.outputs.target }}_${{ steps.parse-command.outputs.subtarget }}_DEVICE_${{ steps.parse-command.outputs.profile }}=y" >> .config
@@ -73,7 +84,6 @@ jobs:
           make defconfig
           make -j$(nproc) BUILD_LOG=1
 
-          # Check if build succeeded and files exist
           if [ -d "bin/" ] && [ "$(ls -A bin/)" ]; then
             echo "build_success=true" >> $GITHUB_OUTPUT
           else
@@ -100,20 +110,11 @@ jobs:
           name: build-${{ steps.parse-command.outputs.target }}-${{ steps.parse-command.outputs.subtarget }}-${{ steps.parse-command.outputs.profile }}
           path: build-artifacts.tar.gz
 
-      - name: Find existing bot comment
-        if: steps.build.outputs.build_success == 'true'
-        id: find-comment
-        uses: peter-evans/find-comment@v2
-        with:
-          issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
-          comment-author: "github-actions[bot]"
-          body-includes: "Build Results for"
-
-      - name: Create or update comment with build results
+      - name: Update comment with build results
         if: steps.build.outputs.build_success == 'true'
         uses: peter-evans/create-or-update-comment@v3
         with:
-          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          comment-id: ${{ steps.start-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
           body: |
             ## Build Results for `${{ steps.parse-command.outputs.build_path }}`
@@ -129,10 +130,11 @@ jobs:
             *Build triggered by: @${{ github.event.comment.user.login }}*
             *Last updated: ${{ github.event.comment.created_at }}*
 
-      - name: Comment on build failure
+      - name: Update comment on build failure
         if: steps.parse-command.outputs.build_requested == 'true' && steps.build.outputs.build_success == 'false'
         uses: peter-evans/create-or-update-comment@v3
         with:
+          comment-id: ${{ steps.start-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number || github.event.issue.number }}
           body: |
             ## Build Results for `${{ steps.parse-command.outputs.build_path }}`
