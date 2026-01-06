@@ -141,14 +141,14 @@ MAKE_INSTALL_FLAGS = \
 MAKE_PATH ?= .
 
 define Build/Compile/Default
-	+$(BUILD_SANDBOX) $(MAKE_VARS) \
+	+$(if $(BUILD_SANDBOX),$(BUILD_SANDBOX) env )$(MAKE_VARS) \
 	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/$(MAKE_PATH) \
 		$(MAKE_FLAGS) \
 		$(1);
 endef
 
 define Build/Install/Default
-	$(BUILD_SANDBOX) $(MAKE_VARS) \
+	$(if $(BUILD_SANDBOX),$(BUILD_SANDBOX) env )$(MAKE_VARS) \
 	$(MAKE) -C $(PKG_BUILD_DIR)/$(MAKE_PATH) \
 		$(MAKE_INSTALL_FLAGS) \
 		$(if $(PKG_SUBDIRS),SUBDIRS='$$$$(wildcard $(PKG_SUBDIRS))') \

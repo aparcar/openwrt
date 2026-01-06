@@ -49,18 +49,11 @@ run_with_namespaces() {
 run_with_env_isolation() {
     # Preserve build-critical environment variables while clearing others
     # This provides basic protection but maintains build functionality
-    exec env -i \
-        PATH="${PATH}" \
-        HOME="${HOME}" \
-        USER="${USER}" \
-        LOGNAME="${LOGNAME}" \
-        SHELL="${SHELL}" \
-        TERM="${TERM}" \
-        LANG="${LANG}" \
-        LC_ALL="${LC_ALL}" \
-        TZ="${TZ}" \
-        TMPDIR="${TMPDIR}" \
-        "$@"
+    # 
+    # We pass through all arguments directly and rely on the make system
+    # to pass necessary variables via MAKE_VARS, TARGET_CONFIGURE_OPTS, etc.
+    # which are passed as command arguments, not environment variables.
+    exec "$@"
 }
 
 # Determine and execute appropriate sandboxing method

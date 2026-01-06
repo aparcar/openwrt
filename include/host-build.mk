@@ -114,7 +114,7 @@ endef
 HOST_MAKE_PATH ?= .
 
 define Host/Compile/Default
-	+$(BUILD_SANDBOX) $(HOST_MAKE_VARS) \
+	+$(if $(BUILD_SANDBOX),$(BUILD_SANDBOX) env )$(HOST_MAKE_VARS) \
 	$(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR)/$(HOST_MAKE_PATH) \
 		$(HOST_MAKE_FLAGS) \
 		$(1)
