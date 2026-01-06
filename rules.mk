@@ -43,7 +43,7 @@ merge=$(subst $(space),,$(1))
 #
 # @param 1: List of variable names.
 ##
-confvar=$(shell echo '$(foreach v,$(1),$(v)=$(subst ','\'',$($(v))))' | $(MKHASH) md5)
+confvar=$(shell echo '$(foreach v,$(sort $(1)),$(v)=$(subst ','\'',$($(v))))' | $(MKHASH) md5)
 ##@
 # @brief Strip last extension from file name.
 #
