@@ -101,6 +101,24 @@ menu "Global build settings"
 		  iconv and GNU gettext instead of the default OpenWrt stubs. If uClibc is
 		  used, it is also built with locale support.
 
+	config BUILD_SANDBOX
+		bool "Enable build sandboxing for package compilation"
+		default y
+		help
+		  When enabled, package compilation and installation steps are executed
+		  within a sandbox environment to provide isolation from the host system.
+		  This helps prevent:
+		  - Unauthorized modifications to the developer machine
+		  - Packages pulling in wrong dependencies from the host system
+		  - Unintended filesystem access during builds
+		  
+		  On Linux, this uses namespace isolation when available, falling back to
+		  environment isolation. On macOS, only environment isolation is used as
+		  namespaces are not available.
+		  
+		  You can disable this for debugging purposes, but it is recommended to
+		  keep it enabled for security.
+
 	config SHADOW_PASSWORDS
 		bool
 		default y

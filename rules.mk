@@ -298,6 +298,14 @@ BUILD_KEY_APK_PUB=$(TOPDIR)/public-key.pem
 
 FAKEROOT:=$(STAGING_DIR_HOST)/bin/fakeroot
 
+# Build sandbox wrapper for package compilation isolation
+# Set CONFIG_BUILD_SANDBOX=n to disable sandboxing
+ifeq ($(CONFIG_BUILD_SANDBOX),n)
+  BUILD_SANDBOX:=
+else
+  BUILD_SANDBOX:=$(SCRIPT_DIR)/build-sandbox.sh
+endif
+
 TARGET_AR:=$(TARGET_CROSS)gcc-ar
 TARGET_RANLIB:=$(TARGET_CROSS)gcc-ranlib
 TARGET_NM:=$(TARGET_CROSS)gcc-nm
