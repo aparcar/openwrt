@@ -89,13 +89,22 @@ endef
 
 ifndef DUMP_TARGET_DB
 # Parameters: <subdir> <name> <target> <depends> <config options> <stampfile location>
+# Content-based stamp checking: compute hash of source directories and compare with stored hash
 define stampfile
   $(1)/stamp-$(3):=$(if $(6),$(6),$(STAGING_DIR))/stamp/.$(2)_$(3)$(5)
   $$($(1)/stamp-$(3)): $(TMP_DIR)/.build $(4)
-	@+$(SCRIPT_DIR)/timestamp.pl -n $$($(1)/stamp-$(3)) $(1) $(4) || \
-		$(MAKE) $(if $(QUIET),--no-print-directory) $$($(1)/flags-$(3)) $(1)/$(3)
-	@mkdir -p $$$$(dirname $$($(1)/stamp-$(3)))
-	@touch $$($(1)/stamp-$(3))
+	@+stamp_file="$$($(1)/stamp-$(3))"; \
+	hash_file="$$$$stamp_file.hash"; \
+	current_hash=$$$$($(call find_md5,$(1) $(4),)); \
+	stored_hash=$$$$(cat "$$$$hash_file" 2>/dev/null || echo ""); \
+	if [ -f "$$$$stamp_file" ] && [ "$$$$current_hash" = "$$$$stored_hash" ]; then \
+		touch "$$$$stamp_file"; \
+	else \
+		$(MAKE) $(if $(QUIET),--no-print-directory) $$($(1)/flags-$(3)) $(1)/$(3) && \
+		mkdir -p $$$$(dirname "$$$$stamp_file") && \
+		echo "$$$$current_hash" > "$$$$hash_file" && \
+		touch "$$$$stamp_file"; \
+	fi
 
   $$(if $(call debug,$(1),v),,.SILENT: $$($(1)/stamp-$(3)))
 
@@ -103,7 +112,7 @@ define stampfile
 
   $(1)//clean:=$(1)/stamp-$(3)/clean
   $(1)/stamp-$(3)/clean: FORCE
-	@rm -f $$($(1)/stamp-$(3))
+	@rm -f $$($(1)/stamp-$(3)) $$($(1)/stamp-$(3)).hash
 
 endef
 endif

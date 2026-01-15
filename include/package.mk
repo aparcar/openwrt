@@ -106,17 +106,19 @@ find_library_dependencies = \
 
 PKG_DIR_NAME:=$(lastword $(subst /,$(space),$(CURDIR)))
 STAMP_NO_AUTOREBUILD=$(wildcard $(PKG_BUILD_DIR)/.no_autorebuild)
-PREV_STAMP_PREPARED:=$(if $(STAMP_NO_AUTOREBUILD),$(wildcard $(PKG_BUILD_DIR)/.prepared*))
-ifneq ($(PREV_STAMP_PREPARED),)
-  STAMP_PREPARED:=$(PREV_STAMP_PREPARED)
-  CONFIG_AUTOREBUILD:=
-else
-  STAMP_PREPARED=$(PKG_BUILD_DIR)/.prepared$(if $(QUILT)$(DUMP),,_$(shell $(call $(if $(CONFIG_AUTOREMOVE),find_md5_reproducible,find_md5),${CURDIR} $(PKG_FILE_DEPENDS),))_$(call confvar,CONFIG_AUTOREMOVE $(PKG_PREPARED_DEPENDS)))
-endif
-STAMP_CONFIGURED=$(PKG_BUILD_DIR)/.configured$(if $(DUMP),,_$(call confvar,$(PKG_CONFIG_DEPENDS)))
+
+# Content-based stamp files: hash is stored inside .hash companion file, not in filename
+# This prevents unnecessary rebuilds when make re-evaluates and computes a different hash
+STAMP_PREPARED:=$(PKG_BUILD_DIR)/.prepared
+STAMP_CONFIGURED:=$(PKG_BUILD_DIR)/.configured
 STAMP_CONFIGURED_WILDCARD=$(PKG_BUILD_DIR)/.configured_*
 STAMP_BUILT:=$(PKG_BUILD_DIR)/.built
 STAMP_INSTALLED:=$(STAGING_DIR)/stamp/.$(PKG_DIR_NAME)$(if $(BUILD_VARIANT),.$(BUILD_VARIANT),)_installed
+
+# Compute hashes for content-based rebuild detection (only when not in DUMP/QUILT mode)
+STAMP_PREPARED_HASH=$(if $(QUILT)$(DUMP),,$(shell $(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),)))
+STAMP_PREPARED_CONFVAR=$(if $(QUILT)$(DUMP),,$(call confvar,$(PKG_PREPARED_DEPENDS)))
+STAMP_CONFIGURED_CONFVAR=$(if $(DUMP),,$(call confvar,$(PKG_CONFIG_DEPENDS)))
 
 STAGING_FILES_LIST:=$(PKG_DIR_NAME)$(if $(BUILD_VARIANT),.$(BUILD_VARIANT),).list
 
@@ -178,12 +180,11 @@ SUBMAKE:=$(NO_TRACE_MAKE) $(if $(CUR_MAKEFILE),-f $(CUR_MAKEFILE))
 PKG_CONFIG_PATH=$(STAGING_DIR)/usr/lib/pkgconfig:$(STAGING_DIR)/usr/share/pkgconfig
 unexport QUIET CONFIG_SITE
 
+# Hash checking is now built into the stamp rules themselves
+# The old rdep mechanism is no longer needed
 ifeq ($(DUMP)$(filter prereq clean refresh update,$(MAKECMDGOALS)),)
   ifneq ($(if $(QUILT),,$(CONFIG_AUTOREBUILD)),)
     define Build/Autoclean
-      $(PKG_BUILD_DIR)/.dep_files: $(STAMP_PREPARED)
-      $(call rdep,${CURDIR} $(PKG_FILE_DEPENDS),$(STAMP_PREPARED),$(PKG_BUILD_DIR)/.dep_files,-x "*/.dep_*")
-      $(if $(filter prepare,$(MAKECMDGOALS)),,$(call rdep,$(PKG_BUILD_DIR),$(STAMP_BUILT),,-x "*/.dep_*" -x "*/ipkg*"))
     endef
   endif
 endif
@@ -249,12 +250,20 @@ define Build/CoreTargets
 
   $(STAMP_PREPARED) : export PATH=$$(TARGET_PATH_PKG)
   $(STAMP_PREPARED): $(STAMP_PREPARED_DEPENDS)
-	@-rm -rf $(PKG_BUILD_DIR)
-	@mkdir -p $(PKG_BUILD_DIR)
-	touch $$@_check
+	@current_hash=$$$$($(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),)); \
+	stored_hash=$$$$(cat "$$@.hash" 2>/dev/null || echo ""); \
+	if [ -f "$$@" ] && [ "$$$$current_hash" = "$$$$stored_hash" ]; then \
+		$(call debug_eval,$(SUBDIR),r,echo "No need to rebuild $$@ (hash unchanged)";) \
+		touch "$$@"; \
+		exit 0; \
+	fi; \
+	$(call debug_eval,$(SUBDIR),r,if [ -f "$$@" ]; then echo "Need to rebuild $$@ (hash changed)"; else echo "Target $$@ not built"; fi;) \
+	rm -rf $(PKG_BUILD_DIR); \
+	mkdir -p $(PKG_BUILD_DIR)
 	$(foreach hook,$(Hooks/Prepare/Pre),$(call $(hook))$(sep))
 	$(Build/Prepare)
 	$(foreach hook,$(Hooks/Prepare/Post),$(call $(hook))$(sep))
+	@echo "$$$$($(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),))" > $$@.hash
 	touch $$@
 
   $(call Build/Exports,$(STAMP_CONFIGURED))
@@ -268,8 +277,6 @@ define Build/CoreTargets
 
   $(call Build/Exports,$(STAMP_BUILT))
   $(STAMP_BUILT): $(STAMP_CONFIGURED) $(STAMP_BUILT_DEPENDS)
-	rm -f $$@
-	touch $$@_check
 	$(foreach hook,$(Hooks/Compile/Pre),$(call $(hook))$(sep))
 	$(Build/Compile)
 	$(foreach hook,$(Hooks/Compile/Post),$(call $(hook))$(sep))
@@ -409,6 +416,7 @@ clean: force-clean-build
 	$(call Build/UninstallDev,$(STAGING_DIR),$(STAGING_DIR)/host)
 	$(Build/Clean)
 	rm -f $(STAGING_DIR)/packages/$(STAGING_FILES_LIST)
+	rm -f $(STAMP_INSTALLED).hash
 
 dist:
 	$(Build/Dist)

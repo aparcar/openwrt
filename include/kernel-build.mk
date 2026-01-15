@@ -10,7 +10,10 @@ ifneq ($(DUMP),1)
 endif
 
 KERNEL_FILE_DEPENDS=$(GENERIC_BACKPORT_DIR) $(GENERIC_PATCH_DIR) $(GENERIC_HACK_DIR) $(PATCH_DIR) $(GENERIC_FILES_DIR) $(FILES_DIR)
-STAMP_PREPARED=$(LINUX_DIR)/.prepared$(if $(QUILT)$(DUMP),,_$(shell $(call $(if $(CONFIG_AUTOREMOVE),find_md5_reproducible,find_md5),$(KERNEL_FILE_DEPENDS),)))
+
+# Content-based stamp files: hash is stored inside .hash companion file, not in filename
+STAMP_PREPARED:=$(LINUX_DIR)/.prepared
+STAMP_PREPARED_HASH=$(if $(QUILT)$(DUMP),,$(shell $(call find_md5,$(KERNEL_FILE_DEPENDS),)))
 STAMP_CONFIGURED:=$(LINUX_DIR)/.configured
 include $(INCLUDE_DIR)/download.mk
 include $(INCLUDE_DIR)/quilt.mk
@@ -72,11 +75,11 @@ ifdef CONFIG_COLLECT_KERNEL_DEBUG
   endef
 endif
 
+# Hash checking is now built into the stamp rules themselves
+# The old rdep mechanism is no longer needed for kernel builds
 ifeq ($(DUMP)$(filter prereq clean refresh update,$(MAKECMDGOALS)),)
   ifneq ($(if $(QUILT),,$(CONFIG_AUTOREBUILD)),)
     define Kernel/Autoclean
-      $(PKG_BUILD_DIR)/.dep_files: $(STAMP_PREPARED)
-      $(call rdep,$(KERNEL_FILE_DEPENDS),$(STAMP_PREPARED),$(PKG_BUILD_DIR)/.dep_files,-x "*/.dep_*")
     endef
   endif
 endif
@@ -90,9 +93,18 @@ define BuildKernel
 
   $(Kernel/Autoclean)
   $(STAMP_PREPARED): $(if $(LINUX_SITE),$(DL_DIR)/$(LINUX_SOURCE))
+	@current_hash=$$$$($(call find_md5,$(KERNEL_FILE_DEPENDS),)); \
+	stored_hash=$$$$(cat "$$@.hash" 2>/dev/null || echo ""); \
+	if [ -f "$$@" ] && [ "$$$$current_hash" = "$$$$stored_hash" ]; then \
+		$(call debug_eval,$(SUBDIR),r,echo "No need to rebuild $$@ (hash unchanged)";) \
+		touch "$$@"; \
+		exit 0; \
+	fi; \
+	$(call debug_eval,$(SUBDIR),r,if [ -f "$$@" ]; then echo "Need to rebuild $$@ (hash changed)"; else echo "Target $$@ not built"; fi;)
 	-rm -rf $(KERNEL_BUILD_DIR)
 	-mkdir -p $(KERNEL_BUILD_DIR)
 	$(Kernel/Prepare)
+	@echo "$$$$($(call find_md5,$(KERNEL_FILE_DEPENDS),))" > $$@.hash
 	touch $$@
 
   $(KERNEL_BUILD_DIR)/symtab.h: FORCE
@@ -125,8 +137,17 @@ define BuildKernel
 		echo; \
 	) > $$@
 
-  $(STAMP_CONFIGURED): $(STAMP_PREPARED) $(LINUX_KCONFIG_LIST) $(TOPDIR)/.config FORCE
+  $(STAMP_CONFIGURED): $(STAMP_PREPARED) $(LINUX_KCONFIG_LIST) $(TOPDIR)/.config
+	@current_hash=$$$$($(call find_md5,$(LINUX_KCONFIG_LIST) $(TOPDIR)/.config,)); \
+	stored_hash=$$$$(cat "$$@.hash" 2>/dev/null || echo ""); \
+	if [ -f "$$@" ] && [ "$$$$current_hash" = "$$$$stored_hash" ]; then \
+		$(call debug_eval,$(SUBDIR),r,echo "No need to reconfigure kernel (hash unchanged)";) \
+		touch "$$@"; \
+		exit 0; \
+	fi; \
+	$(call debug_eval,$(SUBDIR),r,if [ -f "$$@" ]; then echo "Need to reconfigure kernel (hash changed)"; else echo "Kernel not configured"; fi;)
 	$(Kernel/Configure)
+	@echo "$$$$($(call find_md5,$(LINUX_KCONFIG_LIST) $(TOPDIR)/.config,))" > $$@.hash
 	touch $$@
 
   $(LINUX_DIR)/.modules: export STAGING_PREFIX=$$(STAGING_DIR_HOST)
@@ -178,6 +199,7 @@ define BuildKernel
 
   clean: FORCE
 	rm -rf $(KERNEL_BUILD_DIR)
+	rm -f $(STAMP_PREPARED).hash $(STAMP_CONFIGURED).hash
 
   image-prereq:
 	@+$(NO_TRACE_MAKE) -s -C image prereq TARGET_BUILD=

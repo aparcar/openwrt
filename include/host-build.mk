@@ -21,12 +21,18 @@ include $(INCLUDE_DIR)/depends.mk
 include $(INCLUDE_DIR)/quilt.mk
 
 BUILD_TYPES += host
-HOST_STAMP_PREPARED=$(HOST_BUILD_DIR)/.prepared$(if $(HOST_QUILT)$(DUMP),,$(shell $(call $(if $(CONFIG_AUTOREMOVE),find_md5_reproducible,find_md5),${CURDIR} $(PKG_FILE_DEPENDS),))_$(call confvar,CONFIG_AUTOREMOVE $(HOST_PREPARED_DEPENDS)))
+
+# Content-based stamp files: hash is stored inside .hash companion file, not in filename
+HOST_STAMP_PREPARED:=$(HOST_BUILD_DIR)/.prepared
 HOST_STAMP_CONFIGURED:=$(HOST_BUILD_DIR)/.configured
 HOST_STAMP_BUILT:=$(HOST_BUILD_DIR)/.built
 HOST_BUILD_PREFIX?=$(if $(IS_PACKAGE_BUILD),$(STAGING_DIR_HOSTPKG),$(STAGING_DIR_HOST))
 HOST_STAMP_INSTALLED:=$(HOST_BUILD_PREFIX)/stamp/.$(PKG_NAME)_installed
 HOST_STAMP_PROGRAMS:=$(foreach program,$(PKG_PROGRAMS),$(dir $(HOST_STAMP_INSTALLED))$(subst $(PKG_NAME),$(program),$(notdir $(HOST_STAMP_INSTALLED))) )
+
+# Compute hashes for content-based rebuild detection (only when not in DUMP/HOST_QUILT mode)
+HOST_STAMP_PREPARED_HASH=$(if $(HOST_QUILT)$(DUMP),,$(shell $(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),)))
+HOST_STAMP_PREPARED_CONFVAR=$(if $(HOST_QUILT)$(DUMP),,$(call confvar,$(HOST_PREPARED_DEPENDS)))
 
 override MAKEFLAGS=
 
@@ -137,10 +143,10 @@ define Host/Install
 endef
 
 
+# Hash checking is now built into the stamp rules themselves
+# The old rdep mechanism is no longer needed for host builds
 ifneq ($(if $(HOST_QUILT),,$(CONFIG_AUTOREBUILD)),)
-  define HostHost/Autoclean
-    $(call rdep,${CURDIR} $(PKG_FILE_DEPENDS),$(HOST_STAMP_PREPARED))
-    $(if $(if $(Host/Compile),$(filter prepare,$(MAKECMDGOALS)),1),,$(call rdep,$(HOST_BUILD_DIR),$(HOST_STAMP_BUILT)))
+  define Host/Autoclean
   endef
 endif
 
@@ -160,14 +166,23 @@ Host/Exports=$(Host/Exports/Default)
 ifndef DUMP
   define HostBuild/Core
   $(if $(HOST_QUILT),$(Host/Quilt))
-  $(if $(DUMP),,$(call HostHost/Autoclean))
+  $(if $(DUMP),,$(call Host/Autoclean))
 
   $(HOST_STAMP_PREPARED):
-	@-rm -rf $(HOST_BUILD_DIR)
-	@mkdir -p $(HOST_BUILD_DIR)
+	@current_hash=$$$$($(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),)); \
+	stored_hash=$$$$(cat "$$@.hash" 2>/dev/null || echo ""); \
+	if [ -f "$$@" ] && [ "$$$$current_hash" = "$$$$stored_hash" ]; then \
+		$(call debug_eval,$(SUBDIR),r,echo "No need to rebuild $$@ (hash unchanged)";) \
+		touch "$$@"; \
+		exit 0; \
+	fi; \
+	$(call debug_eval,$(SUBDIR),r,if [ -f "$$@" ]; then echo "Need to rebuild $$@ (hash changed)"; else echo "Target $$@ not built"; fi;) \
+	rm -rf $(HOST_BUILD_DIR); \
+	mkdir -p $(HOST_BUILD_DIR)
 	$(foreach hook,$(Hooks/HostPrepare/Pre),$(call $(hook))$(sep))
 	$(call Host/Prepare)
 	$(foreach hook,$(Hooks/HostPrepare/Post),$(call $(hook))$(sep))
+	@echo "$$$$($(call find_md5,${CURDIR} $(PKG_FILE_DEPENDS),))" > $$@.hash
 	touch $$@
 
   $(call Host/Exports,$(HOST_STAMP_CONFIGURED))
@@ -179,10 +194,10 @@ ifndef DUMP
 
   $(call Host/Exports,$(HOST_STAMP_BUILT))
   $(HOST_STAMP_BUILT): $(HOST_STAMP_CONFIGURED)
-		$(foreach hook,$(Hooks/HostCompile/Pre),$(call $(hook))$(sep))
-		$(call Host/Compile)
-		$(foreach hook,$(Hooks/HostCompile/Post),$(call $(hook))$(sep))
-		touch $$@
+	$(foreach hook,$(Hooks/HostCompile/Pre),$(call $(hook))$(sep))
+	$(call Host/Compile)
+	$(foreach hook,$(Hooks/HostCompile/Post),$(call $(hook))$(sep))
+	touch $$@
 
   $(call Host/Exports,$(HOST_STAMP_INSTALLED))
   $(HOST_STAMP_INSTALLED): $(HOST_STAMP_BUILT) $(if $(FORCE_HOST_INSTALL),FORCE)
@@ -215,6 +230,7 @@ ifndef DUMP
   host-clean: host-clean-build
 	$(call Host/Clean)
 	rm -rf $(HOST_STAMP_INSTALLED) $(HOST_STAMP_PROGRAMS)
+	rm -f $(HOST_STAMP_INSTALLED).hash $(HOST_STAMP_PROGRAMS:=.hash)
 
     ifneq ($(CONFIG_AUTOREMOVE),)
       host-compile:
