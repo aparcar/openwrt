@@ -445,6 +445,8 @@ define U-Boot/mt7981_nokia_ea0326gmp
   DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
 endef
 
+# great
+
 define U-Boot/mt7981_openwrt_one-snand
   NAME:=OpenWrt One NAND
   BUILD_SUBTARGET:=filogic
