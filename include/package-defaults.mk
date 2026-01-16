@@ -4,6 +4,16 @@
 
 PKG_DEFAULT_DEPENDS = +libc
 
+# SDK Sandbox Network Configuration
+# Set PKG_BUILD_NETWORK:=1 in package Makefile to allow network access
+# during sandboxed builds. By default, network is disabled for security.
+#
+# Example in package Makefile:
+#   PKG_BUILD_NETWORK:=1
+#
+# This is only relevant when CONFIG_SDK_SANDBOX is enabled.
+PKG_BUILD_NETWORK ?=
+
 ifneq ($(PKG_NAME),toolchain)
   PKG_FIXUP_DEPENDS = $(if $(filter kmod-%,$(1)),$(2),$(PKG_DEFAULT_DEPENDS) $(filter-out $(PKG_DEFAULT_DEPENDS),$(2)))
 else

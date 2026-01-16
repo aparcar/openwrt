@@ -141,6 +141,64 @@ menu "Advanced configuration options (for developers)"
 
 endmenu
 
+menu "SDK build isolation"
+
+	config SDK_MINIMAL_DEPS
+		bool "Minimal dependency resolution"
+		default n
+		help
+		  Only resolve direct dependencies for package builds, not
+		  transitive dependencies. This significantly reduces build time
+		  when building individual packages, but requires that dependencies
+		  are pre-installed in the staging directory.
+
+		  Use with: make SDK_MINIMAL_DEPS=1 package/foo/compile
+
+		  Or enable this option to make it the default behavior.
+
+	config SDK_STRICT_DEPS
+		bool "Strict dependency checking"
+		depends on SDK_MINIMAL_DEPS
+		default n
+		help
+		  When enabled, package builds will fail if any direct dependency
+		  is missing from the staging directory. When disabled, missing
+		  dependencies only produce warnings.
+
+	config SDK_PREBUILT_DEPS
+		bool "Support prebuilt dependency installation"
+		default n
+		help
+		  Enable support for installing prebuilt packages from repositories
+		  into the staging directory. This allows building individual
+		  packages without compiling all dependencies from source.
+
+		  Use scripts/sdk-install-deps.sh <package> to install dependencies.
+
+	config SDK_SANDBOX
+		bool "Sandboxed package builds (bubblewrap)"
+		default n
+		select SDK_MINIMAL_DEPS
+		help
+		  Build packages in an isolated bubblewrap (bwrap) sandbox.
+		  This provides:
+		  - Security isolation from untrusted package sources
+		  - Reproducible builds with clean environment
+		  - Network isolation by default
+
+		  Requires bubblewrap to be installed on the host system.
+
+	config SDK_SANDBOX_NETWORK
+		bool "Allow network access in sandbox by default"
+		depends on SDK_SANDBOX
+		default n
+		help
+		  Allow packages to access the network during build by default.
+		  When disabled (recommended), packages must explicitly request
+		  network access via PKG_BUILD_NETWORK:=1 in their Makefile.
+
+endmenu
+
 config IN_SDK
 	default y
 	bool

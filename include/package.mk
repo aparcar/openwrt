@@ -83,6 +83,16 @@ endif
 
 include $(INCLUDE_DIR)/quilt.mk
 
+# SDK Minimal Dependencies Mode
+# When SDK_MINIMAL_DEPS=1, use simplified direct dependency resolution
+# instead of the 5-level recursive expansion below.
+ifdef SDK_MINIMAL_DEPS
+  include $(INCLUDE_DIR)/package-minimal-deps.mk
+else
+# Default: 5-level recursive dependency expansion
+# This finds all transitive dependencies up to 5 levels deep.
+# For individual package builds, this can cause "dependency explosion"
+# where a simple package pulls in 50+ dependencies.
 find_library_dependencies = \
 	$(wildcard $(patsubst %,$(STAGING_DIR)/pkginfo/%.version, \
 		$(filter-out $(BUILD_PACKAGES), $(sort $(foreach dep4, \
@@ -102,6 +112,7 @@ find_library_dependencies = \
 			$(Package/$(dep4)/depends) $(dep4) \
 		))) \
 	))
+endif # SDK_MINIMAL_DEPS
 
 
 PKG_DIR_NAME:=$(lastword $(subst /,$(space),$(CURDIR)))

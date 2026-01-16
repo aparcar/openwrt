@@ -34,6 +34,11 @@ else
   include rules.mk
   include $(INCLUDE_DIR)/depends.mk
   include $(INCLUDE_DIR)/subdir.mk
+
+  # SDK-specific build isolation modules
+  -include $(INCLUDE_DIR)/sandbox.mk
+  -include $(INCLUDE_DIR)/package-dev.mk
+
   include package/Makefile
 
 $(package/stamp-compile): $(BUILD_DIR)/.prepared
