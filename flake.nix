@@ -1,304 +1,144 @@
-# OpenWrt Build Environment Nix Flake
-#
-# This flake provides a Docker image and development shell for building OpenWrt.
-#
-# Usage:
-#   # Build the Docker image
-#   nix build .#openwrt-docker-image
-#   docker load < result
-#   docker run -it --rm -v $(pwd):/openwrt openwrt-build-env
-#
-#   # Or enter a development shell directly (no Docker needed)
-#   nix develop
-#
 {
   description = "OpenWrt Build Environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-        };
+  outputs = { self, nixpkgs }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
 
-        # OpenWrt tools versions from tools/ folder for reference
-        toolVersions = {
-          "7z" = "25.01";
-          autoconf = "2.72";
-          autoconf-archive = "2023.02.20";
-          automake = "1.18.1";
-          bash = "5.3";
-          bc = "1.08.1";
-          bison = "3.8.2";
-          bzip2 = "1.0.8";
-          ccache = "4.12.1";
-          cmake = "4.2.0";
-          coreutils = "9.6";
-          cpio = "2.15";
-          dosfstools = "4.2";
-          e2fsprogs = "1.47.3";
-          elfutils = "0.192";
-          expat = "2.7.3";
-          fakeroot = "1.37.1.2";
-          findutils = "4.10.0";
-          flex = "2.6.4";
-          gmp = "6.3.0";
-          isl = "0.27";
-          libdeflate = "1.25";
-          liblzo = "2.10";
-          libtool = "2.5.4";
-          lz4 = "1.10.0";
-          m4 = "1.4.20";
-          meson = "1.6.1";
-          mold = "2.40.4";
-          mpc = "1.3.1";
-          mpfr = "4.2.2";
-          mtd-utils = "2.3.0";
-          mtools = "4.0.49";
-          ninja = "1.13.2";
-          patch = "2.8";
-          patchelf = "0.18.0";
-          pkgconf = "2.5.1";
-          quilt = "0.69";
-          sed = "4.9";
-          squashfs4 = "4.7.4";
-          tar = "1.35";
-          util-linux = "2.41.3";
-          xxhash = "0.8.3";
-          xz = "5.8.2";
-          zip = "3.0";
-          zlib = "1.3.1";
-          zstd = "1.5.7";
-        };
+      # Tool versions from OpenWrt tools/ folder
+      toolVersions = {
+        p7zip = "25.01"; autoconf = "2.72"; automake = "1.18.1";
+        bash = "5.3"; bc = "1.08.1"; bison = "3.8.2"; bzip2 = "1.0.8";
+        ccache = "4.12.1"; cmake = "4.2.0"; coreutils = "9.6"; cpio = "2.15";
+        dosfstools = "4.2"; dwarves = "1.31"; e2fsprogs = "1.47.3";
+        elfutils = "0.192"; erofs-utils = "1.8.10"; expat = "2.7.3";
+        fakeroot = "1.37.1.2"; findutils = "4.10.0"; flex = "2.6.4";
+        genext2fs = "1.5.0"; gengetopt = "2.23"; gmp = "6.3.0"; isl = "0.27";
+        libdeflate = "1.25"; lzo = "2.10"; libressl = "4.2.1"; libtool = "2.5.4";
+        llvm-bpf = "21.1.6"; lz4 = "1.10.0"; lzop = "1.04"; m4 = "1.4.20";
+        meson = "1.6.1"; mkimage = "2025.10"; mold = "2.40.4"; mpc = "1.3.1";
+        mpfr = "4.2.2"; mtd-utils = "2.3.0"; mtools = "4.0.49"; ninja = "1.13.2";
+        patch = "2.8"; patchelf = "0.18.0"; pkgconf = "2.5.1"; quilt = "0.69";
+        sed = "4.9"; sparse = "0.6.4"; squashfs = "4.7.4"; tar = "1.35";
+        util-linux = "2.41.3"; xxHash = "0.8.3"; xz = "5.8.2"; zip = "3.0";
+        zlib = "1.3.1"; zstd = "1.5.7";
+      };
 
-        # Common build inputs for OpenWrt
-        commonBuildInputs = with pkgs; [
-          # Essential build tools
-          gnumake
-          gcc
-          glibc
-          binutils
-          coreutils
-          findutils
-          diffutils
-          patch
-          gawk
-          gettext
-          gnused
-          gnugrep
+      buildTools = with pkgs; [
+        # Core
+        bashInteractive coreutils findutils diffutils gnused gnugrep gawk
+        gnutar gzip which file less procps util-linux
 
-          # Compression tools
-          gzip
-          bzip2
-          xz
-          zstd
-          lz4
-          lzop
-          p7zip
-          zip
-          unzip
+        # Build essentials
+        gnumake gcc glibc glibc.static binutils patch gettext stdenv.cc
 
-          # Build system tools
-          autoconf
-          automake
-          libtool
-          pkg-config
-          cmake
-          ninja
-          meson
+        # Compression
+        bzip2 xz zstd lz4 lzop p7zip zip unzip
 
-          # Parser generators
-          flex
-          bison
-          m4
+        # Build systems
+        autoconf automake libtool pkg-config pkgconf cmake ninja meson
 
-          # Python
-          python3
-          python3Packages.setuptools
-          python3Packages.pyelftools
-          python3Packages.jsonschema
-          python3Packages.jinja2
-          python3Packages.pyyaml
+        # Parsers
+        flex bison m4
 
-          # Perl
-          perl
-          perlPackages.DataDumper
+        # Python
+        python3 python3Packages.setuptools python3Packages.pyelftools
+        python3Packages.jsonschema python3Packages.jinja2 python3Packages.pyyaml
 
-          # Version control
-          git
-          subversion
+        # Perl
+        perl perlPackages.DataDumper
 
-          # Download tools
-          wget
-          curl
-          rsync
+        # VCS & network
+        git subversion wget curl rsync cacert
 
-          # ncurses for menuconfig
-          ncurses
-          ncurses.dev
+        # ncurses
+        ncurses ncurses.dev
 
-          # Libraries
-          zlib
-          zlib.dev
-          openssl
-          openssl.dev
-          expat
-          expat.dev
-          lzo
-          libelf
-          elfutils
+        # Libraries
+        zlib zlib.dev zlib.static openssl openssl.dev expat expat.dev
+        lzo lzo.dev gmp gmp.dev mpfr mpfr.dev libmpc isl
 
-          # Filesystem tools
-          squashfsTools
-          e2fsprogs
-          dosfstools
-          mtools
-          mtd-utils
+        # ELF tools
+        libelf elfutils elfutils.dev patchelf dwarves
 
-          # ELF tools
-          patchelf
+        # Compression libs
+        xxHash xxHash.dev libdeflate
 
-          # Build helpers
-          fakeroot
-          file
-          which
-          time
+        # Filesystem tools
+        squashfsTools e2fsprogs dosfstools mtools mtd-utils erofs-utils
 
-          # For kernel building
-          bc
-          kmod
-          cpio
+        # Build helpers
+        fakeroot time bc kmod cpio ccache
 
-          # Device tree
-          dtc
+        # Device tree & U-boot
+        dtc ubootTools
 
-          # U-boot tools
-          ubootTools
+        # Misc
+        mold quilt asciidoc swig sparse libressl gengetopt genext2fs
 
-          # Misc
-          ccache
-          quilt
-          asciidoc
-          swig
-          util-linux
+        # LLVM/BPF
+        llvmPackages.llvm llvmPackages.clang llvmPackages.bintools
+      ];
 
-          # LLVM for BPF
-          llvmPackages.llvm
-          llvmPackages.clang
-        ];
+      etcFiles = pkgs.runCommand "etc-files" { } ''
+        mkdir -p $out/etc
+        cat > $out/etc/passwd << 'EOF'
+        root:x:0:0:root:/root:/bin/bash
+        builder:x:1000:1000:builder:/home/builder:/bin/bash
+        EOF
+        cat > $out/etc/group << 'EOF'
+        root:x:0:
+        builder:x:1000:
+        EOF
+      '';
 
-        # Ubuntu base for Docker image
-        ubuntuBase = pkgs.dockerTools.pullImage {
-          imageName = "ubuntu";
-          imageDigest = "sha256:72297848456d5d37d1262630108ab308d3e9ec7ed1c3286a32fe09856619a782";
-          sha256 = "sha256-GaGwxp8B1MlB5VXYVj29VDvuDVX5rLXLfwkH3Z0qJcE=";
-          finalImageName = "ubuntu";
-          finalImageTag = "24.04";
-        };
+      entrypoint = pkgs.writeShellScriptBin "entrypoint" ''
+        exec "$@"
+      '';
 
-        # Build the Docker image
-        dockerImage = pkgs.dockerTools.buildImage {
+    in {
+      packages.${system} = {
+        default = pkgs.dockerTools.buildLayeredImage {
           name = "openwrt-build-env";
           tag = "latest";
-
-          fromImage = ubuntuBase;
-
-          runAsRoot = ''
-            #!${pkgs.runtimeShell}
-            set -e
-
-            export DEBIAN_FRONTEND=noninteractive
-            export TZ=UTC
-
-            apt-get update
-
-            apt-get install -y --no-install-recommends \
-              build-essential clang flex bison g++ gawk \
-              gcc-multilib g++-multilib gettext git \
-              libncurses5-dev libncursesw5-dev libssl-dev \
-              python3 python3-dev python3-setuptools python3-pip \
-              rsync swig unzip zlib1g-dev file wget curl ca-certificates \
-              xsltproc zip coreutils diffutils findutils gzip bzip2 \
-              xz-utils tar patch make perl perl-modules libdata-dump-perl \
-              libncurses-dev autoconf automake autopoint libtool libtool-bin \
-              pkg-config cmake ninja-build meson bc kmod cpio fakeroot \
-              device-tree-compiler u-boot-tools asciidoc binutils-dev ccache \
-              ecj fastjar java-propose-classpath qemu-utils sharutils subversion \
-              uglifyjs lzop p7zip-full zstd squashfs-tools e2fsprogs dosfstools \
-              mtools mtd-utils libelf-dev elfutils patchelf libz-dev zlib1g-dev \
-              libexpat1-dev liblzo2-dev liblz4-dev libdeflate-dev libxxhash-dev \
-              libssl-dev llvm clang quilt time util-linux uuid-dev libpam-dev
-
-            pip3 install --break-system-packages \
-              pyelftools jsonschema jinja2 pyyaml
-
-            ln -sf /usr/bin/python3 /usr/bin/python || true
-
-            apt-get clean
-            rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-            useradd -m -s /bin/bash builder || true
-            mkdir -p /openwrt
-            chown builder:builder /openwrt
+          contents = buildTools ++ [
+            etcFiles entrypoint
+            pkgs.dockerTools.caCertificates
+            pkgs.dockerTools.fakeNss
+          ];
+          extraCommands = ''
+            mkdir -p tmp root home/builder openwrt usr/bin
+            chmod 1777 tmp
+            ln -sf ${pkgs.python3}/bin/python3 usr/bin/python || true
+            ln -sf ${pkgs.coreutils}/bin/env usr/bin/env || true
           '';
-
           config = {
             Cmd = [ "/bin/bash" ];
+            Entrypoint = [ "${entrypoint}/bin/entrypoint" ];
             WorkingDir = "/openwrt";
             Env = [
+              "PATH=/bin:/usr/bin:${pkgs.lib.makeBinPath buildTools}"
               "FORCE_UNSAFE_CONFIGURE=1"
               "LANG=C.UTF-8"
-              "LC_ALL=C.UTF-8"
-              "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+              "HOME=/root"
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
-            Labels = {
-              "org.opencontainers.image.title" = "OpenWrt Build Environment";
-              "org.opencontainers.image.description" = "Ubuntu-based Docker image with all OpenWrt build dependencies";
-              "org.opencontainers.image.source" = "https://github.com/openwrt/openwrt";
-            };
             Volumes = { "/openwrt" = { }; };
           };
         };
+      };
 
-      in
-      {
-        packages = {
-          openwrt-docker-image = dockerImage;
-          default = dockerImage;
-        };
-
-        # Development shell - enter with: nix develop
-        devShells.default = pkgs.mkShell {
-          name = "openwrt-build-env";
-
-          buildInputs = commonBuildInputs;
-
-          shellHook = ''
-            echo "=========================================="
-            echo "OpenWrt Build Environment"
-            echo "=========================================="
-            echo ""
-            echo "This shell includes all dependencies needed to build OpenWrt."
-            echo ""
-            echo "To build OpenWrt:"
-            echo "  1. ./scripts/feeds update -a"
-            echo "  2. ./scripts/feeds install -a"
-            echo "  3. make menuconfig"
-            echo "  4. make -j$(nproc)"
-            echo ""
-            echo "Environment ready!"
-            echo ""
-          '';
-
-          # Environment variables for OpenWrt build
-          FORCE_UNSAFE_CONFIGURE = "1";
-        };
-      }
-    );
+      devShells.${system}.default = pkgs.mkShell {
+        buildInputs = buildTools;
+        FORCE_UNSAFE_CONFIGURE = "1";
+        shellHook = ''
+          echo "OpenWrt Build Environment"
+        '';
+      };
+    };
 }
