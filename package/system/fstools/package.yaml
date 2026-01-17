@@ -1,0 +1,61 @@
+# OpenWrt filesystem tools
+# Provides mount_root for preinit rootfs mounting
+# Synced with OpenWrt package/system/fstools/Makefile
+
+name: fstools
+version: "2025.10.03"
+release: 1
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/fstools.git"
+  version: "12858e2878efe973049bc9fdbaf48860b9747ce3"
+  sha256: "f69b54fda520151fc2a0db6e371dc48ba64e93199cdb35c259561906a3af2845"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt filesystem tools
+  description: |
+    OpenWrt filesystem tools including mount_root for rootfs mounting
+    during preinit, and factoryreset for factory reset functionality.
+  maintainer: John Crispin <john@phrozen.org>
+
+dependencies:
+  runtime:
+    - ubox
+    - libubox
+  build:
+    - libubox-dev
+    - libuci-dev
+    - libubus-dev
+    - libjson-c-dev
+    - libblobmsg-json
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    # Skip building 'block' which requires system libblkid
+    - "-DCMAKE_SKIP_BLOCK=ON"
+
+subpackages:
+  fstools:
+    description: "OpenWrt filesystem tools"
+    section: base
+    files:
+      - src: "usr/sbin/mount_root"
+        dst: "/sbin/mount_root"
+        mode: "0755"
+      - src: "usr/sbin/factoryreset"
+        dst: "/sbin/factoryreset"
+        mode: "0755"
+      - src: "usr/lib/libfstools.so"
+        dst: "/lib/libfstools.so"
+        mode: "0755"
+    symlinks:
+      - src: "factoryreset"
+        dst: "/sbin/jffs2mark"
+      - src: "factoryreset"
+        dst: "/sbin/jffs2reset"

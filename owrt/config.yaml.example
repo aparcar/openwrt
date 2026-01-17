@@ -1,0 +1,59 @@
+# OpenWrt-ng Build Configuration
+# Copy to config.yaml and customize for your build
+
+# Target and profile selection
+target: armsr-armv8
+profile: generic
+
+# Packages to include (in addition to target's default_packages)
+# Use - package_name for regular packages
+# Use - kmod-xxx for kernel modules
+packages:
+  # Networking
+  - curl
+  - wget-ssl
+  # Kernel modules
+  - kmod-vxlan
+  - kmod-wireguard
+  # Web interface (optional)
+  # - luci
+
+# Packages to exclude from default_packages
+# exclude_packages:
+#   - dropbear
+
+# Kernel configuration overrides
+# These are merged with target's kernel config
+kernel:
+  # Enable IPv6 support
+  # CONFIG_IPV6: y
+  # Enable wireguard
+  # CONFIG_WIREGUARD: m
+
+# Image settings
+image:
+  # Root filesystem size (supports K, M, G suffixes)
+  rootfs_size: 100M
+  # Kernel partition size
+  kernel_size: 16M
+  # Compression: gzip, xz, zstd, none
+  compression: gzip
+  # Filesystem type: squashfs, ext4, both
+  rootfs_type: squashfs
+
+# Build options
+build:
+  # Number of parallel jobs (default: auto-detect)
+  # jobs: 8
+  # Verbose output
+  verbose: false
+  # Continue on package build failure
+  continue_on_error: false
+  # Download directory (for caching sources)
+  # dl_dir: /path/to/downloads
+
+# Advanced: Override source URLs (for local development)
+# source_overrides:
+#   ubus:
+#     type: local
+#     path: /home/user/ubus-dev

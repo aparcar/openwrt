@@ -1,0 +1,238 @@
+# U-Boot for MediaTek SoCs
+# Synced with OpenWrt package/boot/uboot-mediatek/Makefile
+
+name: uboot-mediatek
+version: "2025.10"
+release: 1
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://mirror.cyberbits.eu/u-boot/u-boot-${version}.tar.bz2"
+  sha256: "b4f032848e56cc8f213ad59f9132c084dbbb632bc29176d024e58220e0efdf4a"
+  mirrors:
+    - "https://ftp.denx.de/pub/u-boot/u-boot-${version}.tar.bz2"
+
+metadata:
+  section: boot
+  category: Boot Loaders
+  title: U-Boot for MediaTek SoCs
+  description: |
+    Das U-Boot bootloader for MediaTek ARM SoCs. This package builds
+    U-Boot and combines it with ARM Trusted Firmware (BL31) to create
+    a FIP (Firmware Image Package) for booting.
+  maintainer: OpenWrt Developers
+
+dependencies:
+  runtime: []
+  build:
+    - arm-trusted-firmware-tools  # fiptool for FIP creation
+
+build:
+  system: uboot
+  parallel: true
+  use_intree_dtc: true
+
+  # Disable optional features to reduce size
+  config_disable:
+    - TOOLS_KWBIMAGE
+    - TOOLS_LIBCRYPTO
+    - TOOLS_MKEFICAPSULE
+
+# Device-specific U-Boot configurations
+# Each variant builds a specific defconfig and produces u-boot.fip
+variants:
+  # =========================================================================
+  # OpenWrt One - Official OpenWrt reference hardware
+  # =========================================================================
+  mt7981_openwrt_one-snand:
+    description: "OpenWrt One (SPI-NAND)"
+    defconfig: mt7981_openwrt-one-spi-nand_defconfig
+    plat: mt7981
+    boot_device: spim-nand-ubi
+    ddr_type: ddr4
+    tfa_variant: mt7981-spim-nand-ubi-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-spim-nand-ubi-ddr4-bl31.bin"
+      compress: false
+
+  mt7981_openwrt_one-nor:
+    description: "OpenWrt One (SPI-NOR)"
+    defconfig: mt7981_openwrt-one-nor_defconfig
+    plat: mt7981
+    boot_device: nor
+    ddr_type: ddr4
+    tfa_variant: mt7981-nor-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-nor-ddr4-bl31.bin"
+      compress: true  # NOR variant uses compression
+
+  # =========================================================================
+  # MT7981 Reference and common devices
+  # =========================================================================
+  mt7981_rfb-spim-nand:
+    description: "MT7981 Reference Board (SPI-NAND)"
+    defconfig: mt7981_rfb_defconfig
+    plat: mt7981
+    boot_device: spim-nand
+    ddr_type: ddr3
+    tfa_variant: mt7981-spim-nand-ddr3
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-spim-nand-ddr3-bl31.bin"
+      compress: false
+
+  mt7981_rfb-emmc:
+    description: "MT7981 Reference Board (eMMC)"
+    defconfig: mt7981_emmc_rfb_defconfig
+    plat: mt7981
+    boot_device: emmc
+    ddr_type: ddr3
+    tfa_variant: mt7981-emmc-ddr3
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-emmc-ddr3-bl31.bin"
+      compress: false
+
+  mt7981_rfb-nor:
+    description: "MT7981 Reference Board (SPI-NOR)"
+    defconfig: mt7981_nor_rfb_defconfig
+    plat: mt7981
+    boot_device: nor
+    ddr_type: ddr3
+    tfa_variant: mt7981-nor-ddr3
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-nor-ddr3-bl31.bin"
+      compress: false
+
+  mt7981_glinet_gl-mt2500:
+    description: "GL.iNet GL-MT2500"
+    defconfig: mt7981_glinet_gl-mt2500_defconfig
+    plat: mt7981
+    boot_device: emmc
+    ddr_type: ddr4
+    tfa_variant: mt7981-emmc-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7981-emmc-ddr4-bl31.bin"
+      compress: false
+
+  # =========================================================================
+  # MT7986 (BananaPi R3 and similar)
+  # =========================================================================
+  mt7986_bananapi_bpi-r3-emmc:
+    description: "BananaPi BPi-R3 (eMMC)"
+    defconfig: mt7986a_bpi-r3-emmc_defconfig
+    plat: mt7986
+    boot_device: emmc
+    ddr_type: ddr4
+    tfa_variant: mt7986-emmc-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7986-emmc-ddr4-bl31.bin"
+      compress: false
+
+  mt7986_bananapi_bpi-r3-sdmmc:
+    description: "BananaPi BPi-R3 (SD card)"
+    defconfig: mt7986a_bpi-r3-sd_defconfig
+    plat: mt7986
+    boot_device: sdmmc
+    ddr_type: ddr4
+    tfa_variant: mt7986-sdmmc-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7986-sdmmc-ddr4-bl31.bin"
+      compress: false
+
+  mt7986_bananapi_bpi-r3-snand:
+    description: "BananaPi BPi-R3 (SPI-NAND)"
+    defconfig: mt7986a_bpi-r3-snand_defconfig
+    plat: mt7986
+    boot_device: spim-nand-ubi
+    ddr_type: ddr4
+    tfa_variant: mt7986-spim-nand-ubi-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7986-spim-nand-ubi-ddr4-bl31.bin"
+      compress: false
+
+  mt7986_bananapi_bpi-r3-nor:
+    description: "BananaPi BPi-R3 (SPI-NOR)"
+    defconfig: mt7986a_bpi-r3-nor_defconfig
+    plat: mt7986
+    boot_device: nor
+    ddr_type: ddr4
+    tfa_variant: mt7986-nor-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7986-nor-ddr4-bl31.bin"
+      compress: true
+
+  mt7986_glinet_gl-mt6000:
+    description: "GL.iNet GL-MT6000"
+    defconfig: mt7986a_glinet_gl-mt6000_defconfig
+    plat: mt7986
+    boot_device: emmc
+    ddr_type: ddr4
+    tfa_variant: mt7986-emmc-ddr4
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7986-emmc-ddr4-bl31.bin"
+      compress: false
+
+  # =========================================================================
+  # MT7988 (BananaPi R4 and similar)
+  # =========================================================================
+  mt7988_bananapi_bpi-r4-emmc:
+    description: "BananaPi BPi-R4 (eMMC)"
+    defconfig: mt7988a_bananapi_bpi-r4-emmc_defconfig
+    plat: mt7988
+    boot_device: emmc
+    tfa_variant: mt7988-emmc-comb
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7988-emmc-comb-bl31.bin"
+      compress: false
+
+  mt7988_bananapi_bpi-r4-sdmmc:
+    description: "BananaPi BPi-R4 (SD card)"
+    defconfig: mt7988a_bananapi_bpi-r4-sdmmc_defconfig
+    plat: mt7988
+    boot_device: sdmmc
+    tfa_variant: mt7988-sdmmc-comb
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7988-sdmmc-comb-bl31.bin"
+      compress: false
+
+  mt7988_bananapi_bpi-r4-snand:
+    description: "BananaPi BPi-R4 (SPI-NAND)"
+    defconfig: mt7988a_bananapi_bpi-r4-snand_defconfig
+    plat: mt7988
+    boot_device: spim-nand-ubi
+    tfa_variant: mt7988-spim-nand-ubi-comb
+    output: u-boot.fip
+    fip:
+      bl31: "${staging}/mt7988-spim-nand-ubi-comb-bl31.bin"
+      compress: false
+
+# FIP (Firmware Image Package) assembly
+# Combines BL31 from TF-A with U-Boot binary
+fip_assembly:
+  tool: fiptool
+  command: |
+    fiptool create \
+      --soc-fw ${bl31}${compress_ext} \
+      --nt-fw ${uboot_bin}${compress_ext} \
+      ${output}
+
+# Installation: FIP goes to staging for image assembly
+install:
+  staging:
+    - src: "u-boot.fip"
+      dst: "${variant}-u-boot.fip"
+    - src: "u-boot.bin"
+      dst: "${variant}-u-boot.bin"

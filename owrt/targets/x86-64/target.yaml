@@ -1,0 +1,135 @@
+# OpenWrt Target Definition: x86-64
+# 64-bit x86 systems including virtualized guests (QEMU, VirtualBox, VMware)
+
+name: x86-64
+board: x86
+subtarget: "64"
+description: "x86 64-bit systems including VMs"
+
+arch: x86_64
+
+cpu:
+  type: generic
+  endian: little
+
+toolchain:
+  libc: musl
+  gcc_version: "14.3.0"
+  binutils_version: "2.44"
+  target_tuple: x86_64-openwrt-linux-musl
+  cflags:
+    - "-Os"
+    - "-pipe"
+    - "-march=x86-64"
+    - "-mtune=generic"
+  ldflags: []
+
+# Kernel configuration
+kernel:
+  # Target-specific config fragments
+  config_fragments:
+    - kernel/config/base.config
+    - kernel/config/x86-64.config
+  # Target-specific patches (use generic x86 patches)
+  patch_dirs:
+    - kernel/patches-6.12
+  # No DTS for x86 (uses ACPI)
+  dts_dir: null
+  # x86 uses bzImage
+  kernel_name: bzImage
+
+features:
+  - fpu
+  - pci
+  - pcie
+  - rtc
+  - usb
+  - ext4
+  - squashfs
+  - ramdisk
+  - acpi
+
+# Default packages for bootable system
+default_packages:
+  # Core system (essential for boot)
+  - base-files      # Filesystem structure, init scripts
+  - busybox         # Shell, core utilities
+  - libc            # C library (from toolchain)
+  # procd init system and dependencies
+  - libjson-c       # JSON parsing library
+  - libubox         # Base utility library
+  - libblobmsg-json # JSON blob handling
+  - libjson-script  # JSON scripting
+  - jshn            # JSON shell notation
+  - libubus         # ubus library
+  - ubusd           # ubus daemon
+  - ubus            # ubus client
+  - libuci          # UCI library
+  - uci             # UCI client
+  - libudebug       # Debug library
+  - ubox            # System helper toolbox
+  - logd            # System logging
+  - getrandom       # Random number helper
+  - procd           # Init/process manager
+  - fstools         # Filesystem tools
+  # ucode and modules
+  - ucode           # Tiny scripting language
+  - libucode        # ucode runtime library
+  - ucode-mod-fs    # ucode filesystem module
+  - ucode-mod-ubus  # ucode ubus module
+  - ucode-mod-uci   # ucode UCI module
+  - ucode-mod-uloop # ucode uloop module
+  # Network configuration
+  - libnl-tiny      # Netlink library
+  - netifd          # Network interface daemon
+  # TLS/SSL support
+  - libmbedtls      # TLS/crypto library
+  - libustream-mbedtls  # TLS stream for libubox
+  - libuclient      # HTTP client library
+  - uclient-fetch   # wget replacement
+  - ca-bundle       # CA certificates
+  # Package management
+  - apk             # APK package manager
+  # Random number generation
+  - urandom-seed    # Random seed management
+  - urngd           # Hardware RNG daemon
+  # Network services
+  - dropbear        # SSH server
+  - zlib            # Compression library
+  - dnsmasq         # DNS/DHCP server
+  - odhcpd          # DHCPv6/RA server
+
+profiles:
+  - name: generic
+    title: "Generic x86/64"
+    packages: []
+    images:
+      - name: combined-efi.img.gz
+        type: combined
+        filesystem: ext4
+        size: "512M"
+      - name: rootfs.img.gz
+        type: rootfs
+        filesystem: ext4
+        size: "256M"
+      - name: rootfs.squashfs.gz
+        type: rootfs
+        filesystem: squashfs
+
+  - name: generic-initramfs
+    title: "Generic x86/64 (initramfs only)"
+    packages: []
+    images:
+      - name: initramfs-kernel.bin
+        type: initramfs
+        filesystem: initramfs
+
+image:
+  filesystems:
+    - ext4
+    - squashfs
+    - initramfs
+  kernel_name: bzImage
+  # x86-64 EFI boot path
+  efi_boot_file: bootx64.efi
+  cmdline: "console=tty0 console=ttyS0,115200n8"

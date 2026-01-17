@@ -1,0 +1,38 @@
+# fitblk - FIT block device release tool
+# Used for UBI+FIT rootfs handling on MediaTek and similar platforms
+
+name: fitblk
+version: "1"
+release: 2
+license: GPL-2.0-only
+maintainer: Daniel Golle <daniel@makrotopia.org>
+
+source:
+  type: local
+
+metadata:
+  section: base
+  category: Base system
+  title: fitblk firmware release tool
+  description: |
+    Release uImage.FIT block devices using ioctl.
+    Used for sysupgrade on devices with FIT+UBI rootfs.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: make
+  make_args:
+    - 'CFLAGS=-Os -Wall -Werror'
+
+install:
+  dirs:
+    - /usr/sbin
+    - /lib/upgrade
+  files:
+    # fitblk binary is installed by make install
+    - src: "${pkg_dir}/files/fit.sh"
+      dst: "/lib/upgrade/fit.sh"
+      mode: "0644"

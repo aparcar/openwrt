@@ -1,0 +1,38 @@
+# libc - C library (provided by toolchain)
+# musl libc is built as part of the toolchain, this package installs it
+
+name: libc
+version: "1.2.5"
+release: 3
+license: MIT
+
+source:
+  type: none
+
+metadata:
+  section: libs
+  category: Base system
+  title: C library
+  description: |
+    The C library (musl) from the toolchain.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  files:
+    - src: "${toolchain_dir}/usr/lib/libc.so"
+      dst: "/lib/libc.so"
+      mode: "0755"
+    - src: "${toolchain_dir}/aarch64-openwrt-linux-musl/lib64/libgcc_s.so.1"
+      dst: "/lib/libgcc_s.so.1"
+      mode: "0755"
+  symlinks:
+    - src: "libc.so"
+      dst: "/lib/ld-musl-aarch64.so.1"
+    - src: "libgcc_s.so.1"
+      dst: "/lib/libgcc_s.so"

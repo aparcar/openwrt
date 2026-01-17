@@ -1,0 +1,121 @@
+# hostapd/wpa_supplicant - IEEE 802.1x Authenticator/Supplicant
+# Synced with OpenWrt package/network/services/hostapd/Makefile
+# This is the wpad-basic-mbedtls variant (default)
+
+name: hostapd
+version: "2025.08.26"
+release: 1
+license: BSD-3-Clause
+
+source:
+  type: git
+  url: "https://w1.fi/hostap.git"
+  version: "ca266cc24d8705eb1a2a0857ad326e48b1408b20"
+  sha256: "59ac677093f524ff98588abd9f33805a336a6e929d6814222f0d784c854f2343"
+
+metadata:
+  section: net
+  category: Network
+  title: IEEE 802.1x Authenticator/Supplicant (mbedTLS basic)
+  description: |
+    This package contains hostapd (access point daemon) and wpa_supplicant
+    (client) with WPA-PSK, 802.11r and 802.11w support using mbedTLS.
+
+dependencies:
+  build:
+    - libnl-tiny-dev
+    - libubox-dev
+    - libubus-dev
+    - libucode-dev
+    - libudebug-dev
+    - mbedtls-dev
+    - libjson-c-dev
+  runtime:
+    - libnl-tiny
+    - libubox
+    - libubus
+    - libucode
+    - libudebug
+    - libmbedtls
+    - libjson-c
+
+build:
+  system: custom
+  parallel: true
+  cppflags:
+    - "-I${STAGING_DIR}/usr/include/libnl-tiny"
+    - "-DCONFIG_LIBNL20"
+    - "-D_GNU_SOURCE"
+  ldflags:
+    - "-lubox"
+    - "-lubus"
+    - "-lblobmsg_json"
+    - "-lucode"
+    - "-lm"
+    - "-lnl-tiny"
+    - "-ludebug"
+    - "-lmbedcrypto"
+    - "-lmbedx509"
+    - "-lmbedtls"
+  # Custom build steps - hostapd uses config files not configure
+  configure_script: |
+    cp ${FILES_DIR}/hostapd-basic.config hostapd/.config
+    cp ${FILES_DIR}/wpa_supplicant-basic.config wpa_supplicant/.config
+    # Enable mbedtls and SAE (WPA3)
+    echo "CONFIG_TLS=mbedtls" >> hostapd/.config
+    echo "CONFIG_SAE=y" >> hostapd/.config
+    echo "CONFIG_OWE=y" >> hostapd/.config
+    echo "CONFIG_TLS=mbedtls" >> wpa_supplicant/.config
+    echo "CONFIG_SAE=y" >> wpa_supplicant/.config
+    echo "CONFIG_OWE=y" >> wpa_supplicant/.config
+  build_script: |
+    make -C hostapd -j${JOBS} \
+      CC="${CC}" \
+      CFLAGS="${CPPFLAGS} ${CFLAGS}" \
+      LDFLAGS="${LDFLAGS}" \
+      LIBS="${LDFLAGS}" \
+      hostapd hostapd_cli
+    make -C wpa_supplicant -j${JOBS} \
+      CC="${CC}" \
+      CFLAGS="${CPPFLAGS} ${CFLAGS}" \
+      LDFLAGS="${LDFLAGS}" \
+      LIBS="${LDFLAGS}" \
+      wpa_supplicant wpa_cli
+
+subpackages:
+  hostapd:
+    description: "IEEE 802.1x Authenticator (access point)"
+    section: net
+    dependencies:
+      runtime:
+        - hostapd-common
+        - libnl-tiny
+        - libubox
+        - libubus
+        - libmbedtls
+    files:
+      - src: "hostapd/hostapd"
+        dst: "/usr/sbin/"
+      - src: "hostapd/hostapd_cli"
+        dst: "/usr/sbin/"
+
+  wpa-supplicant:
+    description: "WPA Supplicant (client)"
+    section: net
+    dependencies:
+      runtime:
+        - hostapd-common
+        - libnl-tiny
+        - libubox
+        - libubus
+        - libmbedtls
+    files:
+      - src: "wpa_supplicant/wpa_supplicant"
+        dst: "/usr/sbin/"
+      - src: "wpa_supplicant/wpa_cli"
+        dst: "/usr/sbin/"
+
+  hostapd-common:
+    description: "hostapd/wpa_supplicant common support files"
+    section: net
+    files: []

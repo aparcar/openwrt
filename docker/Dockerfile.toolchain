@@ -1,0 +1,51 @@
+# OpenWrt Toolchain Container
+#
+# This Dockerfile builds a target-specific toolchain container.
+# It extends the base image and includes the compiled cross-toolchain.
+#
+# Build with:
+#   docker build -f Dockerfile.toolchain \
+#     --build-arg TARGET=mediatek-filogic \
+#     --build-arg OPENWRT_SRC=/path/to/openwrt \
+#     -t openwrt-toolchain:mediatek-filogic .
+#
+# The resulting image contains the complete cross-compilation toolchain
+# for the specified target and can be used to build packages and kernel.
+
+ARG BASE_IMAGE=openwrt-poc-base:latest
+FROM ${BASE_IMAGE}
+
+# Target to build toolchain for
+ARG TARGET=mediatek-filogic
+
+LABEL maintainer="OpenWrt Developers"
+LABEL description="OpenWrt Toolchain for ${TARGET}"
+LABEL target="${TARGET}"
+
+# Switch to root for installation
+USER root
+
+# Copy OpenWrt sources (needed for toolchain build)
+COPY --chown=builder:builder . /openwrt
+
+# Switch back to builder
+USER builder
+
+# Set environment
+ENV OPENWRT_DIR=/openwrt
+ENV TARGET=${TARGET}
+
+WORKDIR /openwrt/poc
+
+# Build the toolchain
+# This runs the full toolchain build: binutils -> gcc-initial -> kernel-headers -> musl -> gcc-final
+RUN python3 -m owrt_build toolchain build ${TARGET}
+
+# The toolchain is now installed in /build/toolchain/${TARGET}
+# This image can be used as a base for building packages
+
+# Set the toolchain in PATH for convenience
+ENV PATH="/build/toolchain/${TARGET}/bin:${PATH}"
+
+# Default command shows toolchain info
+CMD ["python3", "-m", "owrt_build", "info", "${TARGET}"]

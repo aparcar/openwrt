@@ -1,0 +1,56 @@
+# uclient - HTTP/1.1 client library
+# Synced with OpenWrt package/libs/uclient/Makefile
+
+name: uclient
+version: "2025.10.03"
+release: 2
+license: ISC
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/uclient.git"
+  version: "dc909ca71bc884c0e5362e1d7cc7808696cb2add"
+  sha256: "a6dbdd653400f3907deaa3e90f6517431677a4dccb9cefef6c2fc4386cba5ab7"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: HTTP/1.1 client library
+  description: |
+    Small HTTP/1.1 client library with SSL support via ustream-ssl.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+
+dependencies:
+  runtime:
+    - libubox
+  build:
+    - libubox-dev
+    - libustream-mbedtls
+
+build:
+  system: cmake
+  parallel: true
+  configure_args: []
+
+subpackages:
+  libuclient:
+    description: "HTTP/1.1 client library"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/lib/libuclient.so"
+        dst: "/usr/lib/libuclient.so"
+
+  uclient-fetch:
+    description: "Tiny wget replacement using libuclient"
+    section: net
+    dependencies:
+      runtime:
+        - libuclient
+        - libustream-mbedtls
+    files:
+      - src: "usr/bin/uclient-fetch"
+        dst: "/bin/uclient-fetch"
+        mode: "0755"

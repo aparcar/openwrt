@@ -1,0 +1,77 @@
+# mac80211-backport - Wireless subsystem backported from newer kernels
+# Provides cfg80211 and mac80211 with newer APIs for wireless drivers
+
+name: mac80211-backport
+version: "6.18"
+release: 1
+license: GPL-2.0-only
+maintainer: Felix Fietkau <nbd@nbd.name>
+
+source:
+  type: tarball
+  url: "https://github.com/openwrt/backports/releases/download/backports-v${version}/backports-${version}.tar.zst"
+  hash: "3bd5d84b1e56cf8addff0d1e4bcf06753c51feee88c4d7925fb7b67784529436"
+
+metadata:
+  section: kernel
+  category: Kernel modules
+  title: Wireless backports (cfg80211/mac80211)
+  description: |
+    Backported wireless subsystem from newer Linux kernels.
+    Provides cfg80211 and mac80211 with APIs needed by modern
+    wireless drivers like mt76.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  # Backports uses its own build system, not standard kmod
+  system: custom
+  # Configuration: enable cfg80211 and mac80211
+  configure_script: 'printf "CPTCFG_CFG80211=m\nCPTCFG_MAC80211=m\nCPTCFG_MAC80211_RC_MINSTREL=y\nCPTCFG_MAC80211_RC_DEFAULT_MINSTREL=y\nCPTCFG_MAC80211_MESH=y\nCPTCFG_MAC80211_LEDS=y\nCPTCFG_CFG80211_WEXT=y\nCPTCFG_CFG80211_DEFAULT_PS=y\nCPTCFG_WLAN=y\nCPTCFG_WLAN_VENDOR_MEDIATEK=y\n" > .config && make KLIB=/lib/modules/$KERNEL_VERSION KLIB_BUILD=$LINUX_DIR allnoconfig'
+  compile_script: 'make -j$NPROC ARCH=$KERNEL_ARCH CROSS_COMPILE=$CROSS_COMPILE KLIB=/lib/modules/$KERNEL_VERSION KLIB_BUILD=$LINUX_DIR EXTRA_CFLAGS="-I$(pwd)/include" MODPROBE=true modules'
+  # Install kernel modules and development files (headers, Module.symvers)
+  install_script: 'mkdir -p $DESTDIR/lib/modules/$KERNEL_VERSION && find . -name "*.ko" -exec cp {} $DESTDIR/lib/modules/$KERNEL_VERSION/ \; && mkdir -p $DESTDIR/usr/include/mac80211 $DESTDIR/usr/include/mac80211-backport $DESTDIR/usr/include/net/mac80211 $DESTDIR/usr/lib/mac80211-backport && cp -r include/* $DESTDIR/usr/include/mac80211/ && cp net/mac80211/*.h $DESTDIR/usr/include/mac80211/ && cp -r backport-include/* $DESTDIR/usr/include/mac80211-backport/ && cp net/mac80211/rate.h $DESTDIR/usr/include/net/mac80211/ && cp Module.symvers $DESTDIR/usr/lib/mac80211-backport/'
+
+install:
+  dirs:
+    - /lib/modules
+
+subpackages:
+  kmod-cfg80211:
+    metadata:
+      title: Wireless configuration API
+      description: cfg80211 wireless configuration API
+    files:
+      - src: "lib/modules/*/cfg80211.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"
+
+  kmod-mac80211:
+    metadata:
+      title: Linux 802.11 wireless stack
+      description: mac80211 wireless networking stack
+    dependencies:
+      runtime:
+        - kmod-cfg80211
+    files:
+      - src: "lib/modules/*/mac80211.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"
+
+  mac80211-backport-dev:
+    metadata:
+      title: mac80211-backport development files
+      description: |
+        Headers and Module.symvers for building wireless drivers
+        against mac80211-backport (e.g., mt76)
+    files:
+      # Headers for compilation - use glob patterns to copy directory trees
+      - src: "usr/include/mac80211/**/*"
+        dst: "/usr/include/mac80211/"
+      - src: "usr/include/mac80211-backport/**/*"
+        dst: "/usr/include/mac80211-backport/"
+      - src: "usr/include/net/**/*"
+        dst: "/usr/include/net/"
+      # Module.symvers for kernel module linking
+      - src: "usr/lib/mac80211-backport/Module.symvers"
+        dst: "/usr/lib/mac80211-backport/"

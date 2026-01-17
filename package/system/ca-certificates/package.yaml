@@ -1,0 +1,41 @@
+# ca-certificates - System CA certificates bundle
+# Uses curl's pre-converted Mozilla CA bundle (cacert-2024-12-31.pem)
+
+name: ca-certificates
+version: "2024.12.31"
+release: 1
+license: MPL-2.0
+
+source:
+  type: local
+
+metadata:
+  section: base
+  category: Base system
+  title: System CA certificates
+  description: |
+    Common CA certificates for TLS/SSL verification.
+    Based on Mozilla's CA certificate store.
+  maintainer: OpenWrt Developers
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  copy_files: true
+
+subpackages:
+  ca-bundle:
+    description: "System CA certificates as a bundle"
+    section: base
+    files:
+      - src: "etc/ssl/certs/ca-certificates.crt"
+        dst: "/etc/ssl/certs/ca-certificates.crt"
+        mode: "0644"
+    symlinks:
+      - src: "/etc/ssl/certs/ca-certificates.crt"
+        dst: "/etc/ssl/cert.pem"

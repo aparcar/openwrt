@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openwrt.org/schemas/config.schema.json",
+  "title": "OpenWrt-ng Build Configuration",
+  "description": "User configuration for OpenWrt-ng builds",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "description": "Target name (e.g., armsr-armv8, x86-64)",
+      "pattern": "^[a-z0-9]+-[a-z0-9]+$"
+    },
+    "profile": {
+      "type": "string",
+      "description": "Target profile name",
+      "default": "generic"
+    },
+    "packages": {
+      "type": "array",
+      "description": "Additional packages to include",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "exclude_packages": {
+      "type": "array",
+      "description": "Packages to exclude from defaults",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "kernel": {
+      "type": "object",
+      "description": "Kernel configuration overrides (CONFIG_* options)",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string", "enum": ["y", "m", "n"]},
+          {"type": "integer"},
+          {"type": "string"}
+        ]
+      },
+      "default": {}
+    },
+    "image": {
+      "type": "object",
+      "description": "Image generation settings",
+      "properties": {
+        "rootfs_size": {
+          "type": "string",
+          "description": "Root filesystem size with suffix (K, M, G)",
+          "pattern": "^[0-9]+[KMG]?$",
+          "default": "100M"
+        },
+        "kernel_size": {
+          "type": "string",
+          "description": "Kernel partition size",
+          "pattern": "^[0-9]+[KMG]?$",
+          "default": "16M"
+        },
+        "compression": {
+          "type": "string",
+          "enum": ["gzip", "xz", "zstd", "none"],
+          "default": "gzip"
+        },
+        "rootfs_type": {
+          "type": "string",
+          "enum": ["squashfs", "ext4", "both"],
+          "default": "squashfs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "description": "Build process settings",
+      "properties": {
+        "jobs": {
+          "type": "integer",
+          "description": "Number of parallel jobs",
+          "minimum": 1
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false
+        },
+        "continue_on_error": {
+          "type": "boolean",
+          "default": false
+        },
+        "dl_dir": {
+          "type": "string",
+          "description": "Download cache directory"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_overrides": {
+      "type": "object",
+      "description": "Override package sources for development",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["local", "git", "tarball"]
+          },
+          "path": {"type": "string"},
+          "url": {"type": "string"},
+          "version": {"type": "string"}
+        },
+        "required": ["type"]
+      }
+    }
+  },
+  "required": ["target"]
+}

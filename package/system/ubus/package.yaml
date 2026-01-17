@@ -1,0 +1,71 @@
+# ubus - OpenWrt micro bus
+# Source produces: libubus, ubusd, ubus
+# Synced with OpenWrt package/system/ubus/Makefile
+
+name: ubus
+version: "2025.12.02"
+release: 1
+license: LGPL-2.1
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/ubus.git"
+  version: "3cc98db1a422dcf560f2d6347fd410f17565a89d"
+  sha256: "25a204888b41e9a432ee0b8d03c1e0f09ae9aaae6a306c41781d680b632b82ae"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt RPC system
+  description: |
+    ubus is the OpenWrt micro bus architecture.
+    It provides inter-process communication for system services.
+
+# Build dependencies for the source (applies to all subpackages)
+dependencies:
+  build:
+    - libubox
+    - libjson-c
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DBUILD_LUA=OFF"
+
+# Multiple output packages from this source
+subpackages:
+  libubus:
+    description: "OpenWrt RPC client library"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/lib/libubus.so*"
+        dst: "/usr/lib/"
+
+  ubusd:
+    description: "OpenWrt RPC daemon"
+    section: base
+    userid:
+      - "ubus=81:ubus=81"
+    dependencies:
+      runtime:
+        - libubox
+        - libubus
+    files:
+      - src: "usr/sbin/ubusd"
+        dst: "/sbin/ubusd"
+        mode: "0755"
+
+  ubus:
+    description: "OpenWrt RPC client utility"
+    section: base
+    dependencies:
+      runtime:
+        - libubus
+    files:
+      - src: "usr/bin/ubus"
+        dst: "/bin/ubus"
+        mode: "0755"

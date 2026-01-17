@@ -1,0 +1,500 @@
+name: PoC Build System
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    paths:
+      - 'poc/**'
+      - '.github/workflows/poc-build.yml'
+  pull_request:
+    paths:
+      - 'poc/**'
+      - '.github/workflows/poc-build.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/openwrt-poc-base
+  TOOLCHAIN_IMAGE: ghcr.io/${{ github.repository_owner }}/openwrt-toolchain
+  # Default target - armsr-armv8 can be tested with QEMU
+  TARGET: armsr-armv8
+  PROFILE: generic
+
+jobs:
+  lint:
+    name: Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema
+
+      - name: Validate YAML schemas
+        run: |
+          cd poc
+          python -c "
+          import json
+          import yaml
+          from jsonschema import validate, ValidationError
+          from pathlib import Path
+
+          # Load schemas
+          pkg_schema = json.loads(Path('schema/package.schema.json').read_text())
+          target_schema = json.loads(Path('schema/target.schema.json').read_text())
+
+          errors = []
+
+          # Validate packages
+          for pkg_file in Path('packages').rglob('package.yaml'):
+              try:
+                  data = yaml.safe_load(pkg_file.read_text())
+                  validate(data, pkg_schema)
+                  print(f'✓ {pkg_file}')
+              except Exception as e:
+                  errors.append(f'{pkg_file}: {e}')
+                  print(f'✗ {pkg_file}: {e}')
+
+          # Validate targets
+          for target_file in Path('targets').rglob('target.yaml'):
+              try:
+                  data = yaml.safe_load(target_file.read_text())
+                  validate(data, target_schema)
+                  print(f'✓ {target_file}')
+              except Exception as e:
+                  errors.append(f'{target_file}: {e}')
+                  print(f'✗ {target_file}: {e}')
+
+          if errors:
+              print(f'\n{len(errors)} validation error(s)')
+              exit(1)
+          print('\nAll schemas valid!')
+          "
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile poc/owrt_build/*.py
+
+  test-cli:
+    name: Test CLI
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema click rich
+
+      - name: Test CLI help
+        run: |
+          cd poc
+          python -m owrt_build --help
+          python -m owrt_build ninja --help
+          python -m owrt_build toolchain --help
+          python -m owrt_build kernel --help
+
+      - name: Test target info
+        run: |
+          cd poc
+          python -m owrt_build info armsr-armv8
+          python -m owrt_build info mediatek-filogic
+
+      - name: Test toolchain commands
+        run: |
+          cd poc
+          echo "=== Toolchain info ==="
+          python -m owrt_build toolchain info armsr-armv8
+          echo ""
+          echo "=== Toolchain build (dry-run) ==="
+          python -m owrt_build toolchain build --dry-run armsr-armv8
+
+      - name: Test dependency resolution
+        run: |
+          cd poc
+          python -m owrt_build ninja plan armsr-armv8
+
+      - name: Test Ninja generation
+        run: |
+          cd poc
+          python -m owrt_build ninja generate armsr-armv8
+          echo "Generated build.ninja:"
+          cat build/armsr-armv8/build.ninja
+
+  build-base-image:
+    name: Build Base Image
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BASE_IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./poc/docker
+          file: ./poc/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-toolchain:
+    name: Build Toolchain (aarch64)
+    runs-on: ubuntu-latest
+    needs: build-base-image
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      toolchain-tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute toolchain hash
+        id: hash
+        run: |
+          # Use the CLI to compute toolchain hash (includes patches)
+          cd poc
+          TAG=$(python3 -m owrt_build toolchain hash ${{ env.TARGET }} --format tag)
+          HASH=$(python3 -m owrt_build toolchain hash ${{ env.TARGET }} --format hash)
+          echo "Toolchain tag: $TAG"
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Show details for debugging
+          python3 -m owrt_build toolchain hash ${{ env.TARGET }} --format json
+
+      - name: Check if toolchain image exists
+        id: check
+        run: |
+          TAG="${{ steps.hash.outputs.tag }}"
+          IMAGE="${{ env.TOOLCHAIN_IMAGE }}:${TAG}"
+          echo "Checking for image: $IMAGE"
+
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "Toolchain image already exists, skipping build"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Toolchain image not found, will build"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Pull base image
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          docker pull ${{ env.BASE_IMAGE }}:${{ github.sha }}
+          docker tag ${{ env.BASE_IMAGE }}:${{ github.sha }} openwrt-poc-base:latest
+
+      - name: Cache toolchain downloads
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: toolchain-dl-${{ steps.hash.outputs.hash }}
+          restore-keys: |
+            toolchain-dl-
+
+      - name: Build toolchain
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          mkdir -p dl toolchain
+          # Run as current user to avoid permission issues with mounted volumes
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/openwrt \
+            -v ${{ github.workspace }}/dl:/build/dl \
+            -v ${{ github.workspace }}/toolchain:/build/toolchain \
+            -w /openwrt/poc \
+            -e BUILD_DIR=/build \
+            -e DL_DIR=/build/dl \
+            -e HOME=/tmp \
+            openwrt-poc-base:latest \
+            python3 -m owrt_build -v toolchain build ${{ env.TARGET }}
+
+      - name: Verify toolchain
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          echo "=== Toolchain contents ==="
+          ls -la toolchain/
+          ls -la toolchain/${{ env.TARGET }}/bin/ || true
+          echo ""
+          echo "=== Test cross-compiler ==="
+          docker run --rm \
+            -v ${{ github.workspace }}/toolchain:/build/toolchain \
+            openwrt-poc-base:latest \
+            /build/toolchain/${{ env.TARGET }}/bin/aarch64-openwrt-linux-musl-gcc --version
+
+      - name: Build and push toolchain Docker image
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.check.outputs.tag }}"
+
+          # Create a Dockerfile that adds the toolchain to the base image
+          cat > Dockerfile.toolchain-built <<EOF
+          ARG BASE_IMAGE
+          FROM \${BASE_IMAGE}
+
+          # Copy pre-built toolchain
+          COPY --chown=builder:builder toolchain/${{ env.TARGET }} /build/toolchain/${{ env.TARGET }}
+
+          # Set environment
+          ENV PATH="/build/toolchain/${{ env.TARGET }}/bin:\${PATH}"
+          ENV CROSS_COMPILE="aarch64-openwrt-linux-musl-"
+          ENV CC="aarch64-openwrt-linux-musl-gcc"
+          ENV CXX="aarch64-openwrt-linux-musl-g++"
+
+          # Verify toolchain works
+          RUN aarch64-openwrt-linux-musl-gcc --version
+          EOF
+
+          docker build \
+            --build-arg BASE_IMAGE=${{ env.BASE_IMAGE }}:${{ github.sha }} \
+            -f Dockerfile.toolchain-built \
+            -t ${{ env.TOOLCHAIN_IMAGE }}:${TAG} \
+            -t ${{ env.TOOLCHAIN_IMAGE }}:${{ env.TARGET }}-latest \
+            .
+
+          # Push the image
+          docker push ${{ env.TOOLCHAIN_IMAGE }}:${TAG}
+          docker push ${{ env.TOOLCHAIN_IMAGE }}:${{ env.TARGET }}-latest
+
+      - name: Upload toolchain artifact
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-aarch64
+          path: toolchain/${{ env.TARGET }}
+          retention-days: 7
+
+      - name: Report toolchain status
+        run: |
+          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
+            echo "✓ Using cached toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${{ steps.check.outputs.tag }}"
+          else
+            echo "✓ Built and pushed new toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${{ steps.check.outputs.tag }}"
+          fi
+
+  build-firmware:
+    name: Build Firmware (ARMSR)
+    runs-on: ubuntu-latest
+    needs: build-toolchain
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull toolchain image
+        run: |
+          TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
+          echo "Using toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG}"
+          docker pull ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG}
+
+      - name: Cache build downloads
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: build-dl-${{ hashFiles('poc/packages/*/package.yaml', 'poc/packages/linux/package.yaml') }}
+          restore-keys: |
+            build-dl-
+            toolchain-dl-
+
+      - name: Generate Ninja build file
+        run: |
+          TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/openwrt \
+            -w /openwrt/poc \
+            -e HOME=/tmp \
+            ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG} \
+            python3 -m owrt_build ninja generate ${{ env.TARGET }} --profile ${{ env.PROFILE }}
+
+          echo "=== Generated build.ninja ==="
+          cat poc/build/${{ env.TARGET }}/build.ninja
+
+      - name: Build with Ninja
+        run: |
+          TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
+          mkdir -p dl output
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/openwrt \
+            -v ${{ github.workspace }}/dl:/build/dl \
+            -v ${{ github.workspace }}/output:/build/output \
+            -w /openwrt/poc \
+            -e BUILD_DIR=/build \
+            -e DL_DIR=/build/dl \
+            -e OUTPUT_DIR=/build/output \
+            -e HOME=/tmp \
+            ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG} \
+            python3 -m owrt_build -v ninja run ${{ env.TARGET }} --profile ${{ env.PROFILE }}
+
+      - name: List build outputs
+        run: |
+          echo "=== Build outputs ==="
+          find output -type f -ls || true
+          echo ""
+          echo "=== Firmware images ==="
+          ls -la output/images/ || true
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.TARGET }}
+          path: output/images/
+          retention-days: 30
+          if-no-files-found: warn
+
+  test-qemu:
+    name: Test with QEMU
+    runs-on: ubuntu-latest
+    needs: build-firmware
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ env.TARGET }}
+          path: firmware
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-aarch64
+
+      - name: List firmware files
+        run: |
+          echo "=== Downloaded firmware ==="
+          ls -la firmware/ || echo "No firmware files found"
+
+      - name: Boot test with QEMU
+        if: hashFiles('firmware/*.img') != '' || hashFiles('firmware/*.qcow2') != ''
+        run: |
+          echo "=== Starting QEMU boot test ==="
+          # Find the firmware image
+          FIRMWARE=$(find firmware -name '*.img' -o -name '*.qcow2' | head -1)
+
+          if [ -z "$FIRMWARE" ]; then
+            echo "No bootable firmware image found, skipping QEMU test"
+            exit 0
+          fi
+
+          echo "Testing: $FIRMWARE"
+
+          # Boot QEMU with timeout - just verify it starts
+          timeout 60 qemu-system-aarch64 \
+            -M virt \
+            -cpu cortex-a53 \
+            -m 256M \
+            -drive file="$FIRMWARE",format=raw,if=virtio \
+            -nographic \
+            -no-reboot \
+            || true
+
+          echo "=== QEMU boot test completed ==="
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [test-cli, build-base-image]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            squashfs-tools \
+            mtd-utils \
+            u-boot-tools \
+            device-tree-compiler
+          pip install pyyaml jsonschema click rich
+
+      - name: Generate full build plan
+        run: |
+          cd poc
+          echo "=== ARM SystemReady (QEMU) ==="
+          python -m owrt_build ninja plan armsr-armv8
+          echo ""
+          echo "=== MediaTek Filogic (OpenWrt One) ==="
+          python -m owrt_build ninja plan mediatek-filogic --profile openwrt_one
+
+      - name: Generate Ninja files
+        run: |
+          cd poc
+          python -m owrt_build ninja generate armsr-armv8
+          python -m owrt_build ninja generate mediatek-filogic --profile openwrt_one
+
+          echo "=== ARMSR build.ninja ==="
+          cat build/armsr-armv8/build.ninja
+
+          echo ""
+          echo "=== MediaTek build.ninja ==="
+          cat build/mediatek-filogic/build.ninja

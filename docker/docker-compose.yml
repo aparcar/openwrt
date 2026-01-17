@@ -1,0 +1,151 @@
+version: '3.8'
+
+# OpenWrt PoC Build System - Multi-Stage Docker Workflow
+#
+# Architecture:
+#   1. Base Image (openwrt-poc-base) - Host tools for building toolchains
+#   2. Toolchain Image (openwrt-toolchain:TARGET) - Contains compiled cross-toolchain
+#   3. Build containers use toolchain images to compile kernel/packages
+#
+# Workflow:
+#   1. docker-compose build base          # Build base image
+#   2. docker-compose build toolchain-*   # Build toolchain for target
+#   3. docker-compose run build-*         # Build firmware using toolchain
+
+services:
+  # ==========================================================================
+  # Stage 1: Base Image
+  # Contains all host tools needed to build the OpenWrt toolchain from source
+  # ==========================================================================
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: openwrt-poc-base:latest
+
+  # ==========================================================================
+  # Stage 2: Toolchain Images (one per target architecture)
+  # These extend the base image and include the compiled cross-toolchain
+  # ==========================================================================
+
+  toolchain-mediatek-filogic:
+    build:
+      context: ../../
+      dockerfile: poc/docker/Dockerfile.toolchain
+      args:
+        BASE_IMAGE: openwrt-poc-base:latest
+        TARGET: mediatek-filogic
+    image: openwrt-toolchain:mediatek-filogic
+    depends_on:
+      - base
+
+  toolchain-armsr-armv8:
+    build:
+      context: ../../
+      dockerfile: poc/docker/Dockerfile.toolchain
+      args:
+        BASE_IMAGE: openwrt-poc-base:latest
+        TARGET: armsr-armv8
+    image: openwrt-toolchain:armsr-armv8
+    depends_on:
+      - base
+
+  # ==========================================================================
+  # Stage 3: Build Containers
+  # Use toolchain images to build firmware
+  # ==========================================================================
+
+  build-mediatek-filogic:
+    image: openwrt-toolchain:mediatek-filogic
+    volumes:
+      - ../../:/openwrt:ro
+      - ../:/poc
+      - build-cache:/build
+      - ../build:/output
+    environment:
+      - OPENWRT_DIR=/openwrt
+      - POC_DIR=/poc
+      - BUILD_DIR=/build
+      - OUTPUT_DIR=/output
+    working_dir: /poc
+    command: python3 -m owrt_build ninja run mediatek-filogic
+    depends_on:
+      - toolchain-mediatek-filogic
+
+  build-armsr-armv8:
+    image: openwrt-toolchain:armsr-armv8
+    volumes:
+      - ../../:/openwrt:ro
+      - ../:/poc
+      - build-cache:/build
+      - ../build:/output
+    environment:
+      - OPENWRT_DIR=/openwrt
+      - POC_DIR=/poc
+      - BUILD_DIR=/build
+      - OUTPUT_DIR=/output
+    working_dir: /poc
+    command: python3 -m owrt_build ninja run armsr-armv8
+    depends_on:
+      - toolchain-armsr-armv8
+
+  # ==========================================================================
+  # Utility Services
+  # ==========================================================================
+
+  # Interactive shell with MediaTek toolchain
+  shell-mediatek:
+    image: openwrt-toolchain:mediatek-filogic
+    volumes:
+      - ../../:/openwrt:ro
+      - ../:/poc
+      - build-cache:/build
+      - ../build:/output
+    environment:
+      - OPENWRT_DIR=/openwrt
+      - POC_DIR=/poc
+      - BUILD_DIR=/build
+      - OUTPUT_DIR=/output
+    working_dir: /poc
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  # Interactive shell with ARMSR toolchain
+  shell-armsr:
+    image: openwrt-toolchain:armsr-armv8
+    volumes:
+      - ../../:/openwrt:ro
+      - ../:/poc
+      - build-cache:/build
+      - ../build:/output
+    environment:
+      - OPENWRT_DIR=/openwrt
+      - POC_DIR=/poc
+      - BUILD_DIR=/build
+      - OUTPUT_DIR=/output
+    working_dir: /poc
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  # Base shell (for toolchain development/debugging)
+  shell-base:
+    image: openwrt-poc-base:latest
+    volumes:
+      - ../../:/openwrt:ro
+      - ../:/poc
+      - build-cache:/build
+      - ../build:/output
+    environment:
+      - OPENWRT_DIR=/openwrt
+      - POC_DIR=/poc
+      - BUILD_DIR=/build
+      - OUTPUT_DIR=/output
+    working_dir: /poc
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+volumes:
+  build-cache:

@@ -1,0 +1,39 @@
+# firewall4 - OpenWrt 4th gen firewall
+# Synced with OpenWrt package/network/config/firewall4/Makefile
+# Note: This package has no build step - just installs files from git source
+
+name: firewall4
+version: "2025.03.17"
+release: 1
+license: ISC
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/firewall4.git"
+  version: "b6e5157527d361f99ad52eaa6da273cb0f2dfd59"
+  sha256: "fb563b493411922a8fbddf6a5a6766cffa47f87621e056b8dcf38309091835eb"
+
+metadata:
+  section: net
+  category: Base system
+  title: OpenWrt 4th gen firewall
+  description: |
+    This package provides an nftables-based implementation of the UCI firewall
+    sharing the same configuration format.
+
+dependencies:
+  runtime:
+    - nftables
+    - ucode
+    - ucode-mod-fs
+    - ucode-mod-ubus
+    - ucode-mod-uci
+
+build:
+  system: none
+
+# firewall4 just copies files from root/ directory
+files:
+  - src: "root/"
+    dst: "/"
+    tree: true

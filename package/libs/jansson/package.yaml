@@ -1,0 +1,32 @@
+# jansson - C library for JSON data
+# Synced with OpenWrt package/libs/jansson/Makefile
+
+name: jansson
+version: "2.14.1"
+release: 1
+license: MIT
+
+source:
+  type: tarball
+  url: "https://github.com/akheron/jansson/archive/v2.14.1.tar.gz"
+  sha256: "979210eaffdffbcf54cfc34d047fccde13f21b529a381df26db871d886f729a4"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Jansson library
+  description: |
+    Jansson is a C library for encoding, decoding and manipulating JSON data.
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DJANSSON_BUILD_DOCS=OFF"
+    - "-DJANSSON_BUILD_SHARED_LIBS=ON"
+    - "-DJANSSON_EXAMPLES=OFF"
+    - "-DJANSSON_WITHOUT_TESTS=ON"
+
+files:
+  - src: "usr/lib/libjansson.so*"
+    dst: "/usr/lib/"

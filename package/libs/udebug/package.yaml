@@ -1,0 +1,47 @@
+# udebug - OpenWrt debug library
+# Source produces: libudebug
+# Synced with OpenWrt package/libs/udebug/Makefile
+
+name: udebug
+version: "2025.10.21"
+release: 1
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/udebug.git"
+  version: "75f39cd4a8067a6f0503c2f1c83c6b1af733a6f2"
+  sha256: "eb40871f2259e17b6e3ee2c01930a6faffb5e0a7db7589827a9e1efda267726f"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: OpenWrt debug library
+  description: |
+    libudebug is the OpenWrt debug library.
+
+# Build dependencies for the source
+dependencies:
+  build:
+    - libubox-dev
+    - libubus-dev
+    - libucode-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DBUILD_UCODE_MODULE=OFF"
+
+# Multiple output packages from this source
+subpackages:
+  libudebug:
+    description: "OpenWrt debug client library"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+        - libubus
+    files:
+      - src: "usr/lib/libudebug.so*"
+        dst: "/usr/lib/"

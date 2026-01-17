@@ -1,0 +1,48 @@
+# ustream-ssl - SSL stream library for libubox
+# Synced with OpenWrt package/libs/ustream-ssl/Makefile
+
+name: ustream-ssl
+version: "2025.10.03"
+release: 1
+license: ISC
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/ustream-ssl.git"
+  version: "5a81c108d20e24724ed847cc4be033f2a74e6635"
+  sha256: "e251189ed315f22ab63dc6f17b03178676e10c21fff0cdd863b294a3c51a1b5b"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: ustream SSL Library
+  description: |
+    SSL stream abstraction library for libubox, providing TLS support
+    for ubus and other OpenWrt components.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+
+dependencies:
+  runtime:
+    - libubox
+    - libmbedtls
+  build:
+    - libubox-dev
+    - libmbedtls-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DMBEDTLS=on"
+
+subpackages:
+  libustream-mbedtls:
+    description: "ustream SSL library (mbedtls)"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+        - libmbedtls
+    files:
+      - src: "usr/lib/libustream-ssl.so"
+        dst: "/lib/libustream-ssl.so"

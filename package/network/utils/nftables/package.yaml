@@ -1,0 +1,64 @@
+# nftables - nftables userspace utility
+# Synced with OpenWrt package/network/utils/nftables/Makefile
+# This is the JSON variant (required by firewall4)
+
+name: nftables
+version: "1.1.6"
+release: 1
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://netfilter.org/projects/nftables/files/nftables-1.1.6.tar.xz"
+  sha256: "372931bda8556b310636a2f9020adc710f9bab66f47efe0ce90bff800ac2530c"
+
+metadata:
+  section: net
+  category: Network
+  title: nftables userspace utility with JSON support
+  description: |
+    nftables is the userspace utility for the in-kernel nf_tables subsystem.
+    This variant includes JSON support required by firewall4.
+
+dependencies:
+  build:
+    - libnftnl-dev
+    - libmnl-dev
+    - jansson-dev
+  runtime:
+    - libnftnl
+    - jansson
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--disable-debug"
+    - "--disable-man-doc"
+    - "--with-mini-gmp"
+    - "--without-cli"
+    - "--disable-python"
+    - "--with-json"
+
+# nftables produces both the nft binary and libnftables
+subpackages:
+  nftables:
+    description: "nftables userspace utility"
+    section: net
+    dependencies:
+      runtime:
+        - libnftables
+    files:
+      - src: "usr/sbin/nft"
+        dst: "/usr/sbin/"
+
+  libnftables:
+    description: "nftables library"
+    section: libs
+    dependencies:
+      runtime:
+        - libnftnl
+        - jansson
+    files:
+      - src: "usr/lib/libnftables.so*"
+        dst: "/usr/lib/"

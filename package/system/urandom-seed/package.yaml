@@ -1,0 +1,48 @@
+# urandom-seed - /etc/urandom.seed handling for OpenWrt
+# Synced with OpenWrt package/system/urandom-seed/Makefile
+
+name: urandom-seed
+version: "1.0"
+release: 3
+license: GPL-2.0-only
+
+source:
+  type: local
+
+metadata:
+  section: base
+  category: Base system
+  title: /etc/urandom.seed handling for OpenWrt
+  description: |
+    Handles saving and restoring the random seed across reboots
+    to improve entropy availability at boot time.
+  maintainer: OpenWrt Developers
+
+dependencies:
+  runtime:
+    - getrandom
+  build: []
+
+build:
+  system: none
+
+install:
+  copy_files: true
+
+subpackages:
+  urandom-seed:
+    description: "/etc/urandom.seed handling for OpenWrt"
+    section: base
+    dependencies:
+      runtime:
+        - getrandom
+    files:
+      - src: "${pkg_dir}/files/sbin/urandom_seed"
+        dst: "/sbin/urandom_seed"
+        mode: "0755"
+      - src: "${pkg_dir}/files/etc/init.d/urandom_seed"
+        dst: "/etc/init.d/urandom_seed"
+        mode: "0755"
+      - src: "${pkg_dir}/files/lib/preinit/81_urandom_seed"
+        dst: "/lib/preinit/81_urandom_seed"
+        mode: "0644"

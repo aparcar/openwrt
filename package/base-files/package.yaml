@@ -1,0 +1,153 @@
+# OpenWrt base-files package
+# Provides essential system files and directory structure
+
+name: base-files
+version: "1"
+release: 3
+license: GPL-2.0
+
+source:
+  type: local
+
+metadata:
+  section: base
+  category: Base system
+  title: Base filesystem for OpenWrt
+  description: |
+    This package contains a base filesystem and system scripts for OpenWrt.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  dirs:
+    - /bin
+    - /dev
+    - /etc
+    - /etc/init.d
+    - /etc/config
+    - /lib
+    - /lib/functions
+    - /lib/preinit
+    - /mnt
+    - /opt
+    - /overlay
+    - /proc
+    - /rom
+    - /root
+    - /sbin
+    - /sys
+    - /tmp
+    - /usr/bin
+    - /usr/lib
+    - /usr/sbin
+    - /var
+    - /var/lock
+    - /var/log
+    - /var/run
+    - /www
+  files:
+    # Essential system files
+    - src: "${pkg_dir}/files/etc/passwd"
+      dst: "/etc/passwd"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/group"
+      dst: "/etc/group"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/shadow"
+      dst: "/etc/shadow"
+      mode: "0600"
+    - src: "${pkg_dir}/files/etc/hosts"
+      dst: "/etc/hosts"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/profile"
+      dst: "/etc/profile"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/banner"
+      dst: "/etc/banner"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/shells"
+      dst: "/etc/shells"
+      mode: "0644"
+    # Init system
+    - src: "${pkg_dir}/files/etc/inittab"
+      dst: "/etc/inittab"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/init.d/rcS"
+      dst: "/etc/init.d/rcS"
+      mode: "0755"
+    # Diagnostic LED control (required by preinit)
+    - src: "${pkg_dir}/files/etc/diag.sh"
+      dst: "/etc/diag.sh"
+      mode: "0644"
+    # Preinit system (required by procd)
+    - src: "${pkg_dir}/files/etc/preinit"
+      dst: "/etc/preinit"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/functions.sh"
+      dst: "/lib/functions.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/preinit.sh"
+      dst: "/lib/functions/preinit.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/system.sh"
+      dst: "/lib/functions/system.sh"
+      mode: "0644"
+    # Preinit scripts (sourced in order by /etc/preinit)
+    - src: "${pkg_dir}/files/lib/preinit/02_default_set_state"
+      dst: "/lib/preinit/02_default_set_state"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/02_sysinfo"
+      dst: "/lib/preinit/02_sysinfo"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/10_indicate_failsafe"
+      dst: "/lib/preinit/10_indicate_failsafe"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/10_indicate_preinit"
+      dst: "/lib/preinit/10_indicate_preinit"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/30_failsafe_wait"
+      dst: "/lib/preinit/30_failsafe_wait"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/40_run_failsafe_hook"
+      dst: "/lib/preinit/40_run_failsafe_hook"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/50_indicate_regular_preinit"
+      dst: "/lib/preinit/50_indicate_regular_preinit"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/70_initramfs_test"
+      dst: "/lib/preinit/70_initramfs_test"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/80_mount_root"
+      dst: "/lib/preinit/80_mount_root"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/99_10_failsafe_login"
+      dst: "/lib/preinit/99_10_failsafe_login"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/preinit/99_10_run_init"
+      dst: "/lib/preinit/99_10_run_init"
+      mode: "0644"
+    # UCI config files
+    - src: "${pkg_dir}/files/etc/config/system"
+      dst: "/etc/config/system"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/config/network"
+      dst: "/etc/config/network"
+      mode: "0644"
+    - src: "${pkg_dir}/files/etc/config/dropbear"
+      dst: "/etc/config/dropbear"
+      mode: "0644"
+  conffiles:
+    - /etc/config/system
+    - /etc/config/network
+    - /etc/config/dropbear
+  symlinks:
+    # Standard symlinks
+    - src: "/tmp"
+      dst: "/var/run"
+    - src: "/tmp"
+      dst: "/var/lock"

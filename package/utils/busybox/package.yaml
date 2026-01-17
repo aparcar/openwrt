@@ -1,0 +1,63 @@
+# BusyBox - Swiss Army Knife of embedded Linux
+# Provides essential userspace utilities
+# Synced with OpenWrt package/utils/busybox/Makefile
+
+name: busybox
+version: "1.37.0"
+release: 6
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://www.busybox.net/downloads/${name}-${version}.tar.bz2"
+  mirrors:
+    - "https://sources.buildroot.net/${name}"
+  sha256: "3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4"
+
+metadata:
+  section: base
+  category: Base system
+  title: Core utilities for embedded Linux
+  description: |
+    BusyBox combines tiny versions of many common UNIX utilities into a single
+    small executable. It provides replacements for most of the utilities you
+    usually find in GNU fileutils, shellutils, etc.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: custom
+  parallel: true
+  env:
+    KCONFIG_NOTIMESTAMP: "1"
+  configure_script: |
+    # Copy OpenWrt's busybox config from poc
+    cp ${pkg_dir}/config.busybox .config
+    # Enable static linking for initramfs
+    sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+    # Disable TC (traffic control) - uses CBQ structures removed from newer kernels
+    sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
+    sed -i 's/CONFIG_FEATURE_TC_INGRESS=y/# CONFIG_FEATURE_TC_INGRESS is not set/' .config
+    # Disable SHA hardware acceleration - x86 SHA-NI code not available on ARM
+    sed -i 's/CONFIG_SHA1_HWACCEL=y/# CONFIG_SHA1_HWACCEL is not set/' .config
+    sed -i 's/CONFIG_SHA256_HWACCEL=y/# CONFIG_SHA256_HWACCEL is not set/' .config
+    sed -i 's/CONFIG_SHA3_SMALL=./CONFIG_SHA3_SMALL=1/' .config
+    # Run oldconfig to fill in any missing options
+    yes '' | make oldconfig
+  compile_script: |
+    make -j${JOBS} CROSS_COMPILE=${CROSS_COMPILE}
+  install_script: |
+    # Install to staging (for build deps) and pkg install dir (for APK)
+    make CONFIG_PREFIX=${DESTDIR} install
+    # Also install to per-package directory for APK packaging
+    if [ -n "${PKG_INSTALL_DIR}" ]; then
+      make CONFIG_PREFIX=${PKG_INSTALL_DIR} install
+    fi
+
+install:
+  # Let make install handle files and symlinks via install_script
+  # The staging dir copy is handled by _install_package
+  dirs: []
+  files: []

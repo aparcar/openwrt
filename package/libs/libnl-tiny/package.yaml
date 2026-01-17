@@ -1,0 +1,38 @@
+# libnl-tiny - Minimal netlink socket library
+# Synced with OpenWrt package/libs/libnl-tiny/Makefile
+
+name: libnl-tiny
+version: "2025.12.02"
+release: 1
+license: LGPL-2.1
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/libnl-tiny.git"
+  version: "40493a655d8caa2ccf5206dde1e733abe2920432"
+  sha256: "b45c72c26961fa6eafc14f73693c2fe463912c4cb0488ccea232d61b425c60d5"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Netlink socket library
+  description: |
+    This package contains a stripped down version of libnl
+  maintainer: Felix Fietkau <nbd@nbd.name>
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: cmake
+  parallel: true
+  configure_args: []
+
+subpackages:
+  libnl-tiny:
+    description: "Minimal netlink socket library"
+    section: libs
+    files:
+      - src: "usr/lib/libnl-tiny.so*"
+        dst: "/usr/lib/"

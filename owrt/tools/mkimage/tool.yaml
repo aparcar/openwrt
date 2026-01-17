@@ -1,0 +1,50 @@
+# U-Boot mkimage tool
+# Synced with OpenWrt tools/mkimage/Makefile
+# Creates FIT images and other U-Boot image formats
+
+name: mkimage
+version: "2025.10"
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://ftp.denx.de/pub/u-boot/u-boot-${version}.tar.bz2"
+  sha256: "b4f032848e56cc8f213ad59f9132c084dbbb632bc29176d024e58220e0efdf4a"
+  # Archive extracts to u-boot-${version}/
+  strip_components: 1
+
+metadata:
+  title: U-Boot mkimage tool
+  description: |
+    mkimage is the U-Boot tool for creating images in various formats:
+    - FIT (Flattened Image Tree) images for modern ARM64 boot
+    - Legacy U-Boot images
+    - Environment images
+    This is used by the kernel and image building process.
+
+dependencies: []
+
+build:
+  system: custom
+  parallel: true
+
+  configure_script: |
+    make \
+      HOSTCFLAGS="${CFLAGS}" \
+      HOSTLDFLAGS="${LDFLAGS}" \
+      PKG_CONFIG_EXTRAARGS="--static" \
+      tools-only_config
+    # Disable mkeficapsule which requires extra dependencies
+    sed -i 's/CONFIG_TOOLS_MKEFICAPSULE=y/# CONFIG_TOOLS_MKEFICAPSULE is not set/' .config
+
+  compile_script: |
+    make -j${JOBS} \
+      HOSTCFLAGS="${CFLAGS}" \
+      HOSTLDFLAGS="${LDFLAGS}" \
+      PKG_CONFIG_EXTRAARGS="--static" \
+      tools-only
+
+  install_script: |
+    install -d ${DESTDIR}/bin
+    install -m 0755 tools/mkimage ${DESTDIR}/bin/
+    install -m 0755 tools/mkenvimage ${DESTDIR}/bin/

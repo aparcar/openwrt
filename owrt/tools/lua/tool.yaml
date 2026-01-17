@@ -1,0 +1,41 @@
+# Lua 5.1.5 - Host tool for building apk-tools
+# Based on OpenWrt package/utils/lua/Makefile
+
+name: lua
+version: "5.1.5"
+license: MIT
+
+source:
+  type: tarball
+  url: "https://www.lua.org/ftp/lua-${version}.tar.gz"
+  mirrors:
+    - "https://www.tecgraf.puc-rio.br/lua/ftp/"
+  sha256: "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333"
+
+metadata:
+  title: Lua programming language (host)
+  description: |
+    Lua is a powerful light-weight programming language designed for extending
+    applications. This is the host build used for building apk-tools.
+
+dependencies: []
+
+build:
+  system: custom
+  parallel: true
+  # Host patches are in patches-host/
+  patch_dir: patches-host
+  configure_script: |
+    # Update paths in luaconf.h to use staging directory
+    sed -i 's,"/usr/local/","${STAGING_DIR}/",' src/luaconf.h
+  compile_script: |
+    make -j${JOBS} CC="${CC} -fPIC -std=gnu99" linux
+  install_script: |
+    make INSTALL_TOP="${STAGING_DIR}" install
+    # Create pkgconfig file
+    mkdir -p "${STAGING_DIR}/lib/pkgconfig"
+    cp etc/lua.pc "${STAGING_DIR}/lib/pkgconfig/lua5.1.pc"
+    # Create symlinks
+    ln -sf lua5.1 "${STAGING_DIR}/bin/lua"
+    ln -sf luac5.1 "${STAGING_DIR}/bin/luac"
+    ln -sf lua5.1.pc "${STAGING_DIR}/lib/pkgconfig/lua.pc"

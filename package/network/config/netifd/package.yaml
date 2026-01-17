@@ -1,0 +1,116 @@
+# netifd - OpenWrt Network Interface Configuration Daemon
+# Synced with OpenWrt package/network/config/netifd/Makefile
+
+name: netifd
+version: "2025.10.20"
+release: 3
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/netifd.git"
+  version: "777f5942fa7d6245f6ad29daa1daecc400344d37"
+  sha256: "7fc56f436faa1a5b05a147febed52c6f58c479125a38c9737736b352cd8d4409"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt Network Interface Configuration Daemon
+  description: |
+    netifd is the OpenWrt network interface daemon. It handles
+    network configuration, manages interfaces, and coordinates
+    protocol handlers like DHCP.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+
+dependencies:
+  runtime:
+    - libuci
+    - libnl-tiny
+    - libubus
+    - ubus
+    - ubusd
+    - jshn
+    - libubox
+    - libudebug
+    - ucode
+    - ucode-mod-fs
+    - ucode-mod-ubus
+    - ucode-mod-uloop
+    - ucode-mod-uci
+  build:
+    - libuci-dev
+    - libnl-tiny-dev
+    - libubus-dev
+    - libubox-dev
+    - libudebug
+    - libjson-c-dev
+    - libucode-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DLIBNL_LIBS=-lnl-tiny"
+    - "-DDEBUG=1"
+
+install:
+  # Copy files from package files/ directory
+  copy_files: true
+
+subpackages:
+  netifd:
+    description: "OpenWrt Network Interface Configuration Daemon"
+    section: base
+    files:
+      # Binary
+      - src: "usr/sbin/netifd"
+        dst: "/sbin/netifd"
+        mode: "0755"
+      # Init scripts
+      - src: "etc/init.d/network"
+        dst: "/etc/init.d/network"
+        mode: "0755"
+      - src: "etc/init.d/packet_steering"
+        dst: "/etc/init.d/packet_steering"
+        mode: "0755"
+      # Hotplug
+      - src: "etc/hotplug.d/iface/00-netstate"
+        dst: "/etc/hotplug.d/iface/00-netstate"
+        mode: "0755"
+      # UCI defaults
+      - src: "etc/uci-defaults/14_migrate-dhcp-release"
+        dst: "/etc/uci-defaults/14_migrate-dhcp-release"
+        mode: "0755"
+      # Config files
+      - src: "etc/udhcpc.user"
+        dst: "/etc/udhcpc.user"
+      # netifd scripts
+      - src: "lib/netifd/*"
+        dst: "/lib/netifd/"
+      # Proto handlers
+      - src: "lib/netifd/proto/*"
+        dst: "/lib/netifd/proto/"
+      # Network library
+      - src: "lib/network/*"
+        dst: "/lib/network/"
+      # Helper scripts
+      - src: "sbin/devstatus"
+        dst: "/sbin/devstatus"
+        mode: "0755"
+      - src: "sbin/ifup"
+        dst: "/sbin/ifup"
+        mode: "0755"
+      - src: "sbin/ifdown"
+        dst: "/sbin/ifdown"
+        mode: "0755"
+      - src: "sbin/ifstatus"
+        dst: "/sbin/ifstatus"
+        mode: "0755"
+      # DHCP scripts
+      - src: "usr/share/udhcpc/*"
+        dst: "/usr/share/udhcpc/"
+      # Packet steering
+      - src: "usr/libexec/network/*"
+        dst: "/usr/libexec/network/"
+    conffiles:
+      - /etc/udhcpc.user

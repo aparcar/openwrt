@@ -1,0 +1,66 @@
+# dnsmasq - DNS and DHCP server
+# Synced with OpenWrt package/network/services/dnsmasq/Makefile
+
+name: dnsmasq
+version: "2.91"
+release: 2
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://thekelleys.org.uk/dnsmasq/dnsmasq-2.91.tar.xz"
+  sha256: "f622682848b33677adb2b6ad08264618a2ae0a01da486a93fd8cd91186b3d153"
+
+metadata:
+  section: net
+  category: Base system
+  title: DNS and DHCP server
+  description: |
+    Dnsmasq is a lightweight DNS, TFTP and DHCP server.
+    It is intended to provide coupled DNS and DHCP service to a LAN.
+
+userid:
+  - "dnsmasq=453:dnsmasq=453"
+
+dependencies:
+  runtime:
+    - libubus
+    - ubusd
+    - jshn
+  build:
+    - libubus-dev
+    - libubox-dev
+
+build:
+  system: make
+  parallel: true
+  # Basic variant with UBUS support, no DHCPv6, no DNSSEC
+  make_args:
+    - "COPTS=-DHAVE_UBUS -DHAVE_POLL_H -DNO_AUTH -DNO_IPSET -DNO_ID -DNO_DHCP6"
+    - "PREFIX=/usr"
+  install_target: install
+
+files:
+  # Built binary
+  - src: "usr/sbin/dnsmasq"
+    dst: "/usr/sbin/dnsmasq"
+    mode: "0755"
+  # Config files from package files/
+  - src: "${pkg_dir}/files/dhcp.conf"
+    dst: "/etc/config/dhcp"
+  - src: "${pkg_dir}/files/dnsmasq.conf"
+    dst: "/etc/dnsmasq.conf"
+  - src: "${pkg_dir}/files/dnsmasq.init"
+    dst: "/etc/init.d/dnsmasq"
+    mode: "0755"
+  - src: "${pkg_dir}/files/dhcp-script.sh"
+    dst: "/usr/lib/dnsmasq/dhcp-script.sh"
+    mode: "0755"
+  - src: "${pkg_dir}/files/dhcpbogushostname.conf"
+    dst: "/usr/share/dnsmasq/dhcpbogushostname.conf"
+  - src: "${pkg_dir}/files/rfc6761.conf"
+    dst: "/usr/share/dnsmasq/rfc6761.conf"
+  - src: "${pkg_dir}/files/dnsmasq_acl.json"
+    dst: "/usr/share/acl.d/dnsmasq_acl.json"
+  - src: "${pkg_dir}/files/dnsmasqsec.hotplug"
+    dst: "/etc/hotplug.d/ntp/25-dnsmasqsec"

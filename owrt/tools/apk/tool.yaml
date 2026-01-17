@@ -1,0 +1,40 @@
+# apk-tools - Alpine Package Keeper (Host tool)
+# Based on OpenWrt package/system/apk/Makefile
+# Used for creating .apk packages and installing rootfs
+
+name: apk
+version: "3.0.2"
+license: GPL-2.0-only
+
+source:
+  type: git
+  url: "https://gitlab.alpinelinux.org/alpine/apk-tools.git"
+  version: "d093f7c198a64bff0cd58afeaf638909fda24ca8"
+  sha256: "596dffa2fa019be2755433ed210e30593a6a8708346cf31486d6ad8008e47556"
+
+metadata:
+  title: APK package manager (host)
+  description: |
+    apk-tools is the package manager used by Alpine Linux and OpenWrt.
+    This host build is used for creating .apk packages and installing
+    packages into the firmware rootfs.
+
+dependencies:
+  - lua
+
+build:
+  system: meson
+  parallel: true
+  env:
+    VERSION: "${version}"
+  configure_args:
+    - "-Db_lto=true"
+    - "-Ddocs=disabled"
+    - "-Dhelp=enabled"
+    - "-Dlua_version=5.1"
+    - "-Ddefault_library=static"
+    - "-Durl_backend=wget"
+    - "-Dzstd=disabled"
+    - "-Dpython=disabled"
+    - "-Dtests=disabled"
+    - "-Dcrypto_backend=openssl"

@@ -1,0 +1,65 @@
+# uci - Unified Configuration Interface
+# Source produces: libuci, uci
+# Synced with OpenWrt package/system/uci/Makefile
+
+name: uci
+version: "2025.12.02"
+release: 1
+license: LGPL-2.1
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/uci.git"
+  version: "66127cd76c5d0bd46d5a90302cc6110f53a4e2f8"
+  sha256: "ff23a9825aeac8da14a7142e985d598043c0287a463279f24863c580622bf18d"
+
+metadata:
+  section: base
+  category: Base system
+  title: Unified Configuration Interface
+  description: |
+    UCI is the unified configuration interface for OpenWrt.
+
+# Build dependencies for the source
+dependencies:
+  build:
+    - libubox
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DBUILD_LUA=OFF"
+
+# Multiple output packages from this source
+subpackages:
+  libuci:
+    description: "C library for UCI"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/lib/libuci.so*"
+        dst: "/usr/lib/"
+
+  libuci-dev:
+    description: "Development files for libuci"
+    section: devel
+    dependencies:
+      runtime:
+        - libuci
+    files:
+      - src: "usr/include/uci*.h"
+        dst: "/usr/include/"
+
+  uci:
+    description: "UCI command line utility"
+    section: base
+    dependencies:
+      runtime:
+        - libuci
+    files:
+      - src: "usr/bin/uci"
+        dst: "/usr/bin/uci"
+        mode: "0755"

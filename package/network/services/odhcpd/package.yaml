@@ -1,0 +1,62 @@
+# odhcpd - OpenWrt DHCP server daemon
+# Full variant with DHCPv4 and DHCPv6 support
+# Synced with OpenWrt package/network/services/odhcpd/Makefile
+
+name: odhcpd
+version: "2025.12.18"
+release: 1
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/odhcpd.git"
+  version: "3fda5f8b121bf58f8ef8e797fe6bfd7f4f340653"
+  sha256: "059c93e48b74880882d80c590d1aa221c849c54814379396c634e5b1c2ccfac4"
+
+metadata:
+  section: net
+  category: Network
+  title: OpenWrt DHCPv4/DHCPv6/NDP/RA server
+  description: |
+    odhcpd is a daemon for serving and relaying IP management protocols to
+    configure clients and downstream routers. It tries to follow the RFC 6204
+    requirements for IPv6 home routers.
+
+    This is a variant with support for RA, DHCPv4 and DHCPv6.
+
+dependencies:
+  runtime:
+    - libjson-c
+    - libubox
+    - libuci
+    - libubus
+    - libnl-tiny
+  build:
+    - libjson-c-dev
+    - libubox-dev
+    - libuci-dev
+    - libubus-dev
+    - libnl-tiny-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DUBUS=1"
+    - "-DDHCPV4_SUPPORT=1"
+
+files:
+  # Built binary
+  - src: "usr/sbin/odhcpd"
+    dst: "/usr/sbin/odhcpd"
+    mode: "0755"
+  # Scripts from package files/
+  - src: "${pkg_dir}/files/odhcpd-update"
+    dst: "/usr/sbin/odhcpd-update"
+    mode: "0755"
+  - src: "${pkg_dir}/files/odhcpd.init"
+    dst: "/etc/init.d/odhcpd"
+    mode: "0755"
+  - src: "${pkg_dir}/files/odhcpd.defaults"
+    dst: "/etc/uci-defaults/15_odhcpd"
+    mode: "0755"

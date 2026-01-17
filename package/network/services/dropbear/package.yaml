@@ -1,0 +1,73 @@
+# Dropbear - Lightweight SSH server
+# Small memory footprint SSH implementation
+# Synced with OpenWrt package/network/services/dropbear/Makefile
+
+name: dropbear
+version: "2025.89"
+release: 1
+license: MIT
+
+source:
+  type: tarball
+  url: "https://matt.ucc.asn.au/dropbear/releases/${name}-${version}.tar.bz2"
+  mirrors:
+    - "https://dropbear.nl/mirror/releases"
+  sha256: "0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634"
+
+metadata:
+  section: net
+  category: Base system
+  title: Dropbear SSH server and client
+  description: |
+    Dropbear is a relatively small SSH server and client. It runs on a variety
+    of POSIX-based platforms. Dropbear is particularly useful for embedded
+    systems with limited resources.
+  provides:
+    - ssh
+    - ssh-server
+
+dependencies:
+  runtime:
+    - libc
+  build:
+    - zlib
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--disable-wtmp"
+    - "--disable-lastlog"
+    - "--disable-pututxline"
+    - "--disable-utmpx"
+    - "--disable-pam"
+    - "--enable-bundled-libtom"
+
+install:
+  files:
+    # Built binaries (config/init files are in files/ directory structure)
+    - src: "${build_dir}/${name}"
+      dst: "/usr/sbin/${name}"
+      mode: "0755"
+    - src: "${build_dir}/dbclient"
+      dst: "/usr/bin/dbclient"
+      mode: "0755"
+    - src: "${build_dir}/dropbearkey"
+      dst: "/usr/bin/dropbearkey"
+      mode: "0755"
+    - src: "${build_dir}/dropbearconvert"
+      dst: "/usr/bin/dropbearconvert"
+      mode: "0755"
+  symlinks:
+    - src: "/usr/bin/dbclient"
+      dst: "/usr/bin/ssh"
+
+subpackages:
+  - name: ${name}-dbclient
+    title: Dropbear SSH client
+    description: SSH client from Dropbear
+    install:
+      files:
+        - src: "${build_dir}/dbclient"
+          dst: "/usr/bin/dbclient"
+          mode: "0755"
