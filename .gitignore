@@ -35,3 +35,9 @@ git-src
 .cproject
 .ccache
 .vscode*
+
+# Nix
+result
+result-*
+.direnv
+.envrc
