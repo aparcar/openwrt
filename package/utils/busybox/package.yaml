@@ -55,6 +55,13 @@ build:
     if [ -n "${PKG_INSTALL_DIR}" ]; then
       make CONFIG_PREFIX=${PKG_INSTALL_DIR} install
     fi
+    # Remove symlinks that conflict with other packages:
+    # - /sbin/init: provided by procd
+    # - /sbin/ifup, /sbin/ifdown: provided by netifd
+    # - /sbin/insmod, /sbin/lsmod, /sbin/modinfo, /sbin/modprobe, /sbin/rmmod: provided by ubox
+    for conflicting in init ifup ifdown insmod lsmod modinfo modprobe rmmod; do
+      rm -f ${DESTDIR}/sbin/${conflicting} ${PKG_INSTALL_DIR}/sbin/${conflicting} 2>/dev/null || true
+    done
 
 install:
   # Let make install handle files and symlinks via install_script

@@ -25,15 +25,13 @@ dependencies:
 build:
   system: none
 
-install:
-  copy_files: true
-
+# Use subpackages to create ca-bundle APK
 subpackages:
   ca-bundle:
     description: "System CA certificates as a bundle"
     section: base
     files:
-      - src: "etc/ssl/certs/ca-certificates.crt"
+      - src: "files/etc/ssl/certs/ca-certificates.crt"
         dst: "/etc/ssl/certs/ca-certificates.crt"
         mode: "0644"
     symlinks:
