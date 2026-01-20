@@ -382,17 +382,14 @@ class DependencyResolver:
         from pathlib import Path
 
         poc_dir = Path(__file__).parent.parent
-        packages_dir = poc_dir / 'packages'
+        package_root = poc_dir / 'package'
 
-        if not packages_dir.exists():
+        if not package_root.exists():
             return
 
-        for pkg_path in packages_dir.iterdir():
-            if not pkg_path.is_dir():
-                continue
-            pkg_file = pkg_path / 'package.yaml'
-            if not pkg_file.exists():
-                continue
+        # Recursively find all package.yaml files
+        for pkg_file in package_root.rglob('package.yaml'):
+            pkg_path = pkg_file.parent
 
             try:
                 pkg = PackageConfig.load(pkg_path)
