@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from owrt.resolver import DependencyResolver, ProviderInfo
 from owrt.config import PackageConfig, Config
-from conftest import create_package_dir
+from owrt.tests.conftest import create_package_dir
 
 
 class TestProviderInfo:
@@ -35,12 +35,15 @@ class TestProviderRegistry:
     def mock_config(self):
         """Create a mock Config object."""
         config = Mock(spec=Config)
+        config.name = 'test-target'
+        config.arch = 'aarch64'
         config.build_dir = Path('/tmp/build')
         config.packages_dir = Path('/tmp/build/packages/test')
         config.staging_dir = Path('/tmp/build/staging/test')
         config.kernel_build_dir = Path('/tmp/build/kernel/test')
         config.toolchain_dir = Path('/tmp/build/toolchain/test')
         config.cross_compile = 'aarch64-openwrt-linux-musl-'
+        config.toolchain = {'gcc_version': '14.3.0', 'libc': 'musl'}
         return config
 
     def test_register_providers_basic(self, mock_config, temp_packages_dir, package_with_provides):
@@ -143,12 +146,15 @@ class TestVirtualDependencyResolution:
     def mock_config(self):
         """Create a mock Config object."""
         config = Mock(spec=Config)
+        config.name = 'test-target'
+        config.arch = 'aarch64'
         config.build_dir = Path('/tmp/build')
         config.packages_dir = Path('/tmp/build/packages/test')
         config.staging_dir = Path('/tmp/build/staging/test')
         config.kernel_build_dir = Path('/tmp/build/kernel/test')
         config.toolchain_dir = Path('/tmp/build/toolchain/test')
         config.cross_compile = 'aarch64-openwrt-linux-musl-'
+        config.toolchain = {'gcc_version': '14.3.0', 'libc': 'musl'}
         return config
 
     def test_resolve_virtual_dependency(self, mock_config, temp_packages_dir, monkeypatch):

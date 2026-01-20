@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from owrt.config import PackageConfig, SubpackageConfig
-from conftest import create_package_dir
+from owrt.tests.conftest import create_package_dir
 
 
 class TestPackageConfig:

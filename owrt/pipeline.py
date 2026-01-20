@@ -453,7 +453,9 @@ class CopyKernelStep(PipelineStep):
 
         # Copy kernel to work dir
         output_file = ctx.work_dir / "kernel.bin"
-        shutil.copy2(ctx.kernel, output_file)
+        # Only copy if source and dest are different files
+        if ctx.kernel.resolve() != output_file.resolve():
+            shutil.copy2(ctx.kernel, output_file)
 
         ctx.current = output_file
         return output_file
@@ -469,7 +471,9 @@ class CopyRootfsStep(PipelineStep):
             raise ValueError("CopyRootfsStep: No rootfs file")
 
         output_file = ctx.work_dir / "rootfs.bin"
-        shutil.copy2(ctx.rootfs, output_file)
+        # Only copy if source and dest are different files
+        if ctx.rootfs.resolve() != output_file.resolve():
+            shutil.copy2(ctx.rootfs, output_file)
 
         ctx.current = output_file
         return output_file
