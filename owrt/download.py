@@ -167,15 +167,25 @@ def download_package_source(
                     dest.unlink()
 
         # Clone and create tarball
-        if verbose:
-            print(f"  {pkg.name}: cloning {url}")
-        _git_clone_to_tarball(url, version, dest, source.get('submodules', False))
+        try:
+            if verbose:
+                print(f"  {pkg.name}: cloning {url}")
+            _git_clone_to_tarball(url, version, dest, source.get('submodules', False))
+            return dest
+        except Exception as e:
+            # Always show git clone failures - they're important
+            print(f"  {pkg.name}: git clone failed: {e}")
+            if dest.exists():
+                dest.unlink()
 
-        # Note: Don't verify hash for git-cloned tarballs - the hash in package.yaml
-        # is for the mirror version which may differ slightly from local clones
-        # (timestamps, compression, etc.). The commit hash ensures correctness.
-
-        return dest
+            # Fallback to OpenWrt mirror if git clone failed
+            if expected_hash:
+                mirror_url = f"{OPENWRT_MIRROR}/{filename}"
+                print(f"  {pkg.name}: falling back to mirror {mirror_url}")
+                _download_file(mirror_url, dest, expected_hash)
+                return dest
+            else:
+                raise RuntimeError(f"Git clone failed for {pkg.name} and no hash available for mirror fallback: {e}") from e
 
     return None
 
@@ -231,33 +241,27 @@ def _git_clone_to_tarball(
     with tempfile.TemporaryDirectory() as tmpdir:
         clone_dir = Path(tmpdir) / 'src'
 
+        def run_git(cmd, **kwargs):
+            """Run git command with proper error handling."""
+            result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                raise subprocess.CalledProcessError(
+                    result.returncode, cmd, output=result.stdout, stderr=error_msg
+                )
+            return result
+
         # Clone with specific commit
-        cmd = ['git', 'clone', '--depth=1']
-        if version and version != 'HEAD':
-            # For specific commits, we need to fetch after clone
-            subprocess.run(
-                ['git', 'clone', '--depth=1', url, str(clone_dir)],
-                check=True,
-                capture_output=True,
-            )
-            subprocess.run(
-                ['git', 'fetch', '--depth=1', 'origin', version],
-                cwd=clone_dir,
-                check=True,
-                capture_output=True,
-            )
-            subprocess.run(
-                ['git', 'checkout', version],
-                cwd=clone_dir,
-                check=True,
-                capture_output=True,
-            )
-        else:
-            subprocess.run(
-                ['git', 'clone', '--depth=1', url, str(clone_dir)],
-                check=True,
-                capture_output=True,
-            )
+        try:
+            if version and version != 'HEAD':
+                # For specific commits, we need to fetch after clone
+                run_git(['git', 'clone', '--depth=1', url, str(clone_dir)])
+                run_git(['git', 'fetch', '--depth=1', 'origin', version], cwd=clone_dir)
+                run_git(['git', 'checkout', version], cwd=clone_dir)
+            else:
+                run_git(['git', 'clone', '--depth=1', url, str(clone_dir)])
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Git operation failed for {url}: {e.stderr}") from e
 
         # Initialize submodules if requested
         if submodules and (clone_dir / '.gitmodules').exists():
