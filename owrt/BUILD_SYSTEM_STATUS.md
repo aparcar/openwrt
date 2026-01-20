@@ -132,7 +132,14 @@ owrt/
 - [x] Volume mounts for build artifacts
 - [x] Non-Docker fallback mode
 
-### 12. Target Support
+### 12. Download Management (`download.py`)
+- [x] Tarball downloads with hash verification
+- [x] Git repository cloning with commit checkout
+- [x] OpenWrt mirror fallback (sources.openwrt.org)
+- [x] Automatic retry when git.openwrt.org is unavailable
+- [x] OpenWrt-compatible filename format for mirror
+
+### 13. Target Support
 - [x] **armsr-armv8** - ARM SystemReady (EFI) 64-bit
 - [x] **x86-64** - x86 64-bit systems/VMs
 - [x] **mediatek-filogic** - MT7981/MT7986 (OpenWrt One, ABT ASR3000)
@@ -140,6 +147,12 @@ owrt/
   - [x] FIT images for U-Boot
   - [x] UBI/UBIFS for NAND flash
   - [x] Factory images with BL2 + FIP
+
+### 14. Per-Architecture Build Sharing
+- [x] Package stamps shared across targets with same architecture
+- [x] Staging directories per-architecture (not per-target)
+- [x] APK packages per-architecture
+- [x] Avoids rebuilds when switching between armsr-armv8 and mediatek-filogic (both aarch64)
 
 ---
 
@@ -236,6 +249,12 @@ owrt/
 
 1. **Post-install scripts**: Not executed during rootfs assembly (APK uses --no-scripts)
 2. **Conditional dependencies**: Not supported in resolver
+3. **Package versions**: Some package versions are newer than what's on sources.openwrt.org mirror - when git.openwrt.org is down, these packages cannot be downloaded
+
+**Workaround for git.openwrt.org downtime:**
+- The build system automatically falls back to sources.openwrt.org mirror
+- For packages not on the mirror, update package.yaml to use an available version
+- Check available versions: `curl -s https://sources.openwrt.org/ | grep <pkgname>`
 
 **Resolved Issues:**
 - ~~Virtual packages~~: PROVIDES support implemented with priority system
@@ -272,15 +291,21 @@ python -m owrt ninja run armsr-armv8
 ### Output Locations
 ```
 build/
-├── toolchain/armsr-armv8/    # Cross-compiler
+├── toolchain/<target>/       # Cross-compiler (per-target)
 ├── host-staging/             # Host tools (apk, lua, mtd-utils)
-├── kernel/armsr-armv8/       # Kernel build
-├── packages/armsr-armv8/     # Package builds
-├── staging/armsr-armv8/      # Installed headers/libs
-├── apk-packages/armsr-armv8/ # Individual .apk files
-├── apk-repo/armsr-armv8/     # Repository with APKINDEX
-├── rootfs/armsr-armv8/       # Assembled rootfs
+├── kernel/<target>/          # Kernel build (per-target)
+├── packages/<arch>/          # Package builds (per-architecture, shared)
+├── staging/<arch>/           # Installed headers/libs (per-architecture)
+├── apk-packages/<arch>/      # Individual .apk files (per-architecture)
+├── apk-repo/<arch>/          # Repository with APKINDEX (per-architecture)
+├── rootfs/<target>/          # Assembled rootfs (per-target)
+├── <target>/stamp/           # Build stamps (toolchain, kernel, kmod)
 └── output/images/            # Final firmware images
+
+# Architecture mapping:
+#   armsr-armv8 → aarch64
+#   mediatek-filogic → aarch64
+#   x86-64 → x86_64
 ```
 
 ---
