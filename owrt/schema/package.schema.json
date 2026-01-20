@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openwrt.org/poc/schema/package.json",
+  "$id": "https://openwrt.org/owrt/schema/package.json",
   "title": "OpenWrt Package Definition",
   "description": "Declarative package definition for OpenWrt modern build system. Supports variable interpolation using ${var} syntax throughout all string fields.",
   "type": "object",
