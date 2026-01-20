@@ -37,15 +37,15 @@ build:
     cp ${pkg_dir}/config.busybox .config
     # Enable static linking for initramfs
     sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
-    # Disable TC (traffic control) - uses CBQ structures removed from newer kernels
-    sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
-    sed -i 's/CONFIG_FEATURE_TC_INGRESS=y/# CONFIG_FEATURE_TC_INGRESS is not set/' .config
     # Disable SHA hardware acceleration - x86 SHA-NI code not available on ARM
     sed -i 's/CONFIG_SHA1_HWACCEL=y/# CONFIG_SHA1_HWACCEL is not set/' .config
     sed -i 's/CONFIG_SHA256_HWACCEL=y/# CONFIG_SHA256_HWACCEL is not set/' .config
     sed -i 's/CONFIG_SHA3_SMALL=./CONFIG_SHA3_SMALL=1/' .config
     # Run oldconfig to fill in any missing options
     yes '' | make oldconfig
+    # Disable TC (traffic control) AFTER oldconfig - uses CBQ structures removed from newer kernels
+    sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
+    sed -i 's/CONFIG_FEATURE_TC_INGRESS=y/# CONFIG_FEATURE_TC_INGRESS is not set/' .config
   compile_script: |
     make -j${JOBS} CROSS_COMPILE=${CROSS_COMPILE}
   install_script: |

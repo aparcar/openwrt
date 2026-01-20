@@ -59,8 +59,8 @@ class ToolConfig:
     @classmethod
     def list_tools(cls) -> List[str]:
         """List all available host tools."""
-        poc_dir = Path(__file__).parent.parent
-        tools_dir = poc_dir / 'tools'
+        owrt_dir = Path(__file__).parent
+        tools_dir = owrt_dir / 'tools'
         tools = []
 
         if tools_dir.exists():

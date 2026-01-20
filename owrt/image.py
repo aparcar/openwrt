@@ -319,45 +319,14 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
         """
         # Collect all userid entries from packages
         userids = []
-        poc_dir = Path(__file__).parent.parent
-        packages_dir = poc_dir / 'packages'
 
         for pkg_name in packages:
-            # Try to find the package definition
-            pkg_dir = packages_dir / pkg_name
-            if not pkg_dir.exists():
-                # Try to find as a subpackage
-                for parent_dir in packages_dir.iterdir():
-                    if not parent_dir.is_dir():
-                        continue
-                    yaml_file = parent_dir / 'package.yaml'
-                    if yaml_file.exists():
-                        try:
-                            pkg_config = PackageConfig.load(parent_dir)
-                            # Check if this package has subpackages with our name
-                            if pkg_config.has_subpackages:
-                                subpkg = pkg_config.get_subpackage(pkg_name)
-                                if subpkg and subpkg.userid:
-                                    userids.extend(subpkg.userid)
-                        except Exception:
-                            pass
-                continue
-
-            # Load package config
-            yaml_file = pkg_dir / 'package.yaml'
-            if yaml_file.exists():
-                try:
-                    pkg_config = PackageConfig.load(pkg_dir)
-                    # Get userid from main package
-                    if pkg_config.userid:
-                        userids.extend(pkg_config.userid)
-                    # Get userid from subpackages
-                    if pkg_config.has_subpackages:
-                        subpkg = pkg_config.get_subpackage(pkg_name)
-                        if subpkg and subpkg.userid:
-                            userids.extend(subpkg.userid)
-                except Exception:
-                    pass
+            # Use PackageConfig.find_package which searches all package locations
+            pkg = PackageConfig.find_package(pkg_name)
+            if pkg:
+                # Get userid from the package (main or subpackage)
+                if hasattr(pkg, 'userid') and pkg.userid:
+                    userids.extend(pkg.userid)
 
         if not userids:
             return

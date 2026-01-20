@@ -24,8 +24,13 @@ dependencies:
 
 build:
   system: make
-  make_args:
-    - 'CFLAGS=-Os -Wall -Werror'
+  # Include kernel headers for linux/fitblk.h
+  env:
+    CFLAGS: "-Os -Wall -Werror -I${LINUX_DIR}/include/uapi -I${LINUX_DIR}/include"
+  # Custom install since Makefile has no install target
+  install_script: |
+    install -d ${DESTDIR}/usr/sbin
+    install -m 0755 fitblk ${DESTDIR}/usr/sbin/
 
 install:
   dirs:

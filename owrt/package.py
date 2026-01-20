@@ -779,9 +779,23 @@ endian = '{endian}'
         make_install_args = pkg.build.get('make_install_args', [])
         make_install_extra = ' '.join(shlex.quote(arg) if ' ' in arg else arg for arg in make_install_args)
 
+        # Get package-level env vars (for custom CFLAGS like kernel includes)
+        pkg_env = pkg.build.get('env', {})
+
+        # Get kernel version for include paths
+        kernel_version = self.config.kernel.get('full_version', '6.12')
+        kernel_linux_dir = f'/kernel/linux-{kernel_version}'
+
         # Use virtual paths that get substituted to per-package staging by _run_command
-        # CFLAGS with staging include path for header files
-        cflags = '-Os -pipe -I/staging/usr/include -ffunction-sections -fdata-sections'
+        # Base CFLAGS with staging include path for header files
+        base_cflags = '-Os -pipe -I/staging/usr/include -ffunction-sections -fdata-sections'
+        # Append any package-specific CFLAGS (e.g., kernel headers for fitblk)
+        if 'CFLAGS' in pkg_env:
+            # Replace ${LINUX_DIR} with the kernel path (virtual path that gets substituted)
+            pkg_cflags = pkg_env['CFLAGS'].replace('${LINUX_DIR}', kernel_linux_dir)
+            base_cflags = f"{base_cflags} {pkg_cflags}"
+        cflags = base_cflags
+
         # LDFLAGS with staging lib path for libraries
         ldflags = '-L/staging/usr/lib -Wl,-rpath-link=/staging/usr/lib -Wl,--gc-sections'
 
@@ -798,8 +812,13 @@ endian = '{endian}'
         )
         commands.append(['sh', '-c', make_cmd])
 
-        # Install
-        install_cmd = f"cd /src && make DESTDIR=/ipkg-install install {make_install_extra}"
+        # Install - use custom script if provided, otherwise make install
+        install_script = pkg.build.get('install_script', '')
+        if install_script:
+            script = install_script.strip()
+            install_cmd = f"cd /src && export DESTDIR=/ipkg-install && {script}"
+        else:
+            install_cmd = f"cd /src && make DESTDIR=/ipkg-install install {make_install_extra}"
         commands.append(['sh', '-c', install_cmd])
 
         return commands
@@ -837,18 +856,18 @@ endian = '{endian}'
 
         configure_script = pkg.build.get('configure_script', '')
         if configure_script:
-            # Replace newlines with semicolons for shell execution
-            script = configure_script.replace('\n', '; ').strip()
+            # Keep newlines for proper shell execution (comments need newlines)
+            script = configure_script.strip()
             commands.append(['sh', '-c', f'{env_setup} cd /src && {script}'])
 
         compile_script = pkg.build.get('compile_script', '')
         if compile_script:
-            script = compile_script.replace('\n', '; ').strip()
+            script = compile_script.strip()
             commands.append(['sh', '-c', f'{env_setup} cd /src && {script}'])
 
         install_script = pkg.build.get('install_script', '')
         if install_script:
-            script = install_script.replace('\n', '; ').strip()
+            script = install_script.strip()
             commands.append(['sh', '-c', f'{env_setup} cd /src && {script}'])
 
         return commands

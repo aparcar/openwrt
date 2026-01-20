@@ -348,6 +348,10 @@ class PackageIsolation:
                     segment = segment.replace('-I/toolchain/', f'-I{toolchain_str}/')
                 elif '-L/toolchain/' in segment:
                     segment = segment.replace('-L/toolchain/', f'-L{toolchain_str}/')
+                # Handle kernel header includes
+                elif '-I/kernel/' in segment:
+                    kernel_str = env.get('KERNEL_BUILD_DIR', '/build/kernel')
+                    segment = segment.replace('-I/kernel/', f'-I{kernel_str}/')
                 # Handle segments starting with virtual paths
                 elif segment.startswith('/shared-staging/') or segment == '/shared-staging':
                     segment = shared_staging_str + segment[15:]  # len('/shared-staging') = 15
