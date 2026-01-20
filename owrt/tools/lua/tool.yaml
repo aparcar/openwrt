@@ -23,8 +23,8 @@ dependencies: []
 build:
   system: custom
   parallel: true
-  # Host patches are in patches-host/
-  patch_dir: patches-host
+  # Use patches from original OpenWrt tree (no duplication)
+  patch_dir: ../../../package/utils/lua/patches-host
   configure_script: |
     # Update paths in luaconf.h to use staging directory
     sed -i 's,"/usr/local/","${STAGING_DIR}/",' src/luaconf.h

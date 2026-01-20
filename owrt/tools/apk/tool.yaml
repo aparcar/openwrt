@@ -25,6 +25,8 @@ dependencies:
 build:
   system: meson
   parallel: true
+  # Use patches from original OpenWrt tree (no duplication)
+  patch_dir: ../../../package/system/apk/patches
   env:
     VERSION: "${version}"
   configure_args:

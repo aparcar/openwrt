@@ -20,6 +20,8 @@ metadata:
 build:
   system: autotools
   autoreconf: true  # Required because patches modify configure.ac
+  # Use patches from original OpenWrt tree (no duplication)
+  patch_dir: ../../../tools/mtd-utils/patches
   configure_args:
     - "--without-tests"
     - "--without-crypto"
