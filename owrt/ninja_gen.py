@@ -173,13 +173,27 @@ class NinjaGenerator:
         parallel_packages = max(4, min(24, cpu_count // 3))
         jobs_per_package = max(2, cpu_count // parallel_packages)
 
+        # Downloads are highly parallel (network I/O bound)
+        # Allow many concurrent downloads
+        parallel_downloads = max(8, min(32, cpu_count))
+
         return [
             '# Build rules',
+            '',
+            '# Pool for parallel downloads (network I/O bound)',
+            'pool download_pool',
+            f'  depth = {parallel_downloads}',
             '',
             '# Pool for parallel package builds',
             '# Limits concurrent packages so each gets enough CPU cores',
             'pool package_pool',
             f'  depth = {parallel_packages}',
+            '',
+            '# Download a package source',
+            'rule download',
+            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt download $target -p $pkg && touch $out',
+            '  description = Downloading $pkg',
+            '  pool = download_pool',
             '',
             '# Build toolchain',
             'rule toolchain',
@@ -224,7 +238,34 @@ class NinjaGenerator:
 
     def _generate_builds(self, plan: BuildPlan) -> list:
         """Generate Ninja build statements."""
-        lines = ['# Build statements', '']
+        from .download import get_download_filename
+
+        lines = ['# Download statements (run first, highly parallel)', '']
+
+        # First, generate download targets for all packages
+        # These run in parallel before any builds start
+        download_stamps = []
+        for name in plan.build_order:
+            target = plan.targets[name]
+            if target.target_type == 'package' and target.config:
+                pkg = target.config
+                # Get source package for subpackages
+                if isinstance(pkg, SubpackageConfig):
+                    pkg = pkg.parent
+                filename = get_download_filename(pkg)
+                if filename:
+                    dl_stamp = f'$builddir/stamp/dl-{name}.stamp'
+                    download_stamps.append(dl_stamp)
+                    lines.append(f'build {dl_stamp}: download')
+                    lines.append(f'  pkg = {name}')
+                    lines.append('')
+
+        # Add 'downloads' alias target
+        if download_stamps:
+            lines.append(f'build downloads: phony {" ".join(download_stamps)}')
+            lines.append('')
+
+        lines.append('# Build statements', '')
 
         for name in plan.build_order:
             target = plan.targets[name]
@@ -235,12 +276,14 @@ class NinjaGenerator:
                 lines.append('')
                 continue
 
-            lines.extend(self._generate_target_build(target))
+            lines.extend(self._generate_target_build(target, download_stamps))
 
         return lines
 
-    def _generate_target_build(self, target: BuildTarget) -> list:
+    def _generate_target_build(self, target: BuildTarget, download_stamps: list = None) -> list:
         """Generate build statement for a single target."""
+        from .download import get_download_filename
+
         lines = []
         stamp = f'$builddir/stamp/{target.name}.stamp'
 
@@ -262,6 +305,20 @@ class NinjaGenerator:
             lines.append(f'  keyhash = {keyhash}')
 
         elif target.target_type == 'package':
+            # Package builds depend on their download completing
+            pkg = target.config
+            if isinstance(pkg, SubpackageConfig):
+                pkg = pkg.parent
+            has_download = pkg and get_download_filename(pkg)
+
+            if has_download:
+                # Add download stamp as explicit dependency
+                dl_stamp = f'$builddir/stamp/dl-{target.name}.stamp'
+                if dep_str:
+                    dep_str = f'{dl_stamp} {dep_str}'
+                else:
+                    dep_str = dl_stamp
+
             lines.append(f'build {stamp}: package | {dep_str}'.strip())
             lines.append(f'  pkg = {target.name}')
             # Include effective hash for dependency tracking

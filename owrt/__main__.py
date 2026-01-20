@@ -730,6 +730,41 @@ def apk_index(ctx, target):
     click.echo(f"Repository index generated: {arch_dir / 'packages.adb'}")
 
 
+@cli.command('download')
+@click.argument('target')
+@click.option('--package', '-p', help='Download specific package only')
+@click.option('--jobs', '-j', default=16, help='Parallel downloads (default: 16)')
+@click.pass_context
+def download(ctx, target, package, jobs):
+    """Download all package sources for TARGET.
+
+    Downloads sources in parallel with OpenWrt-compatible naming
+    for sources.openwrt.org mirror fallback support.
+    """
+    from .download import DownloadManager, download_package_source
+
+    config = Config.load_target(target)
+
+    if package:
+        # Download single package
+        click.echo(f"Downloading source for {package}...")
+        pkg = PackageConfig.find_package(package)
+        if not pkg:
+            click.echo(f"Package not found: {package}", err=True)
+            sys.exit(1)
+        result = download_package_source(pkg, config.dl_dir, ctx.obj['verbose'])
+        if result:
+            click.echo(f"Downloaded: {result}")
+        else:
+            click.echo(f"No download needed for {package}")
+    else:
+        # Download all packages
+        click.echo(f"Downloading all sources for {target}...")
+        manager = DownloadManager(config, verbose=ctx.obj['verbose'])
+        results = manager.download_all(max_workers=jobs)
+        click.echo(f"Downloads complete: {len(results)} files")
+
+
 @cli.command('image')
 @click.argument('target')
 @click.option('--profile', '-p', default='generic', help='Device profile')
