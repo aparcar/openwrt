@@ -194,8 +194,9 @@ class NinjaGenerator:
             '  pool = console',
             '',
             '# Package kernel modules',
+            '# Only runs if kernel was rebuilt (kernel.stamp is newer than kmod.stamp)',
             'rule kmod',
-            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt kernel modules $target',
+            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt kernel modules $target && touch $out',
             '  description = Packaging kernel modules',
             '  pool = console',
             '',
@@ -297,8 +298,9 @@ class NinjaGenerator:
         lines.append('build kernel-target: phony $builddir/stamp/kernel.stamp')
         lines.append('')
 
-        # Kernel module packaging - depends on kernel
-        lines.append('build $builddir/stamp/kmod.stamp: kmod | $builddir/stamp/kernel.stamp')
+        # Kernel module packaging - depends on kernel (regular dep, not order-only)
+        # Re-runs only when kernel.stamp is newer than kmod.stamp
+        lines.append('build $builddir/stamp/kmod.stamp: kmod $builddir/stamp/kernel.stamp')
         lines.append('')
 
         # Kmod alias
