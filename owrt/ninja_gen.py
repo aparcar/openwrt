@@ -58,9 +58,17 @@ class NinjaGenerator:
 
         Processes packages in dependency order so that dependency hashes can
         be included - if a dependency changes, all dependents will rebuild.
+
+        Note: Toolchain/kernel stamps are per-target (in build_dir/stamp),
+        while package stamps are per-architecture (in packages_dir/stamp).
         """
-        stamp_dir = self.build_dir / 'stamp'
-        stamp_dir.mkdir(parents=True, exist_ok=True)
+        # Per-target stamp dir for toolchain/kernel
+        target_stamp_dir = self.build_dir / 'stamp'
+        target_stamp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Per-architecture stamp dir for packages
+        pkg_stamp_dir = self.config.packages_dir / 'stamp'
+        pkg_stamp_dir.mkdir(parents=True, exist_ok=True)
 
         toolchain_info = self.config.toolchain
 
@@ -70,6 +78,13 @@ class NinjaGenerator:
         # Process in build order so dependencies are computed before dependents
         for name in plan.build_order:
             target = plan.targets[name]
+
+            # Select appropriate stamp directory
+            if target.target_type in ('toolchain', 'kernel'):
+                stamp_dir = target_stamp_dir
+            else:
+                stamp_dir = pkg_stamp_dir
+
             stamp_file = stamp_dir / f'{name}.stamp'
             key_file = stamp_dir / f'{name}.key'
 
@@ -146,12 +161,16 @@ class NinjaGenerator:
         # build_root is the parent of the target-specific build dir
         # This is used by rules to set BUILD_DIR environment variable
         build_root = self.config.build_dir
+        # Package stamps are per-architecture (shared across targets with same arch)
+        pkg_stamp_dir = self.config.packages_dir / 'stamp'
         return [
             '# Build directories',
             f'builddir = {self.build_dir}',
             f'build_root = {build_root}',
             f'poc_dir = {poc_dir}',
             f'target = {self.config.name}',
+            f'arch = {self.config.arch}',
+            f'pkg_stamp_dir = {pkg_stamp_dir}',
             '',
             '# Python interpreter',
             f'python = {os.sys.executable}',
@@ -218,8 +237,9 @@ class NinjaGenerator:
             '',
             '# Build a package',
             '# After success, writes the effective hash to a .key file for dependency tracking',
+            '# Package stamps are per-architecture (shared across targets with same arch)',
             'rule package',
-            f'  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt -j {jobs_per_package} package $target $pkg && echo $keyhash > $builddir/stamp/$pkg.key',
+            f'  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt -j {jobs_per_package} package $target $pkg && echo $keyhash > $pkg_stamp_dir/$pkg.key',
             '  description = Building package $pkg',
             '  pool = package_pool',
             '',
@@ -242,10 +262,14 @@ class NinjaGenerator:
         """Generate Ninja build statements."""
         from .download import get_download_filename
 
+        # Store plan targets for dependency type lookup
+        self._plan_targets = plan.targets
+
         lines = ['# Download statements (run first, highly parallel)', '']
 
         # First, generate download targets for all packages
         # These run in parallel before any builds start
+        # Downloads are per-architecture (shared across targets with same arch)
         download_stamps = []
         for name in plan.build_order:
             target = plan.targets[name]
@@ -256,7 +280,7 @@ class NinjaGenerator:
                     pkg = pkg.parent
                 filename = get_download_filename(pkg)
                 if filename:
-                    dl_stamp = f'$builddir/stamp/dl-{name}.stamp'
+                    dl_stamp = f'$pkg_stamp_dir/dl-{name}.stamp'
                     download_stamps.append(dl_stamp)
                     lines.append(f'build {dl_stamp}: download')
                     lines.append(f'  pkg = {name}')
@@ -288,12 +312,21 @@ class NinjaGenerator:
         from .download import get_download_filename
 
         lines = []
-        stamp = f'$builddir/stamp/{target.name}.stamp'
 
-        # Compute dependencies
+        # Toolchain and kernel stamps are per-target, package stamps are per-architecture
+        if target.target_type in ('toolchain', 'kernel'):
+            stamp = f'$builddir/stamp/{target.name}.stamp'
+        else:
+            stamp = f'$pkg_stamp_dir/{target.name}.stamp'
+
+        # Compute dependencies - packages depend on per-arch stamps, toolchain/kernel on per-target
         deps = []
         for dep_name in target.deps:
-            deps.append(f'$builddir/stamp/{dep_name}.stamp')
+            dep_target = getattr(self, '_plan_targets', {}).get(dep_name)
+            if dep_target and dep_target.target_type in ('toolchain', 'kernel'):
+                deps.append(f'$builddir/stamp/{dep_name}.stamp')
+            else:
+                deps.append(f'$pkg_stamp_dir/{dep_name}.stamp')
 
         dep_str = ' '.join(deps) if deps else ''
 
@@ -315,8 +348,8 @@ class NinjaGenerator:
             has_download = pkg and get_download_filename(pkg)
 
             if has_download:
-                # Add download stamp as explicit dependency
-                dl_stamp = f'$builddir/stamp/dl-{target.name}.stamp'
+                # Add download stamp as explicit dependency (downloads are per-arch too)
+                dl_stamp = f'$pkg_stamp_dir/dl-{target.name}.stamp'
                 if dep_str:
                     dep_str = f'{dl_stamp} {dep_str}'
                 else:
@@ -335,11 +368,11 @@ class NinjaGenerator:
         """Generate alias targets for convenience."""
         lines = ['# Alias targets', '']
 
-        # Collect package stamps
+        # Collect package stamps (per-architecture)
         pkg_stamps = []
         for name, target in plan.targets.items():
             if target.target_type == 'package':
-                pkg_stamps.append(f'$builddir/stamp/{name}.stamp')
+                pkg_stamps.append(f'$pkg_stamp_dir/{name}.stamp')
 
         # All packages alias
         if pkg_stamps:
@@ -347,6 +380,7 @@ class NinjaGenerator:
             lines.append('')
 
             # APK repository index - depends on all packages
+            # Note: apk-index is per-target since different targets may have different package selections
             lines.append(f'build $builddir/stamp/apk-index.stamp: apk_index | {" ".join(pkg_stamps)}')
             lines.append('')
 
@@ -354,7 +388,7 @@ class NinjaGenerator:
             lines.append('build apk-index: phony $builddir/stamp/apk-index.stamp')
             lines.append('')
 
-        # Kernel alias
+        # Kernel alias (per-target)
         lines.append('build kernel-target: phony $builddir/stamp/kernel.stamp')
         lines.append('')
 
@@ -381,8 +415,15 @@ class NinjaGenerator:
         lines.append('')
 
         # Full build alias - includes images if packages exist
-        all_stamps = [f'$builddir/stamp/{name}.stamp' for name in plan.build_order]
-        all_stamps.append('$builddir/stamp/kmod.stamp')  # Kernel modules
+        # Toolchain and kernel stamps are per-target, package stamps are per-architecture
+        all_stamps = []
+        for name in plan.build_order:
+            target = plan.targets[name]
+            if target.target_type in ('toolchain', 'kernel'):
+                all_stamps.append(f'$builddir/stamp/{name}.stamp')
+            else:
+                all_stamps.append(f'$pkg_stamp_dir/{name}.stamp')
+        all_stamps.append('$builddir/stamp/kmod.stamp')  # Kernel modules (per-target)
         if pkg_stamps:
             all_stamps.append('$builddir/stamp/apk-index.stamp')
             all_stamps.append('$builddir/stamp/image.stamp')

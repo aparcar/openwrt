@@ -73,9 +73,9 @@ class PackageBuilder:
         self.dl_dir = config.dl_dir
         self.stamp_dir = self.packages_dir / 'stamp'
 
-        # APK packaging paths
-        self.apk_dir = config.build_dir / 'apk-packages' / config.name
-        self.repo_dir = config.build_dir / 'apk-repo' / config.name
+        # APK packaging paths (per-architecture, shared across targets with same arch)
+        self.apk_dir = config.build_dir / 'apk-packages' / config.arch
+        self.repo_dir = config.build_dir / 'apk-repo' / config.arch
 
         # Get toolchain
         self.toolchain = ToolchainBuilder(config, verbose=verbose, jobs=jobs)

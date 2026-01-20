@@ -99,10 +99,14 @@ class Config:
         self.output_dir = Path(os.environ.get('OUTPUT_DIR', self.root_dir / 'build' / self.name))
 
         # Build subdirectories
+        # Toolchain is per-target (different CPU features/optimizations)
         self.toolchain_dir = self.build_dir / 'toolchain' / self.name
-        self.staging_dir = self.build_dir / 'staging' / self.name
-        self.packages_dir = self.build_dir / 'packages' / self.name
+        # Packages are per-architecture (same binaries work across targets with same arch)
+        self.staging_dir = self.build_dir / 'staging' / self.arch
+        self.packages_dir = self.build_dir / 'packages' / self.arch
+        # Kernel is per-target (different configs, DTBs)
         self.kernel_build_dir = self.build_dir / 'kernel' / self.name
+        # Rootfs is per-target (different package selections, configs)
         self.rootfs_dir = self.build_dir / 'rootfs' / self.name
 
         # Output directories (OpenWrt-style structure)
