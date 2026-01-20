@@ -221,18 +221,12 @@ class NinjaGenerator:
             '  description = Building toolchain for $target',
             '  pool = console',
             '',
-            '# Build kernel',
-            '# Only touches stamp if hash changed (avoids triggering kmod rebuild)',
+            '# Build kernel and package modules',
+            '# Single target: builds kernel, then packages modules using all cores',
+            '# Only touches stamp if hash changed (avoids triggering downstream rebuilds)',
             'rule kernel',
-            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt -j $$(nproc) kernel build $target && { [ "$$(cat $builddir/stamp/kernel.key 2>/dev/null)" = "$keyhash" ] || { echo $keyhash > $builddir/stamp/kernel.key && touch $out; }; }',
-            '  description = Building kernel for $target',
-            '  pool = console',
-            '',
-            '# Package kernel modules',
-            '# Only runs if kernel was rebuilt (kernel.stamp is newer than kmod.stamp)',
-            'rule kmod',
-            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt kernel modules $target && touch $out',
-            '  description = Packaging kernel modules',
+            '  command = PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt -j $$(nproc) kernel build $target && PYTHONPATH=$poc_dir BUILD_DIR=$build_root $python -m owrt -j $$(nproc) kernel modules $target && { [ "$$(cat $builddir/stamp/kernel.key 2>/dev/null)" = "$keyhash" ] || { echo $keyhash > $builddir/stamp/kernel.key && touch $out; }; }',
+            '  description = Building kernel and packaging modules for $target',
             '  pool = console',
             '',
             '# Build a package',
@@ -388,21 +382,12 @@ class NinjaGenerator:
             lines.append('build apk-index: phony $builddir/stamp/apk-index.stamp')
             lines.append('')
 
-        # Kernel alias (per-target)
+        # Kernel alias (per-target) - includes module packaging
         lines.append('build kernel-target: phony $builddir/stamp/kernel.stamp')
         lines.append('')
 
-        # Kernel module packaging - depends on kernel (regular dep, not order-only)
-        # Re-runs only when kernel.stamp is newer than kmod.stamp
-        lines.append('build $builddir/stamp/kmod.stamp: kmod $builddir/stamp/kernel.stamp')
-        lines.append('')
-
-        # Kmod alias
-        lines.append('build kmod: phony $builddir/stamp/kmod.stamp')
-        lines.append('')
-
-        # Image generation - depends on kernel, kmod, apk-index (and thus all packages)
-        image_deps = ['$builddir/stamp/kernel.stamp', '$builddir/stamp/kmod.stamp']
+        # Image generation - depends on kernel (which includes kmod) and apk-index
+        image_deps = ['$builddir/stamp/kernel.stamp']
         if pkg_stamps:
             image_deps.append('$builddir/stamp/apk-index.stamp')
         lines.append(f'build $builddir/stamp/image.stamp: image | {" ".join(image_deps)}')
@@ -416,6 +401,7 @@ class NinjaGenerator:
 
         # Full build alias - includes images if packages exist
         # Toolchain and kernel stamps are per-target, package stamps are per-architecture
+        # Note: kernel.stamp now includes module packaging
         all_stamps = []
         for name in plan.build_order:
             target = plan.targets[name]
@@ -423,7 +409,6 @@ class NinjaGenerator:
                 all_stamps.append(f'$builddir/stamp/{name}.stamp')
             else:
                 all_stamps.append(f'$pkg_stamp_dir/{name}.stamp')
-        all_stamps.append('$builddir/stamp/kmod.stamp')  # Kernel modules (per-target)
         if pkg_stamps:
             all_stamps.append('$builddir/stamp/apk-index.stamp')
             all_stamps.append('$builddir/stamp/image.stamp')
