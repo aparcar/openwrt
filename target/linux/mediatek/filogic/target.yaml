@@ -58,10 +58,9 @@ default_packages:
   - fitblk
   - kmod-leds-gpio
   - kmod-gpio-button-hotplug
+  - kmod-crypto-hw-safexcel
   - wpad-basic-mbedtls
   - uboot-envtools
-  # TODO: These packages need additional work:
-  # - kmod-crypto-hw-safexcel  # Requires eip197-mini-firmware package + crypto deps
 
 profiles:
   # =========================================================================
