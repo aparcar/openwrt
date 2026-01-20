@@ -30,7 +30,7 @@ def get_download_filename(pkg: PackageConfig) -> Optional[str]:
     """Get OpenWrt-compatible download filename for a package.
 
     For tarballs: uses original filename from URL
-    For git: creates {name}-{version}.tar.zst where version is date~commit
+    For git: creates {name}-{YYYY.MM.DD}~{commit8}.tar.xz (OpenWrt mirror format)
 
     Returns None if package has no downloadable source.
     """
@@ -51,14 +51,15 @@ def get_download_filename(pkg: PackageConfig) -> Optional[str]:
         return url.split('/')[-1]
 
     if src_type == 'git':
-        # OpenWrt naming: {name}-{date}~{commit_abbrev}.tar.zst
-        # We use version field which should contain commit hash
-        version = source.get('version', 'HEAD')
-        if version == 'HEAD':
+        # OpenWrt mirror naming: {name}-{YYYY.MM.DD}~{8-char-commit}.tar.xz
+        # pkg.version contains the date (e.g., "2025.12.08")
+        # source.version contains the git commit hash
+        git_version = source.get('version', 'HEAD')
+        if git_version == 'HEAD':
             return f"{pkg.name}-git.tar.zst"
-        # Abbreviate commit to 12 chars like OpenWrt
-        commit_abbrev = version[:12] if len(version) > 12 else version
-        return f"{pkg.name}-{commit_abbrev}.tar.zst"
+        # Use package version (date) and 8-char commit abbreviation
+        commit_abbrev = git_version[:8] if len(git_version) > 8 else git_version
+        return f"{pkg.name}-{pkg.version}~{commit_abbrev}.tar.xz"
 
     return None
 
@@ -277,43 +278,16 @@ def _git_clone_to_tarball(
         if git_dir.exists():
             shutil.rmtree(git_dir)
 
-        # Create tarball with zstd compression
+        # Create tarball with xz compression (matches OpenWrt mirror format)
         # Use tar with transform to set archive root directory name
         archive_name = dest.stem.replace('.tar', '')
 
-        if shutil.which('zstd'):
-            # Create .tar.zst
-            subprocess.run(
-                ['tar', '-C', tmpdir, '--transform', f's,^src,{archive_name},',
-                 '-cf', '-', 'src'],
-                stdout=subprocess.PIPE,
-                check=True,
-            ).stdout
-            # Pipe through zstd
-            with open(dest, 'wb') as f:
-                tar_proc = subprocess.Popen(
-                    ['tar', '-C', tmpdir, '--transform', f's,^src,{archive_name},',
-                     '-cf', '-', 'src'],
-                    stdout=subprocess.PIPE,
-                )
-                zstd_proc = subprocess.Popen(
-                    ['zstd', '-T0', '-'],
-                    stdin=tar_proc.stdout,
-                    stdout=f,
-                )
-                tar_proc.stdout.close()
-                zstd_proc.wait()
-                tar_proc.wait()
-        else:
-            # Fallback to gzip
-            dest_gz = dest.with_suffix('.tar.gz')
-            subprocess.run(
-                ['tar', '-C', tmpdir, '--transform', f's,^src,{archive_name},',
-                 '-czf', str(dest_gz), 'src'],
-                check=True,
-            )
-            if dest != dest_gz:
-                dest_gz.rename(dest)
+        # Use xz compression to match OpenWrt sources mirror
+        subprocess.run(
+            ['tar', '-C', tmpdir, '--transform', f's,^src,{archive_name},',
+             '-cJf', str(dest), 'src'],
+            check=True,
+        )
 
 
 class DownloadManager:
