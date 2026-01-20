@@ -1,0 +1,59 @@
+# U-Boot tools - Utilities for working with U-Boot
+# Provides fw_printenv/fw_setenv for reading/writing U-Boot environment
+
+name: uboot-tools
+version: "2025.10"
+release: 1
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://ftp.denx.de/pub/u-boot/u-boot-2025.10.tar.bz2"
+  sha256: "b4f032848e56cc8f213ad59f9132c084dbbb632bc29176d024e58220e0efdf4a"
+
+metadata:
+  section: utils
+  category: Utilities
+  submenu: Boot Loaders
+  title: U-Boot tools
+
+dependencies:
+  build: []
+  runtime: []
+
+build:
+  system: custom
+  parallel: true
+  configure_script: |
+    # Configure for tools-only build
+    make tools-only_defconfig
+    # Disable crypto and kwbimage (not needed for envtools)
+    sed -i 's/CONFIG_TOOLS_LIBCRYPTO=y/# CONFIG_TOOLS_LIBCRYPTO is not set/' .config
+    sed -i 's/CONFIG_TOOLS_KWBIMAGE=y/# CONFIG_TOOLS_KWBIMAGE is not set/' .config
+  build_script: |
+    # Build environment tools only
+    make -j${JOBS} \
+      ARCH="sandbox" \
+      TARGET_CFLAGS="${CFLAGS}" \
+      TARGET_LDFLAGS="${LDFLAGS}" \
+      NO_PYTHON=1 \
+      envtools
+
+subpackages:
+  uboot-envtools:
+    description: "Read/modify U-Boot bootloader environment"
+    section: utils
+    dependencies:
+      runtime: []
+    conffiles:
+      - /etc/config/ubootenv
+      - /etc/fw_env.config
+      - /etc/fw_sys.config
+    files:
+      - src: "tools/env/fw_printenv"
+        dst: "/usr/sbin/"
+        mode: "0755"
+      # Create fw_setenv symlink in post-install
+    scripts:
+      post-install: |
+        ln -sf fw_printenv /usr/sbin/fw_setenv

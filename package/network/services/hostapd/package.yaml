@@ -119,3 +119,18 @@ subpackages:
     description: "hostapd/wpa_supplicant common support files"
     section: net
     files: []
+
+  # Combined hostapd + wpa_supplicant package (wpad)
+  # This is what most users want for a typical WiFi router
+  wpad-basic-mbedtls:
+    description: |
+      IEEE 802.1x Authenticator/Supplicant (mbedTLS, basic variant).
+      Combined hostapd and wpa_supplicant with WPA-PSK, SAE (WPA3),
+      802.11r, and 802.11w support using mbedTLS for crypto.
+    section: net
+    provides:
+      - wpad
+    dependencies:
+      runtime:
+        - hostapd
+        - wpa-supplicant

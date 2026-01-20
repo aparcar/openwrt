@@ -1,0 +1,49 @@
+# gpio-button-hotplug - Simple GPIO Button Hotplug driver
+# Out-of-tree kernel module that generates uevents for GPIO buttons
+# instead of kernel input events (lighter weight than gpio_keys)
+
+name: gpio-button-hotplug
+version: "1.0"
+release: 5
+license: GPL-2.0
+
+source:
+  type: local
+  # Source is in src/ subdirectory of package directory
+  subdir: src
+
+metadata:
+  section: kernel
+  category: Kernel modules
+  submenu: GPIO support
+  title: Simple GPIO Button Hotplug driver
+  description: |
+    This is a replacement for the following in-kernel drivers:
+    1) gpio_keys (KEYBOARD_GPIO)
+    2) gpio_keys_polled (KEYBOARD_GPIO_POLLED)
+
+    Instead of generating input events (like in-kernel drivers do) it generates
+    uevent-s and broadcasts them. This allows disabling input subsystem which is
+    an overkill for OpenWrt simple needs.
+
+dependencies:
+  build: []
+  runtime:
+    - kernel
+
+build:
+  system: kmod
+  # Module will be built using make -C <kernel_dir> M=<src_dir> modules
+
+subpackages:
+  kmod-gpio-button-hotplug:
+    description: "Simple GPIO Button Hotplug driver"
+    section: kernel
+    autoload:
+      priority: 30
+      modules:
+        - gpio-button-hotplug
+      boot: true
+    files:
+      - src: "gpio-button-hotplug.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"

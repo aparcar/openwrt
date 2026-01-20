@@ -56,12 +56,12 @@ default_packages:
   - busybox
   - dropbear
   - fitblk
-  # TODO: These packages need kernel modules or additional packages to be built:
-  # - kmod-leds-gpio           # Requires kernel rebuild with CONFIG_LEDS_GPIO
-  # - kmod-gpio-button-hotplug # Requires gpio-button-hotplug package
-  # - kmod-crypto-hw-safexcel  # Requires kernel rebuild with CONFIG_CRYPTO_DEV_SAFEXCEL
-  # - wpad-basic-mbedtls       # WiFi daemon - needs hostapd package
-  # - uboot-envtools           # U-Boot env tools - needs uboot-tools package
+  - kmod-leds-gpio
+  - kmod-gpio-button-hotplug
+  - wpad-basic-mbedtls
+  - uboot-envtools
+  # TODO: These packages need additional work:
+  # - kmod-crypto-hw-safexcel  # Requires eip197-mini-firmware package + crypto deps
 
 profiles:
   # =========================================================================
