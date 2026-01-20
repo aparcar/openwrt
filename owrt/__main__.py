@@ -238,11 +238,12 @@ def toolchain_hash(ctx, target, fmt):
         rel_path = target_yaml.relative_to(poc_dir)
         files_to_hash.append((str(rel_path), target_yaml))
 
-    # 3. OpenWrt downstream patches (from poc/toolchain/)
+    # 3. OpenWrt downstream patches (from owrt/toolchain/)
+    owrt_dir = Path(__file__).parent
     patches_dirs = [
-        ('binutils', poc_dir / 'toolchain' / 'binutils' / 'patches' / builder.binutils_version),
-        ('gcc', poc_dir / 'toolchain' / 'gcc' / f'patches-{builder.gcc_version.split(".")[0]}.x'),
-        ('musl', poc_dir / 'toolchain' / 'musl' / 'patches'),
+        ('binutils', owrt_dir / 'toolchain' / 'binutils' / 'patches' / builder.binutils_version),
+        ('gcc', owrt_dir / 'toolchain' / 'gcc' / f'patches-{builder.gcc_version.split(".")[0]}.x'),
+        ('musl', owrt_dir / 'toolchain' / 'musl' / 'patches'),
     ]
 
     patch_files = []
@@ -308,7 +309,7 @@ def tool_list():
                 title = t.metadata.get('title', t.name)
                 click.echo(f"  {name:15} - {title}")
     else:
-        click.echo("No host tools found in poc/tools/")
+        click.echo("No host tools found in owrt/tools/")
 
 
 @tool.command('info')

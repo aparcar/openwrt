@@ -131,8 +131,9 @@ class ToolchainBuilder:
         if not src_dir.exists():
             extract_archive(tarball, self.build_dir)
 
-        # Apply OpenWrt patches (from poc/toolchain/)
-        patches_dir = self.config.poc_dir / 'toolchain' / 'binutils' / 'patches' / self.binutils_version
+        # Apply OpenWrt patches (from owrt/toolchain/)
+        owrt_dir = Path(__file__).parent
+        patches_dir = owrt_dir / 'toolchain' / 'binutils' / 'patches' / self.binutils_version
         if patches_dir.exists():
             apply_patches(src_dir, patches_dir, verbose=self.verbose)
 
@@ -182,9 +183,10 @@ class ToolchainBuilder:
         if not src_dir.exists():
             extract_archive(tarball, self.build_dir)
 
-        # Apply OpenWrt patches (from poc/toolchain/)
+        # Apply OpenWrt patches (from owrt/toolchain/)
+        owrt_dir = Path(__file__).parent
         gcc_major = self.gcc_version.split('.')[0]
-        patches_dir = self.config.poc_dir / 'toolchain' / 'gcc' / f'patches-{gcc_major}.x'
+        patches_dir = owrt_dir / 'toolchain' / 'gcc' / f'patches-{gcc_major}.x'
         if patches_dir.exists():
             apply_patches(src_dir, patches_dir, verbose=self.verbose)
 
@@ -289,8 +291,9 @@ class ToolchainBuilder:
         if not src_dir.exists():
             extract_archive(tarball, self.build_dir)
 
-        # Apply OpenWrt patches (from poc/toolchain/)
-        patches_dir = self.config.poc_dir / 'toolchain' / 'musl' / 'patches'
+        # Apply OpenWrt patches (from owrt/toolchain/)
+        owrt_dir = Path(__file__).parent
+        patches_dir = owrt_dir / 'toolchain' / 'musl' / 'patches'
         if patches_dir.exists():
             apply_patches(src_dir, patches_dir, verbose=self.verbose)
 

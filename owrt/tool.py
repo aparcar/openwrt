@@ -42,9 +42,9 @@ class ToolConfig:
 
     @classmethod
     def find_tool(cls, name: str) -> Optional['ToolConfig']:
-        """Find a tool by name in poc/tools/."""
-        poc_dir = Path(__file__).parent.parent
-        tools_dir = poc_dir / 'tools'
+        """Find a tool by name in owrt/tools/."""
+        owrt_dir = Path(__file__).parent
+        tools_dir = owrt_dir / 'tools'
 
         tool_dir = tools_dir / name
         tool_yaml = tool_dir / 'tool.yaml'
