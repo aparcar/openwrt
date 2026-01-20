@@ -647,6 +647,13 @@ class PackageBuilder:
         target = self.config.target_tuple
         commands = []
 
+        # Base CFLAGS for cross-compilation
+        base_cflags = '-Os -pipe -ffunction-sections -fdata-sections'
+        # Add package-specific cflags (e.g., extra include paths like libnl-tiny)
+        pkg_cflags = pkg.build.get('cflags', '')
+        if pkg_cflags:
+            base_cflags = f'{base_cflags} {pkg_cflags}'
+
         # Use in-source build - run cmake from source directory
         # This matches OpenWrt's behavior and works with packages that use
         # relative paths in custom cmake commands
@@ -660,6 +667,7 @@ class PackageBuilder:
             '-DCMAKE_FIND_ROOT_PATH=/staging;/toolchain',  # Semicolon separates paths
             '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY',
             '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY',
+            f'-DCMAKE_C_FLAGS={base_cflags}',
         ] + pkg.build.get('configure_args', [])
 
         # Quote arguments properly to handle semicolons and special characters

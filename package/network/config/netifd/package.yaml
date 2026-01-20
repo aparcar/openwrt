@@ -52,6 +52,8 @@ build:
   configure_args:
     - "-DLIBNL_LIBS=-lnl-tiny"
     - "-DDEBUG=1"
+  # Extra CFLAGS for libnl-tiny (headers are in libnl-tiny subdir)
+  cflags: "-I/staging/usr/include/libnl-tiny"
 
 install:
   # Copy files from package files/ directory

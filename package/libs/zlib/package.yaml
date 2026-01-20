@@ -28,9 +28,8 @@ dependencies:
 build:
   system: cmake
   parallel: true
-  # OpenWrt enables ARM NEON optimizations when available
-  configure_args:
-    - "-DARMv8=ON"
+  # ARM NEON optimizations are auto-detected by zlib's cmake
+  configure_args: []
 
 install:
   files:

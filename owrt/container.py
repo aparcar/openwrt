@@ -235,6 +235,7 @@ class PackageIsolation:
             '--root', str(staging_dir),
             '--arch', self.arch,
             '--initdb',
+            '--usermode',  # Required for non-root operation
             '--allow-untrusted',
             '--no-scripts',
             '--no-network',
@@ -249,14 +250,34 @@ class PackageIsolation:
         )
 
         if result.returncode != 0:
+            # Show error to help debugging
+            if self.verbose:
+                print(f"      APK batch install failed: {result.stderr}")
             # Some packages may not exist (e.g., no -dev variant)
             # Try installing what we can, one by one
             installed = []
+            # First init the database since batch install failed
+            # APK v3 requires --initdb with 'add' subcommand
+            init_cmd = [
+                str(self.apk_binary),
+                '--root', str(staging_dir),
+                '--arch', self.arch,
+                '--initdb',
+                '--usermode',
+                '--allow-untrusted',
+                '--no-scripts',
+                '--no-network',
+                '--repository', str(repo_path),
+                'add',  # 'add' with no packages just initializes the db
+            ]
+            subprocess.run(init_cmd, capture_output=True)
+
             for pkg in packages_to_install:
                 single_cmd = [
                     str(self.apk_binary),
                     '--root', str(staging_dir),
                     '--arch', self.arch,
+                    '--usermode',  # Required for non-root operation
                     '--allow-untrusted',
                     '--no-scripts',
                     '--no-network',
@@ -271,6 +292,8 @@ class PackageIsolation:
                 )
                 if single_result.returncode == 0:
                     installed.append(pkg)
+                elif self.verbose:
+                    print(f"      Failed to install {pkg}: {single_result.stderr.strip()}")
 
             if installed and self.verbose:
                 print(f"      Installed: {', '.join(installed)}")

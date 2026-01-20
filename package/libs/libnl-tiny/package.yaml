@@ -44,7 +44,7 @@ subpackages:
       runtime:
         - libnl-tiny
     files:
-      - src: "usr/include/netlink/*.h"
-        dst: "/usr/include/netlink/"
-      - src: "usr/include/netlink-private/*.h"
-        dst: "/usr/include/netlink-private/"
+      - src: "usr/include/libnl-tiny/**/*.h"
+        dst: "/usr/include/libnl-tiny/"
+      - src: "usr/lib/pkgconfig/libnl-tiny.pc"
+        dst: "/usr/lib/pkgconfig/"
