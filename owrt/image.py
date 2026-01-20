@@ -1571,6 +1571,35 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
 
         return None
 
+    def _get_profile_dtb_overlays(self, profile: Dict[str, Any]) -> List[Path]:
+        """Get DTB overlay paths for a profile.
+
+        DTB overlays (.dtbo files) are used to modify the device tree at runtime
+        or build time. Common uses include different flash configurations
+        (eMMC vs NAND vs NOR) or optional hardware accessories.
+
+        Args:
+            profile: Profile configuration dictionary
+
+        Returns:
+            List of paths to .dtbo files for this profile
+        """
+        dts_overlay = profile.get('dts_overlay', [])
+        if not dts_overlay:
+            return []
+
+        dtbos_dir = self.kernel_builder.get_dtbos_dir()
+        if not dtbos_dir.exists():
+            return []
+
+        overlays = []
+        for overlay_name in dts_overlay:
+            dtbo = dtbos_dir / f'{overlay_name}.dtbo'
+            if dtbo.exists():
+                overlays.append(dtbo)
+
+        return overlays
+
     def _compress_kernel(self, kernel: Path, compression: str) -> Path:
         """Compress kernel image."""
         if compression == 'none' or not compression:

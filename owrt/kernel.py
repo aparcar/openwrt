@@ -102,7 +102,8 @@ class KernelBuilder:
         self._configure(profile_name, kernel_config_overrides)
         self._compile()
         self._build_dtbs()
-        self._install()
+        self._build_dtb_overlays(profile_name)
+        self._install(profile_name)
 
         # Mark as built
         (self.stamp_dir / 'kernel_built').touch()
@@ -510,19 +511,154 @@ class KernelBuilder:
 
         stamp.touch()
 
-    def build_dtbs(self, profile_name: Optional[str] = None):
-        """Public method to build only DTBs.
+    def _build_dtb_overlays(self, profile_name: Optional[str] = None):
+        """Build Device Tree Blob Overlays (.dtbo files).
+
+        DTB overlays allow runtime or build-time modification of the device tree.
+        Common uses include different flash configurations (eMMC vs NAND vs NOR)
+        or optional hardware accessories.
 
         Args:
-            profile_name: Profile to include kmod packages from (optional)
+            profile_name: Profile name to get overlay list from
+        """
+        if not profile_name:
+            return
+
+        try:
+            profile = self.config.get_profile(profile_name)
+        except ValueError:
+            return
+
+        # Get list of overlays from profile
+        dts_overlay = profile.get('dts_overlay', [])
+        if not dts_overlay:
+            return
+
+        stamp = self.stamp_dir / f'dtbos_built_{profile_name}'
+        if stamp.exists():
+            print(f"  DTB overlays already built for {profile_name}, skipping.")
+            return
+
+        print(f"  Building DTB overlays for {profile_name}...")
+
+        # Get DTS directory (profile-specific or target default)
+        profile_dts_dir = profile.get('dts_dir')
+        if profile_dts_dir:
+            dts_dir = Path(self.config._expand_vars(profile_dts_dir))
+        else:
+            dts_dir = self.config.get_dts_dir()
+
+        if not dts_dir or not dts_dir.exists():
+            print(f"    Warning: DTS directory not found, skipping overlay build")
+            return
+
+        env = self._get_build_env()
+        kernel_dts_dir = self.src_dir / 'arch' / self.kernel_arch / 'boot' / 'dts'
+
+        # Output directory for compiled overlays
+        dtbo_output = self.output_dir / 'dtbos'
+        dtbo_output.mkdir(parents=True, exist_ok=True)
+
+        # DTC compiler location (use kernel's built-in one)
+        dtc = self.src_dir / 'scripts' / 'dtc' / 'dtc'
+        if not dtc.exists():
+            print(f"    Warning: DTC compiler not found at {dtc}, using system dtc")
+            dtc = Path('dtc')
+
+        # DTC warning flags (matching OpenWrt)
+        dtc_warn_flags = [
+            '-Wno-interrupt_provider',
+            '-Wno-unique_unit_address',
+            '-Wno-unit_address_vs_reg',
+            '-Wno-avoid_unnecessary_addr_size',
+            '-Wno-alias_paths',
+            '-Wno-graph_child_address',
+            '-Wno-simple_bus_reg',
+        ]
+
+        built_count = 0
+        for overlay_name in dts_overlay:
+            dtso_file = dts_dir / f'{overlay_name}.dtso'
+            if not dtso_file.exists():
+                print(f"    Warning: Overlay source {overlay_name}.dtso not found")
+                continue
+
+            dtbo_file = dtbo_output / f'{overlay_name}.dtbo'
+
+            # Copy .dtso to kernel DTS dir if it's not already there
+            kernel_dtso = kernel_dts_dir / f'{overlay_name}.dtso'
+            if dtso_file != kernel_dtso:
+                shutil.copy2(dtso_file, kernel_dtso)
+
+            # Preprocess with CPP (handles #include directives)
+            preprocessed = self.build_dir / f'{overlay_name}.dts.preprocessed'
+            cpp_cmd = [
+                f'{self.config.cross_compile}cpp',
+                '-nostdinc',
+                '-x', 'assembler-with-cpp',
+                f'-I{dts_dir}',
+                f'-I{dts_dir}/include',
+                f'-I{self.src_dir}/include',
+                f'-I{kernel_dts_dir}',
+                '-undef',
+                '-D__DTS__',
+                str(dtso_file),
+                '-o', str(preprocessed),
+            ]
+
+            try:
+                run_command(cpp_cmd, env=env, verbose=self.verbose)
+            except subprocess.CalledProcessError as e:
+                print(f"    Warning: Failed to preprocess {overlay_name}.dtso: {e}")
+                continue
+
+            # Compile with DTC
+            # -@ flag enables symbols needed for overlays
+            dtc_cmd = [
+                str(dtc),
+                '-O', 'dtb',
+                '-@',  # Enable symbols for overlay support
+                f'-i{kernel_dts_dir}',
+                f'-i{dts_dir}',
+            ] + dtc_warn_flags + [
+                '-o', str(dtbo_file),
+                str(preprocessed),
+            ]
+
+            try:
+                run_command(dtc_cmd, env=env, verbose=self.verbose)
+                built_count += 1
+            except subprocess.CalledProcessError as e:
+                print(f"    Warning: Failed to compile {overlay_name}.dtbo: {e}")
+                continue
+
+            # Clean up preprocessed file
+            preprocessed.unlink(missing_ok=True)
+
+        if built_count > 0:
+            print(f"    Built {built_count} DTB overlays")
+
+        stamp.touch()
+
+    def build_dtbs(self, profile_name: Optional[str] = None):
+        """Public method to build only DTBs and DTB overlays.
+
+        Args:
+            profile_name: Profile to include kmod packages from and get
+                         overlay list from (optional)
         """
         self._download_and_extract()
         self._apply_patches()
         self._configure(profile_name)
         self._build_dtbs()
+        self._build_dtb_overlays(profile_name)
 
-    def _install(self):
-        """Install kernel and modules."""
+    def _install(self, profile_name: Optional[str] = None):
+        """Install kernel and modules.
+
+        Args:
+            profile_name: Profile name (used for logging DTB overlay info)
+        """
         stamp = self.stamp_dir / 'kernel_installed'
         if stamp.exists():
             print("  [6/6] Kernel already installed, skipping.")
@@ -576,6 +712,13 @@ class KernelBuilder:
             if dtb_count > 0:
                 print(f"    DTBs: {dtb_count} files")
 
+        # Report DTB overlays (already built by _build_dtb_overlays)
+        dtbo_output = self.output_dir / 'dtbos'
+        if dtbo_output.exists():
+            dtbo_count = len(list(dtbo_output.glob('*.dtbo')))
+            if dtbo_count > 0:
+                print(f"    DTB overlays: {dtbo_count} files")
+
         stamp.touch()
 
     def _get_build_env(self) -> dict:
@@ -612,6 +755,10 @@ class KernelBuilder:
     def get_dtbs_dir(self) -> Path:
         """Get path to compiled DTBs."""
         return self.output_dir / 'dtbs'
+
+    def get_dtbos_dir(self) -> Path:
+        """Get path to compiled DTB overlays."""
+        return self.output_dir / 'dtbos'
 
     def rebuild_with_initramfs(self, rootfs_dir: Path) -> Path:
         """Rebuild kernel with embedded initramfs.

@@ -148,6 +148,27 @@ subpackages:          # Multiple outputs from one source
 ### Subpackages
 One source can produce multiple installable packages. The source is built once, then files are split into subpackages. Build dependencies should reference `-dev` packages.
 
+### Profile YAML Format (in target.yaml)
+```yaml
+profiles:
+  - name: my_device
+    title: "My Device"
+    dts: mt7981b-my-device           # Main device tree
+    dts_dir: "${OPENWRT_DIR}/target/linux/mediatek/dts"
+    dts_load_address: "0x43f00000"   # DTB load address
+
+    # DTB overlays (optional) - for devices with multiple flash configs
+    # Each overlay name corresponds to a .dtso file in dts_dir
+    dts_overlay:
+      - mt7981b-my-device-emmc       # For eMMC boot
+      - mt7981b-my-device-nand       # For NAND boot
+      - mt7981b-my-device-sd         # For SD card boot
+
+    packages:
+      - kmod-mt7915e
+      - kmod-usb3
+```
+
 ### Build Output Paths
 ```
 build/

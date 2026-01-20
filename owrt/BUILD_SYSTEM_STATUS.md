@@ -179,7 +179,7 @@ owrt/
 - [x] **Device Tree handling**
   - [x] Build DTBs for target devices
   - [x] Include correct DTB in firmware image
-  - [ ] DTB overlays support
+  - [x] DTB overlays support (profile `dts_overlay` field)
 
 #### 1.3 Image Generation
 - [x] **Rootfs assembly** - Complete
@@ -236,7 +236,6 @@ owrt/
 
 1. **Post-install scripts**: Not executed during rootfs assembly (APK uses --no-scripts)
 2. **Conditional dependencies**: Not supported in resolver
-3. **DTB overlays**: Not implemented in kernel builder
 
 **Resolved Issues:**
 - ~~Virtual packages~~: PROVIDES support implemented with priority system
@@ -245,6 +244,7 @@ owrt/
 - ~~FIT images~~: Full support for kernel + DTB + rootfs
 - ~~UBI images~~: Working with ubinize
 - ~~Sysupgrade format~~: Working with fwtool metadata
+- ~~DTB overlays~~: Implemented via profile `dts_overlay` field
 
 ## Quick Reference
 
