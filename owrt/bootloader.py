@@ -32,8 +32,8 @@ class BootloaderBuilder:
         self.dl_dir = config.build_dir / 'dl'
         self.host_staging = config.build_dir / 'host-staging'
 
-        # Package definitions directory
-        self.packages_dir = config.poc_dir / 'packages'
+        # Package definitions directory (bootloader packages are in package/boot/)
+        self.boot_packages_dir = config.openwrt_dir / 'package' / 'boot'
         self.tools_dir = config.poc_dir / 'tools'
 
     def build_tfa(self, variant: str) -> Dict[str, Path]:
@@ -48,7 +48,7 @@ class BootloaderBuilder:
         print(f"Building TF-A: {variant}")
 
         # Load package definition
-        pkg_yaml = self.packages_dir / 'arm-trusted-firmware-mediatek' / 'package.yaml'
+        pkg_yaml = self.boot_packages_dir / 'arm-trusted-firmware-mediatek' / 'package.yaml'
         if not pkg_yaml.exists():
             raise FileNotFoundError(f"TF-A package definition not found: {pkg_yaml}")
 
@@ -71,7 +71,7 @@ class BootloaderBuilder:
         # Download and extract source (with patches)
         source = pkg_config['source']
         version = pkg_config.get('version', '')
-        patches_dir = self.packages_dir / 'arm-trusted-firmware-mediatek' / 'patches'
+        patches_dir = self.boot_packages_dir / 'arm-trusted-firmware-mediatek' / 'patches'
         self._fetch_source(source, src_dir, version, patches_dir)
 
         # Build TF-A
@@ -139,7 +139,7 @@ class BootloaderBuilder:
         print(f"Building U-Boot: {variant}")
 
         # Load package definition
-        pkg_yaml = self.packages_dir / 'uboot-mediatek' / 'package.yaml'
+        pkg_yaml = self.boot_packages_dir / 'uboot-mediatek' / 'package.yaml'
         if not pkg_yaml.exists():
             raise FileNotFoundError(f"U-Boot package definition not found: {pkg_yaml}")
 
@@ -175,7 +175,7 @@ class BootloaderBuilder:
         # Download and extract source (with patches)
         source = pkg_config['source']
         version = pkg_config.get('version', '')
-        patches_dir = self.packages_dir / 'uboot-mediatek' / 'patches'
+        patches_dir = self.boot_packages_dir / 'uboot-mediatek' / 'patches'
         self._fetch_source(source, src_dir, version, patches_dir)
 
         # Configure U-Boot
@@ -234,26 +234,25 @@ class BootloaderBuilder:
         if fip_compress:
             print(f"    Compressing binaries with xz...")
 
-            # Compress BL31
+            # Compress BL31 (use subprocess directly for binary output)
             bl31_xz = build_dir / 'bl31.bin.xz'
-            run_command([
-                'xz', '-f', '-e', '-k', '-9', '-C', 'crc32',
-                '-c', str(bl31_path),
-            ], verbose=self.verbose, capture=True)
-            # Write output
             result = subprocess.run(
                 ['xz', '-f', '-e', '-k', '-9', '-C', 'crc32', '-c', str(bl31_path)],
                 capture_output=True,
             )
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(result.returncode, 'xz')
             bl31_xz.write_bytes(result.stdout)
             bl31_input = bl31_xz
 
-            # Compress U-Boot
+            # Compress U-Boot (use subprocess directly for binary output)
             uboot_xz = build_dir / 'u-boot.bin.xz'
             result = subprocess.run(
                 ['xz', '-f', '-e', '-k', '-9', '-C', 'crc32', '-c', str(uboot_bin)],
                 capture_output=True,
             )
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(result.returncode, 'xz')
             uboot_xz.write_bytes(result.stdout)
             uboot_input = uboot_xz
 

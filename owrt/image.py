@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any, List
 from .config import Config, PackageConfig
 from .kernel import KernelBuilder
 from .package import PackageBuilder
-from .fit import FITBuilder, UBIBuilder, MetadataBuilder
+from .fit import FITBuilder, UBIBuilder, UBIFSBuilder, MetadataBuilder
 from .apk import APKRootfs
 from .bootloader import BootloaderBuilder
 from .utils import run_command
@@ -51,6 +51,7 @@ class ImageBuilder:
         self.metadata_builder = MetadataBuilder(
             target=f"{config.board}/{config.subtarget}",
             board=config.name,
+            host_staging=config.build_dir / 'host-staging',
             verbose=verbose,
         )
 
@@ -482,6 +483,8 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
                 images['squashfs'] = self._build_squashfs()
             elif fs == 'ext4':
                 images['ext4'] = self._build_ext4()
+            elif fs == 'ubifs':
+                images['ubifs'] = self._build_ubifs(profile)
 
         return images
 
@@ -550,6 +553,73 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
             ], verbose=self.verbose)
 
         print(f"    Created: {output.name} ({size_mb}MB)")
+
+        return output
+
+    def _build_ubifs(self, profile: Dict[str, Any]) -> Path:
+        """Build UBIFS root filesystem image for NAND flash.
+
+        UBIFS (Unsorted Block Image File System) is designed for raw NAND
+        flash devices. It runs on top of UBI (Unsorted Block Images) which
+        handles wear leveling and bad block management.
+
+        Args:
+            profile: Device profile containing UBI/UBIFS configuration
+
+        Returns:
+            Path to generated UBIFS image
+        """
+        print("  Building UBIFS rootfs...")
+        output = self.build_dir / 'rootfs.ubifs'
+
+        # Get UBI configuration from profile
+        ubi_config = profile.get('ubi', {})
+        block_size_str = ubi_config.get('blocksize', '128k')
+        page_size = ubi_config.get('pagesize', 2048)
+
+        # Parse block size to bytes
+        block_size = block_size_str.upper()
+        if block_size.endswith('K'):
+            block_size_bytes = int(block_size[:-1]) * 1024
+        elif block_size.endswith('M'):
+            block_size_bytes = int(block_size[:-1]) * 1024 * 1024
+        else:
+            block_size_bytes = int(block_size)
+
+        # Calculate LEB size: PEB - 2 * page_size
+        leb_size = UBIFSBuilder.calculate_leb_size(block_size_bytes, page_size)
+
+        # Get UBIFS-specific options from profile
+        ubifs_config = profile.get('ubifs', {})
+        max_leb_cnt = ubifs_config.get('max_leb_cnt', 4096)
+        compression = ubifs_config.get('compression', 'zlib')
+
+        staging_dir = self.config.build_dir / 'host-staging'
+
+        ubifs_builder = UBIFSBuilder(
+            min_io_size=page_size,
+            leb_size=leb_size,
+            max_leb_cnt=max_leb_cnt,
+            compression=compression,
+            staging_dir=staging_dir,
+            verbose=self.verbose,
+        )
+
+        try:
+            ubifs_builder.build_ubifs(
+                rootfs_dir=self.rootfs_dir,
+                output=output,
+                space_fixup=True,
+                squash_uids=True,
+            )
+            print(f"    Created: {output.name} ({output.stat().st_size // 1024}KB)")
+            print(f"      LEB size: {leb_size} bytes ({leb_size // 1024}KiB)")
+            print(f"      Min I/O: {page_size} bytes")
+            print(f"      Compression: {compression}")
+        except subprocess.CalledProcessError as e:
+            print(f"    Warning: UBIFS build failed: {e}")
+        except FileNotFoundError:
+            print(f"    Warning: mkfs.ubifs not found (build mtd-utils host tool)")
 
         return output
 
@@ -1264,16 +1334,27 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
         # Add sysupgrade image as fit volume
         content = artifact.get('content')
         if content:
+            sysupgrade_img = None
             for search_dir in [self.images_dir, self.build_dir]:
-                sysupgrade_img = search_dir / content
-                if sysupgrade_img.exists():
-                    volumes.append({
-                        'name': 'fit',
-                        'type': 'dynamic',
-                        'image': str(sysupgrade_img),
-                        'autoresize': True,
-                    })
+                # First try exact match
+                exact_path = search_dir / content
+                if exact_path.exists():
+                    sysupgrade_img = exact_path
                     break
+                # Then try glob pattern for device-prefixed files
+                import glob
+                pattern = str(search_dir / f'*{content}')
+                matches = glob.glob(pattern)
+                if matches:
+                    sysupgrade_img = Path(matches[0])
+                    break
+            if sysupgrade_img and sysupgrade_img.exists():
+                volumes.append({
+                    'name': 'fit',
+                    'type': 'dynamic',
+                    'image': str(sysupgrade_img),
+                    'autoresize': True,
+                })
 
         if volumes:
             staging_dir = self.config.build_dir / 'host-staging'
@@ -1368,8 +1449,17 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
             elif part_type == 'ubi':
                 content = part.get('content')
                 if content:
-                    content_path = self.images_dir / content
-                    if content_path.exists():
+                    # For UBI parts in combined artifacts, use the already-generated factory.ubi
+                    # which contains the sysupgrade image
+                    import glob
+                    content_path = None
+                    # First look for factory.ubi (already generated)
+                    for pattern in [f'*factory.ubi', f'*{content}']:
+                        matches = glob.glob(str(self.images_dir / pattern))
+                        if matches:
+                            content_path = Path(matches[0])
+                            break
+                    if content_path and content_path.exists():
                         with open(output, 'ab') as out:
                             out.write(content_path.read_bytes())
                         print(f"      Part ubi: {content_path.stat().st_size // 1024}KB")

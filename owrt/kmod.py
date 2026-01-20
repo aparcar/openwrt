@@ -84,7 +84,7 @@ class KmodRegistry:
         if self._loaded:
             return
 
-        yaml_path = self.poc_dir / 'kmods.yaml'
+        yaml_path = self.poc_dir / 'owrt' / 'kmods.yaml'
         if not yaml_path.exists():
             print(f"  Warning: kmods.yaml not found at {yaml_path}")
             return

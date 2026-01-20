@@ -307,6 +307,109 @@ class FITBuilder:
         return self.build_fit(its_file, output, external_data, dtc_path)
 
 
+class UBIFSBuilder:
+    """Creates UBIFS filesystem images using mkfs.ubifs."""
+
+    def __init__(
+        self,
+        min_io_size: int = 2048,
+        leb_size: int = 126976,  # 128k - 2*2048 = 124KiB
+        max_leb_cnt: int = 4096,
+        compression: str = "zlib",
+        staging_dir: Optional[Path] = None,
+        verbose: bool = False,
+    ):
+        """Initialize UBIFS builder.
+
+        Args:
+            min_io_size: Minimum I/O unit size (typically NAND page size)
+            leb_size: Logical erase block size (PEB size - 2 * min_io_size)
+            max_leb_cnt: Maximum number of logical erase blocks
+            compression: Compression type (none, lzo, zlib)
+            staging_dir: Path to host-staging directory for tools
+            verbose: Enable verbose output
+        """
+        self.min_io_size = min_io_size
+        self.leb_size = leb_size
+        self.max_leb_cnt = max_leb_cnt
+        self.compression = compression
+        self.staging_dir = staging_dir
+        self.verbose = verbose
+
+    def _find_mkfs_ubifs(self) -> str:
+        """Find mkfs.ubifs binary."""
+        if self.staging_dir:
+            # Check host-staging locations
+            for subdir in ['sbin', 'bin']:
+                mkfs = self.staging_dir / subdir / 'mkfs.ubifs'
+                if mkfs.exists():
+                    return str(mkfs)
+        # Fall back to system PATH
+        return 'mkfs.ubifs'
+
+    @staticmethod
+    def calculate_leb_size(block_size: int, page_size: int) -> int:
+        """Calculate LEB size from physical erase block and page sizes.
+
+        UBIFS overhead is 2 pages per physical erase block (PEB):
+        - One page for the erase counter header (EC)
+        - One page for the volume identifier header (VID)
+
+        Args:
+            block_size: Physical erase block size in bytes
+            page_size: NAND page size in bytes
+
+        Returns:
+            Logical erase block (LEB) size in bytes
+        """
+        return block_size - (2 * page_size)
+
+    def build_ubifs(
+        self,
+        rootfs_dir: Path,
+        output: Path,
+        space_fixup: bool = True,
+        squash_uids: bool = True,
+    ) -> Path:
+        """Build UBIFS image from a root filesystem directory.
+
+        Args:
+            rootfs_dir: Path to root filesystem directory
+            output: Output UBIFS image path
+            space_fixup: Enable free space fixup for first mount
+            squash_uids: Squash ownership info to root
+
+        Returns:
+            Path to generated UBIFS image
+        """
+        output.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            self._find_mkfs_ubifs(),
+            '-m', str(self.min_io_size),
+            '-e', str(self.leb_size),
+            '-c', str(self.max_leb_cnt),
+        ]
+
+        if self.compression != 'none':
+            cmd.extend(['--compr', self.compression])
+
+        if space_fixup:
+            cmd.append('--space-fixup')
+
+        if squash_uids:
+            cmd.append('--squash-uids')
+
+        cmd.extend([
+            '-r', str(rootfs_dir),
+            '-o', str(output),
+        ])
+
+        run_command(cmd, verbose=self.verbose)
+
+        return output
+
+
 class UBIBuilder:
     """Creates UBI (Unsorted Block Image) volumes."""
 
@@ -478,6 +581,7 @@ class MetadataBuilder:
         revision: str = "",
         target: str = "",
         board: str = "",
+        host_staging: Optional[Path] = None,
         verbose: bool = False,
     ):
         self.version_dist = version_dist
@@ -485,6 +589,7 @@ class MetadataBuilder:
         self.revision = revision
         self.target = target
         self.board = board
+        self.host_staging = host_staging
         self.verbose = verbose
 
     def generate_metadata(
@@ -526,8 +631,14 @@ class MetadataBuilder:
 
         # Try using fwtool
         try:
+            # Use full path to fwtool if host_staging is available
+            fwtool_bin = 'fwtool'
+            if self.host_staging:
+                fwtool_path = self.host_staging / 'bin' / 'fwtool'
+                if fwtool_path.exists():
+                    fwtool_bin = str(fwtool_path)
             run_command(
-                ['sh', '-c', f'echo \'{metadata}\' | fwtool -I - {image}'],
+                ['sh', '-c', f'echo \'{metadata}\' | {fwtool_bin} -I - {image}'],
                 verbose=self.verbose,
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
