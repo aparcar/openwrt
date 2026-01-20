@@ -41,9 +41,9 @@ class Config:
         """Set up all build paths."""
         # Environment-based paths (set by Docker or manually)
         self.openwrt_dir = Path(os.environ.get('OPENWRT_DIR', '/openwrt'))
-        # root_dir is the repository root - three levels up from target dir (owrt/targets/name/ -> root)
-        # _base_dir is owrt/targets/name/, so parent.parent.parent is the repo root
-        self.root_dir = Path(os.environ.get('ROOT_DIR', self._base_dir.parent.parent.parent))
+        # root_dir is the repository root - four levels up from target dir
+        # _base_dir is target/linux/<board>/<subtarget>/, so parent.parent.parent.parent is the repo root
+        self.root_dir = Path(os.environ.get('ROOT_DIR', self._base_dir.parent.parent.parent.parent))
         # Backwards compat alias
         self.poc_dir = self.root_dir
         self.build_dir = Path(os.environ.get('BUILD_DIR', self.root_dir / 'build'))
@@ -298,14 +298,25 @@ class Config:
 
     @classmethod
     def load_target(cls, target_name: str) -> 'Config':
-        """Load a target configuration by name."""
-        # Find the owrt module directory (where targets/ is located)
-        owrt_dir = Path(__file__).parent
-        if not owrt_dir.exists():
-            owrt_dir = Path.cwd() / 'owrt'
+        """Load a target configuration by name.
 
-        # Look for target.yaml in owrt/targets/
-        target_file = owrt_dir / 'targets' / target_name / 'target.yaml'
+        Target name format: <board>-<subtarget> (e.g., mediatek-filogic, armsr-armv8, x86-64)
+        Target file location: target/linux/<board>/<subtarget>/target.yaml
+        """
+        # Find repository root (parent of owrt/ directory)
+        owrt_dir = Path(__file__).parent
+        root_dir = owrt_dir.parent
+
+        # Parse target name into board and subtarget
+        parts = target_name.split('-', 1)
+        if len(parts) == 2:
+            board, subtarget = parts
+        else:
+            board = target_name
+            subtarget = 'generic'
+
+        # Look for target.yaml in target/linux/<board>/<subtarget>/
+        target_file = root_dir / 'target' / 'linux' / board / subtarget / 'target.yaml'
         if not target_file.exists():
             raise FileNotFoundError(f"Target definition not found: {target_file}")
 
