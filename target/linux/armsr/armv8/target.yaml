@@ -26,12 +26,12 @@ toolchain:
 kernel:
   # Target-specific config fragments (merged with base)
   config_fragments:
-    - kernel/config/base.config
-    - kernel/config/armv8.config
-    - kernel/config/kmods.config
+    - config/base.config
+    - config/armv8.config
+    - config/kmods.config
   # Target-specific patches
   patch_dirs:
-    - kernel/patches-6.12
+    - patches-6.12
   # No DTS for EFI systems (uses ACPI)
   dts_dir: null
   # Load addresses for this target

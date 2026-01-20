@@ -28,11 +28,11 @@ toolchain:
 kernel:
   # Target-specific config fragments
   config_fragments:
-    - kernel/config/base.config
-    - kernel/config/x86-64.config
+    - config/base.config
+    - config/x86-64.config
   # Target-specific patches (use generic x86 patches)
   patch_dirs:
-    - kernel/patches-6.12
+    - patches-6.12
   # No DTS for x86 (uses ACPI)
   dts_dir: null
   # x86 uses bzImage

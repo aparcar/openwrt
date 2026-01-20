@@ -28,12 +28,12 @@ kernel:
   # Target-specific config fragments (merged with generic config from linux package)
   # Paths relative to target directory
   config_fragments:
-    - kernel/config/subtarget.config
-    - kernel/config/wifi.config
-    - kernel/config/hardware.config
+    - config/subtarget.config
+    - config/wifi.config
+    - config/hardware.config
   # Target-specific patches (from mediatek target)
   patch_dirs:
-    - kernel/patches-6.12
+    - patches-6.12
   # DTS files location (still from OpenWrt source for now)
   dts_dir: ${OPENWRT_DIR}/target/linux/mediatek/dts
   # Load addresses for this SoC
