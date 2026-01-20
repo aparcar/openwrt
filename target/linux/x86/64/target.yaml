@@ -30,9 +30,9 @@ kernel:
   config_fragments:
     - config/base.config
     - config/x86-64.config
-  # Target-specific patches (use generic x86 patches)
+  # Target-specific patches (from parent target dir)
   patch_dirs:
-    - patches-6.12
+    - ../patches-6.12
   # No DTS for x86 (uses ACPI)
   dts_dir: null
   # x86 uses bzImage

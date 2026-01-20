@@ -31,9 +31,9 @@ kernel:
     - config/subtarget.config
     - config/wifi.config
     - config/hardware.config
-  # Target-specific patches (from mediatek target)
+  # Target-specific patches (from parent target dir)
   patch_dirs:
-    - patches-6.12
+    - ../patches-6.12
   # DTS files location (still from OpenWrt source for now)
   dts_dir: ${OPENWRT_DIR}/target/linux/mediatek/dts
   # Load addresses for this SoC
