@@ -36,3 +36,15 @@ subpackages:
     files:
       - src: "usr/lib/libnl-tiny.so*"
         dst: "/usr/lib/"
+
+  libnl-tiny-dev:
+    description: "Minimal netlink socket library (development files)"
+    section: devel
+    dependencies:
+      runtime:
+        - libnl-tiny
+    files:
+      - src: "usr/include/netlink/*.h"
+        dst: "/usr/include/netlink/"
+      - src: "usr/include/netlink-private/*.h"
+        dst: "/usr/include/netlink-private/"
