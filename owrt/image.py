@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any, List
 from .config import Config, PackageConfig
 from .kernel import KernelBuilder
 from .package import PackageBuilder
-from .fit import FITBuilder, UBIBuilder, UBIFSBuilder, MetadataBuilder
+from .fit import FITBuilder, UBIBuilder, UBIFSBuilder, JFFS2Builder, MetadataBuilder
 from .apk import APKRootfs
 from .bootloader import BootloaderBuilder
 from .utils import run_command
@@ -485,6 +485,8 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
                 images['ext4'] = self._build_ext4()
             elif fs == 'ubifs':
                 images['ubifs'] = self._build_ubifs(profile)
+            elif fs == 'jffs2':
+                images['jffs2'] = self._build_jffs2(profile)
 
         return images
 
@@ -620,6 +622,70 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
             print(f"    Warning: UBIFS build failed: {e}")
         except FileNotFoundError:
             print(f"    Warning: mkfs.ubifs not found (build mtd-utils host tool)")
+
+        return output
+
+    def _build_jffs2(self, profile: Dict[str, Any]) -> Path:
+        """Build JFFS2 root filesystem image.
+
+        JFFS2 (Journaling Flash File System 2) is designed for NOR flash
+        and can also be used on NAND flash. It provides wear leveling and
+        journaling for reliable operation.
+
+        Args:
+            profile: Device profile containing JFFS2 configuration
+
+        Returns:
+            Path to generated JFFS2 image
+        """
+        print("  Building JFFS2 rootfs...")
+        output = self.build_dir / 'rootfs.jffs2'
+
+        # Get JFFS2 configuration from profile
+        jffs2_config = profile.get('jffs2', {})
+
+        # Erase block size - common values: 64k for NOR, 128k for NAND
+        erase_block_str = jffs2_config.get('erase_block', '64k')
+        if erase_block_str.upper().endswith('K'):
+            erase_block_size = int(erase_block_str[:-1]) * 1024
+        elif erase_block_str.upper().endswith('M'):
+            erase_block_size = int(erase_block_str[:-1]) * 1024 * 1024
+        else:
+            erase_block_size = int(erase_block_str)
+
+        # NAND-specific options
+        page_size = jffs2_config.get('page_size')  # None for NOR
+        no_cleanmarkers = jffs2_config.get('no_cleanmarkers', False)
+
+        # Endianness
+        big_endian = jffs2_config.get('big_endian', False)
+
+        staging_dir = self.config.build_dir / 'host-staging'
+
+        jffs2_builder = JFFS2Builder(
+            erase_block_size=erase_block_size,
+            page_size=page_size,
+            big_endian=big_endian,
+            no_cleanmarkers=no_cleanmarkers,
+            staging_dir=staging_dir,
+            verbose=self.verbose,
+        )
+
+        try:
+            jffs2_builder.build_jffs2(
+                source_dir=self.rootfs_dir,
+                output=output,
+                pad=True,
+                squash_uids=True,
+            )
+            print(f"    Created: {output.name} ({output.stat().st_size // 1024}KB)")
+            print(f"      Erase block: {erase_block_size // 1024}KiB")
+            if page_size:
+                print(f"      Page size: {page_size} bytes (NAND)")
+        except subprocess.CalledProcessError as e:
+            print(f"    Warning: JFFS2 build failed: {e}")
+        except FileNotFoundError:
+            print(f"    Warning: mkfs.jffs2 not found (build mtd-utils host tool)")
 
         return output
 

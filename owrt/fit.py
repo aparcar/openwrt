@@ -307,6 +307,123 @@ class FITBuilder:
         return self.build_fit(its_file, output, external_data, dtc_path)
 
 
+class JFFS2Builder:
+    """Creates JFFS2 (Journaling Flash File System 2) images using mkfs.jffs2."""
+
+    def __init__(
+        self,
+        erase_block_size: int = 65536,  # 64k default
+        page_size: Optional[int] = None,  # For NAND
+        big_endian: bool = False,
+        no_cleanmarkers: bool = False,  # For NAND/UBI
+        staging_dir: Optional[Path] = None,
+        verbose: bool = False,
+    ):
+        """Initialize JFFS2 builder.
+
+        Args:
+            erase_block_size: Erase block size in bytes (typically 64k or 128k)
+            page_size: NAND page size (set for NAND flash, None for NOR)
+            big_endian: Use big endian format
+            no_cleanmarkers: Don't add cleanmarkers (for NAND/UBI)
+            staging_dir: Path to host-staging directory for tools
+            verbose: Enable verbose output
+        """
+        self.erase_block_size = erase_block_size
+        self.page_size = page_size
+        self.big_endian = big_endian
+        self.no_cleanmarkers = no_cleanmarkers
+        self.staging_dir = staging_dir
+        self.verbose = verbose
+
+    def _find_mkfs_jffs2(self) -> str:
+        """Find mkfs.jffs2 binary."""
+        if self.staging_dir:
+            for subdir in ['sbin', 'bin']:
+                mkfs = self.staging_dir / subdir / 'mkfs.jffs2'
+                if mkfs.exists():
+                    return str(mkfs)
+        return 'mkfs.jffs2'
+
+    def build_jffs2(
+        self,
+        source_dir: Path,
+        output: Path,
+        pad: bool = True,
+        squash_uids: bool = True,
+    ) -> Path:
+        """Build JFFS2 image from a source directory.
+
+        Args:
+            source_dir: Path to source directory (rootfs or overlay content)
+            output: Output JFFS2 image path
+            pad: Pad output to erase block boundary
+            squash_uids: Squash ownership info to root
+
+        Returns:
+            Path to generated JFFS2 image
+        """
+        output.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [self._find_mkfs_jffs2()]
+
+        # Erase block size
+        cmd.extend(['-e', str(self.erase_block_size)])
+
+        # Endianness
+        if self.big_endian:
+            cmd.append('--big-endian')
+        else:
+            cmd.append('--little-endian')
+
+        # NAND options
+        if self.page_size:
+            cmd.extend(['--pagesize', str(self.page_size)])
+        if self.no_cleanmarkers:
+            cmd.append('--no-cleanmarkers')
+
+        # Padding
+        if pad:
+            cmd.append('--pad')
+
+        # Squash UIDs
+        if squash_uids:
+            cmd.append('--squash-uids')
+
+        # Source and output
+        cmd.extend(['-d', str(source_dir)])
+        cmd.extend(['-o', str(output)])
+
+        run_command(cmd, verbose=self.verbose)
+
+        return output
+
+    def build_empty_overlay(
+        self,
+        output: Path,
+        pad: bool = True,
+    ) -> Path:
+        """Build an empty JFFS2 image for overlay filesystem.
+
+        Creates a minimal JFFS2 image that can be used as an overlay
+        partition on top of a read-only squashfs root.
+
+        Args:
+            output: Output JFFS2 image path
+            pad: Pad output to erase block boundary
+
+        Returns:
+            Path to generated JFFS2 overlay image
+        """
+        import tempfile
+
+        # Create temporary empty directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty_dir = Path(tmpdir) / 'empty'
+            empty_dir.mkdir()
+            return self.build_jffs2(empty_dir, output, pad=pad, squash_uids=True)
+
+
 class UBIFSBuilder:
     """Creates UBIFS filesystem images using mkfs.ubifs."""
 

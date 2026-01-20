@@ -183,6 +183,13 @@ profiles:
       max_leb_cnt: 2048       # Maximum logical erase blocks
       compression: zlib       # Compression: none, lzo, zlib
 
+    # JFFS2 configuration (for NOR/NAND rootfs or overlay images)
+    # Used when filesystem: jffs2 is specified
+    jffs2:
+      erase_block: 128k       # Erase block size
+      page_size: 2048         # NAND page size (omit for NOR flash)
+      no_cleanmarkers: true   # For NAND/UBI usage
+
     # Image generation
     images:
       # Main sysupgrade image (UBI + FIT)
@@ -211,6 +218,11 @@ profiles:
       - name: rootfs.ubifs
         type: rootfs
         filesystem: ubifs
+
+      # JFFS2 rootfs image (for NOR flash or overlay)
+      - name: rootfs.jffs2
+        type: rootfs
+        filesystem: jffs2
 
     # Boot artifacts (preloader, U-Boot, etc.)
     artifacts:
@@ -359,6 +371,7 @@ image:
   filesystems:
     - squashfs
     - ubifs
+    - jffs2
     - initramfs
   kernel_name: Image
   kernel_in_ubi: true
