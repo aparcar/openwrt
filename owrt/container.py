@@ -200,68 +200,82 @@ class PackageIsolation:
             self._run_command(cmd, build_dir, source_dir, isolated_env)
 
     def _install_deps(self, staging_dir: Path, build_deps: List[str]):
-        """Install build dependencies by extracting APK files to staging directory."""
+        """Install build dependencies to staging directory using APK.
+
+        Uses APK's dependency resolution to install all transitive dependencies.
+        This ensures that if A depends on B-dev which depends on C-dev,
+        all of A, B-dev, C-dev (and their runtime deps) are installed.
+        """
+        if not build_deps:
+            return
+
         if self.verbose:
             print(f"      Installing deps: {', '.join(build_deps)}")
 
-        # Prepare package names to extract
-        # We need both the base package (for .so files) and dev package (for headers)
-        packages_to_extract = []
+        # Prepare package names - add both base and -dev variants
+        packages_to_install = []
         for dep in build_deps:
             if dep.endswith('-dev'):
-                # Add both the dev package and the base package
-                packages_to_extract.append(dep)
-                base_pkg = dep[:-4]  # Remove '-dev' suffix
-                packages_to_extract.append(base_pkg)
+                packages_to_install.append(dep)
+                base_pkg = dep[:-4]
+                packages_to_install.append(base_pkg)
             else:
-                # Add both the base package and dev package
-                packages_to_extract.append(dep)
-                packages_to_extract.append(f"{dep}-dev")
-        # Remove duplicates while preserving order
-        seen = set()
-        dev_deps = []
-        for pkg in packages_to_extract:
-            if pkg not in seen:
-                seen.add(pkg)
-                dev_deps.append(pkg)
+                packages_to_install.append(dep)
+                packages_to_install.append(f"{dep}-dev")
 
-        # Find and extract APK files for each dependency
-        repo_arch_dir = self.repo_dir / self.arch
-        installed = []
+        # Remove duplicates
+        packages_to_install = list(dict.fromkeys(packages_to_install))
 
-        for dep in dev_deps:
-            # Find the APK file (name-version-release.apk)
-            apk_files = list(repo_arch_dir.glob(f"{dep}-[0-9]*.apk"))
-            if not apk_files:
-                if self.verbose:
-                    print(f"      Warning: No APK found for {dep}")
-                continue
+        # Use APK to install with full dependency resolution
+        # This handles transitive dependencies automatically
+        repo_path = self.repo_dir / self.arch / 'packages.adb'
 
-            # Use the first match (should be sorted by version)
-            apk_file = sorted(apk_files)[-1]  # Latest version
+        cmd = [
+            str(self.apk_binary),
+            '--root', str(staging_dir),
+            '--arch', self.arch,
+            '--initdb',
+            '--allow-untrusted',
+            '--no-scripts',
+            '--no-network',
+            '--repository', str(repo_path),
+            'add',
+        ] + packages_to_install
 
-            # Extract APK to staging using apk extract
-            cmd = [
-                str(self.apk_binary),
-                'extract',
-                '--allow-untrusted',
-                f'--destination={staging_dir}',
-                str(apk_file),
-            ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-            )
+        if result.returncode != 0:
+            # Some packages may not exist (e.g., no -dev variant)
+            # Try installing what we can, one by one
+            installed = []
+            for pkg in packages_to_install:
+                single_cmd = [
+                    str(self.apk_binary),
+                    '--root', str(staging_dir),
+                    '--arch', self.arch,
+                    '--allow-untrusted',
+                    '--no-scripts',
+                    '--no-network',
+                    '--repository', str(repo_path),
+                    'add',
+                    pkg,
+                ]
+                single_result = subprocess.run(
+                    single_cmd,
+                    capture_output=True,
+                    text=True,
+                )
+                if single_result.returncode == 0:
+                    installed.append(pkg)
 
-            if result.returncode == 0:
-                installed.append(dep)
-            elif self.verbose:
-                print(f"      Warning: Failed to extract {apk_file.name}: {result.stderr}")
-
-        if installed and self.verbose:
-            print(f"      Installed: {', '.join(installed)}")
+            if installed and self.verbose:
+                print(f"      Installed: {', '.join(installed)}")
+        elif self.verbose:
+            print(f"      Installed deps with APK (including transitive)")
 
     def _build_isolated_env(
         self,
