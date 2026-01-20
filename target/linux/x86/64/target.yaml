@@ -26,10 +26,9 @@ toolchain:
 
 # Kernel configuration
 kernel:
-  # Target-specific config fragments
+  # Use original OpenWrt config (kmod options added dynamically)
   config_fragments:
-    - config/base.config
-    - config/x86-64.config
+    - config-6.12
   # Target-specific patches (from parent target dir)
   patch_dirs:
     - ../patches-6.12
