@@ -80,11 +80,19 @@ class Config:
 
     def _setup_paths(self):
         """Set up all build paths."""
-        # Environment-based paths (set by Docker or manually)
-        self.openwrt_dir = Path(os.environ.get('OPENWRT_DIR', '/openwrt'))
         # root_dir is the repository root - four levels up from target dir
         # _base_dir is target/linux/<board>/<subtarget>/, so parent.parent.parent.parent is the repo root
         self.root_dir = Path(os.environ.get('ROOT_DIR', self._base_dir.parent.parent.parent.parent))
+        # Environment-based paths (set by Docker or manually)
+        # Default to /openwrt (Docker mount) or root_dir (direct execution)
+        openwrt_env = os.environ.get('OPENWRT_DIR')
+        if openwrt_env:
+            self.openwrt_dir = Path(openwrt_env)
+        elif Path('/openwrt').exists():
+            self.openwrt_dir = Path('/openwrt')
+        else:
+            # Fallback: when running directly on host, use root_dir
+            self.openwrt_dir = self.root_dir
         # Backwards compat alias
         self.poc_dir = self.root_dir
         self.build_dir = Path(os.environ.get('BUILD_DIR', self.root_dir / 'build'))

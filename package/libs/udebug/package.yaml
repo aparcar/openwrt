@@ -26,6 +26,7 @@ dependencies:
     - libubox-dev
     - libubus-dev
     - libucode-dev
+    - libjson-c-dev  # Required by libucode-dev headers
 
 build:
   system: cmake

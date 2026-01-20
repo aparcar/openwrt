@@ -59,6 +59,7 @@ default_packages:
   - kmod-leds-gpio
   - kmod-gpio-button-hotplug
   - kmod-crypto-hw-safexcel
+  - eip197-mini-firmware
   - wpad-basic-mbedtls
   - uboot-envtools
 

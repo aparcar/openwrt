@@ -191,6 +191,9 @@ class KernelModulePackager:
         # Cache of built module paths (ko_name -> Path)
         self._built_modules: Dict[str, Path] = {}
 
+        # Cache of built-in module paths (from modules.builtin)
+        self._builtin_modules: Set[str] = set()
+
     def discover_built_modules(self) -> Dict[str, Path]:
         """Discover all built kernel modules (.ko files)."""
         if self._built_modules:
@@ -225,6 +228,59 @@ class KernelModulePackager:
 
         return self._built_modules
 
+    def load_builtin_modules(self) -> Set[str]:
+        """Load list of built-in modules from modules.builtin.
+
+        Returns a set of module basenames (without .ko extension) that are
+        built into the kernel rather than as loadable modules.
+        """
+        if self._builtin_modules:
+            return self._builtin_modules
+
+        # Find modules.builtin in kernel source directory
+        kernel_src = self.kernel_builder.src_dir
+        builtin_file = kernel_src / 'modules.builtin'
+
+        if not builtin_file.exists():
+            if self.verbose:
+                print(f"  Warning: modules.builtin not found at {builtin_file}")
+            return self._builtin_modules
+
+        with open(builtin_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                # Extract module basename without .ko extension
+                # e.g., "kernel/crypto/crypto_hash.ko" -> "crypto_hash"
+                basename = Path(line).stem
+                # Store both original and normalized names (- vs _)
+                self._builtin_modules.add(basename)
+                self._builtin_modules.add(basename.replace('_', '-'))
+
+        if self.verbose:
+            print(f"  Loaded {len(self._builtin_modules)} built-in modules from modules.builtin")
+
+        return self._builtin_modules
+
+    def is_module_builtin(self, kmod: KmodDefinition) -> bool:
+        """Check if a kmod's files are all built-in to the kernel.
+
+        Returns True if ALL module files for this kmod are built-in.
+        This means the module functionality is available but no .ko file exists.
+        """
+        builtin = self.load_builtin_modules()
+        if not builtin:
+            return False
+
+        for ko_file in kmod.files:
+            ko_basename = Path(ko_file).stem
+            # Check both original and normalized names
+            if ko_basename not in builtin and ko_basename.replace('_', '-') not in builtin:
+                return False
+
+        return len(kmod.files) > 0
+
     def build_module_packages(self, module_names: Optional[List[str]] = None) -> List[Path]:
         """Build APK packages for kernel modules.
 
@@ -242,22 +298,34 @@ class KernelModulePackager:
             print("  No kernel modules to package")
             return []
 
+        # Load built-in modules for later use
+        self.load_builtin_modules()
+
         # Determine which modules to build
         if module_names:
             # Build specific modules
             to_build = module_names
         else:
-            # Build all modules that have definitions and are built
+            # Build all modules that have definitions and are either:
+            # 1. Built as loadable modules (.ko files exist)
+            # 2. Built-in to the kernel (in modules.builtin)
             # Note: hidden modules are still built (needed as dependencies),
             # just not user-selectable in menus
             to_build = []
             for name, kmod in self.registry.get_all().items():
-                # Check if the module files exist
+                # First check if module files exist as .ko
+                found_ko = False
                 for ko_file in kmod.files:
                     ko_name = Path(ko_file).stem.replace('_', '-')
                     if ko_name in built_modules:
-                        to_build.append(name)
+                        found_ko = True
                         break
+
+                if found_ko:
+                    to_build.append(name)
+                elif self.is_module_builtin(kmod):
+                    # Module is built-in - create empty package for dep resolution
+                    to_build.append(name)
 
         # First, create the kernel virtual package that kmods depend on
         kernel_pkg = self._build_kernel_package()
@@ -411,7 +479,10 @@ class KernelModulePackager:
                 if ko_name_orig in built_modules:
                     ko_paths.append((ko_file, built_modules[ko_name_orig]))
 
-        if not ko_paths:
+        # Check if module is built-in (no .ko files but in modules.builtin)
+        is_builtin = not ko_paths and self.is_module_builtin(kmod)
+
+        if not ko_paths and not is_builtin:
             if self.verbose:
                 print(f"    Warning: No built modules found for kmod-{name}")
             return None
@@ -424,25 +495,32 @@ class KernelModulePackager:
             shutil.rmtree(staging_dir)
         staging_dir.mkdir(parents=True)
 
-        # Install module files
-        modules_install_dir = staging_dir / 'lib' / 'modules' / self.kernel_version
-        modules_install_dir.mkdir(parents=True)
+        if is_builtin:
+            # Built-in module: create empty package (no .ko files, no autoload)
+            # This satisfies dependency resolution for packages that depend on
+            # modules that are compiled into the kernel
+            if self.verbose:
+                print(f"    NOTICE: kmod-{name} is built-in, creating empty package")
+        else:
+            # Install module files
+            modules_install_dir = staging_dir / 'lib' / 'modules' / self.kernel_version
+            modules_install_dir.mkdir(parents=True)
 
-        for ko_rel_path, ko_src_path in ko_paths:
-            # Preserve path structure
-            dest_path = modules_install_dir / ko_rel_path
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ko_src_path, dest_path)
+            for ko_rel_path, ko_src_path in ko_paths:
+                # Preserve path structure
+                dest_path = modules_install_dir / ko_rel_path
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ko_src_path, dest_path)
 
-        # Create autoload config with priority
-        # /etc/modules.d/<priority>-<module_name>
-        modules_d = staging_dir / 'etc' / 'modules.d'
-        modules_d.mkdir(parents=True)
+            # Create autoload config with priority (only for actual modules)
+            # /etc/modules.d/<priority>-<module_name>
+            modules_d = staging_dir / 'etc' / 'modules.d'
+            modules_d.mkdir(parents=True)
 
-        priority = kmod.autoload_priority
-        autoload_modules = kmod.autoload_modules or [name.replace('-', '_')]
-        autoload_file = modules_d / f"{priority:02d}-{name}"
-        autoload_file.write_text('\n'.join(autoload_modules) + '\n')
+            priority = kmod.autoload_priority
+            autoload_modules = kmod.autoload_modules or [name.replace('-', '_')]
+            autoload_file = modules_d / f"{priority:02d}-{name}"
+            autoload_file.write_text('\n'.join(autoload_modules) + '\n')
 
         # Build package dependencies
         # All kmod packages depend on the exact kernel version (with vermagic)
@@ -528,7 +606,14 @@ class KernelModulePackager:
             if dep.startswith('kmod-'):
                 pkg_depends.append(dep)
             else:
-                pkg_depends.append(f"kmod-{dep}")
+                # Check if this is actually a kmod (in registry) or a regular package
+                # Firmware packages like eip197-mini-firmware should NOT get kmod- prefix
+                if self.registry.get(dep):
+                    # It's a kmod, add prefix
+                    pkg_depends.append(f"kmod-{dep}")
+                else:
+                    # It's a regular package (firmware, library, etc.), keep as-is
+                    pkg_depends.append(dep)
 
         # Create APK package
         # Version includes vermagic to indicate kernel compatibility

@@ -29,7 +29,25 @@ build:
   # Backports uses its own build system, not standard kmod
   system: custom
   # Configuration: enable cfg80211 and mac80211
-  configure_script: 'printf "CPTCFG_CFG80211=m\nCPTCFG_MAC80211=m\nCPTCFG_MAC80211_RC_MINSTREL=y\nCPTCFG_MAC80211_RC_DEFAULT_MINSTREL=y\nCPTCFG_MAC80211_MESH=y\nCPTCFG_MAC80211_LEDS=y\nCPTCFG_CFG80211_WEXT=y\nCPTCFG_CFG80211_DEFAULT_PS=y\nCPTCFG_WLAN=y\nCPTCFG_WLAN_VENDOR_MEDIATEK=y\n" > .config && make KLIB=/lib/modules/$KERNEL_VERSION KLIB_BUILD=$LINUX_DIR allnoconfig'
+  # IMPORTANT: Build kconf tools with host compiler (gcc), not cross-compiler
+  # The kconf/conf tool runs on the build host, not on the target
+  configure_script: |
+    # Apply patches from the OpenWrt package directory
+    PATCH_BASE="${OPENWRT_DIR}/package/kernel/mac80211/patches"
+    for patchdir in build subsys; do
+      if [ -d "$PATCH_BASE/$patchdir" ]; then
+        for patch in $(ls "$PATCH_BASE/$patchdir"/*.patch 2>/dev/null | sort); do
+          echo "Applying patch: $patch"
+          patch -p1 < "$patch" || echo "Warning: patch may have already been applied"
+        done
+      fi
+    done
+    # Build kconf tools with native host compiler
+    make -C kconf CC=gcc HOSTCC=gcc clean conf
+    # Write initial config with desired options
+    printf "CPTCFG_CFG80211=m\nCPTCFG_MAC80211=m\nCPTCFG_MAC80211_RC_MINSTREL=y\nCPTCFG_MAC80211_RC_DEFAULT_MINSTREL=y\nCPTCFG_MAC80211_MESH=y\nCPTCFG_MAC80211_LEDS=y\nCPTCFG_CFG80211_WEXT=y\nCPTCFG_CFG80211_DEFAULT_PS=y\nCPTCFG_WLAN=y\nCPTCFG_WLAN_VENDOR_MEDIATEK=y\n" > .config
+    # Run allnoconfig via backports Makefile which generates Kconfig.kernel etc.
+    make KLIB_BUILD=$LINUX_DIR KLIB=/lib/modules/$KERNEL_VERSION allnoconfig
   compile_script: 'make -j$NPROC ARCH=$KERNEL_ARCH CROSS_COMPILE=$CROSS_COMPILE KLIB=/lib/modules/$KERNEL_VERSION KLIB_BUILD=$LINUX_DIR EXTRA_CFLAGS="-I$(pwd)/include" MODPROBE=true modules'
   # Install kernel modules and development files (headers, Module.symvers)
   install_script: 'mkdir -p $DESTDIR/lib/modules/$KERNEL_VERSION && find . -name "*.ko" -exec cp {} $DESTDIR/lib/modules/$KERNEL_VERSION/ \; && mkdir -p $DESTDIR/usr/include/mac80211 $DESTDIR/usr/include/mac80211-backport $DESTDIR/usr/include/net/mac80211 $DESTDIR/usr/lib/mac80211-backport && cp -r include/* $DESTDIR/usr/include/mac80211/ && cp net/mac80211/*.h $DESTDIR/usr/include/mac80211/ && cp -r backport-include/* $DESTDIR/usr/include/mac80211-backport/ && cp net/mac80211/rate.h $DESTDIR/usr/include/net/mac80211/ && cp Module.symvers $DESTDIR/usr/lib/mac80211-backport/'

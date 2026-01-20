@@ -852,6 +852,7 @@ endian = '{endian}'
             f'export CROSS_COMPILE={self.config.cross_compile} && '
             f'export NPROC={self.jobs} && '
             f'export DESTDIR=/ipkg-install && '
+            f'export OPENWRT_DIR={self.config.openwrt_dir} && '
         )
 
         configure_script = pkg.build.get('configure_script', '')
