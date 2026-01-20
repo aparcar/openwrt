@@ -238,12 +238,11 @@ def toolchain_hash(ctx, target, fmt):
         rel_path = target_yaml.relative_to(poc_dir)
         files_to_hash.append((str(rel_path), target_yaml))
 
-    # 3. OpenWrt downstream patches (from owrt/toolchain/)
-    owrt_dir = Path(__file__).parent
+    # 3. OpenWrt downstream patches (from toolchain/)
     patches_dirs = [
-        ('binutils', owrt_dir / 'toolchain' / 'binutils' / 'patches' / builder.binutils_version),
-        ('gcc', owrt_dir / 'toolchain' / 'gcc' / f'patches-{builder.gcc_version.split(".")[0]}.x'),
-        ('musl', owrt_dir / 'toolchain' / 'musl' / 'patches'),
+        ('binutils', poc_dir / 'toolchain' / 'binutils' / 'patches' / builder.binutils_version),
+        ('gcc', poc_dir / 'toolchain' / 'gcc' / f'patches-{builder.gcc_version.split(".")[0]}.x'),
+        ('musl', poc_dir / 'toolchain' / 'musl' / 'patches'),
     ]
 
     patch_files = []
