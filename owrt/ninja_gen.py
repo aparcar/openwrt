@@ -265,7 +265,8 @@ class NinjaGenerator:
             lines.append(f'build downloads: phony {" ".join(download_stamps)}')
             lines.append('')
 
-        lines.append('# Build statements', '')
+        lines.append('# Build statements')
+        lines.append('')
 
         for name in plan.build_order:
             target = plan.targets[name]
