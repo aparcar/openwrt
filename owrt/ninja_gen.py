@@ -164,11 +164,14 @@ class NinjaGenerator:
         # All commands need BUILD_DIR set to ensure consistent paths between ninja and Docker
 
         # Calculate optimal parallel package builds
-        # Each package build uses multiple cores internally, so limit concurrent packages
+        # Many packages are small/fast, so allow high parallelism
+        # Large packages (kernel, toolchain) are handled separately via console pool
         cpu_count = os.cpu_count() or 4
-        # Allow 4 concurrent package builds, each gets ~1/4 of cores
-        parallel_packages = max(2, min(8, cpu_count // 12))
-        jobs_per_package = max(1, cpu_count // parallel_packages)
+        # Allow more concurrent package builds - most packages are I/O bound or small
+        # For 48 cores: 16 parallel packages, each with 3 jobs
+        # For 8 cores: 4 parallel packages, each with 2 jobs
+        parallel_packages = max(4, min(24, cpu_count // 3))
+        jobs_per_package = max(2, cpu_count // parallel_packages)
 
         return [
             '# Build rules',

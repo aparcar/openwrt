@@ -25,6 +25,7 @@ dependencies:
     - libubox
   build:
     - libubox-dev
+    - libucode-dev
     - libustream-mbedtls
 
 build:
