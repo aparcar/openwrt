@@ -28,7 +28,7 @@ class Config:
         self.toolchain = data['toolchain']
         self.features = data.get('features', [])
         self.default_packages = data.get('default_packages', ['base-files', 'busybox'])
-        self.profiles = data.get('profiles', [{'name': 'generic'}])
+        self.profiles = self._load_profiles(data.get('profiles', []))
         self.image = data.get('image', {})
 
         # Derived paths (needed before kernel loading)
@@ -36,6 +36,47 @@ class Config:
 
         # Load and merge kernel configuration
         self.kernel = self._load_kernel_config(data.get('kernel', {}))
+
+    def _load_profiles(self, inline_profiles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Load profiles from profiles/ subdirectory and merge with inline profiles.
+
+        Profiles can be defined either:
+        1. Inline in target.yaml under 'profiles:' key
+        2. As individual YAML files in a profiles/ subdirectory
+
+        Files in profiles/ take precedence over inline definitions with the same name.
+        """
+        profiles = {}
+
+        # First, load inline profiles
+        for profile in inline_profiles:
+            name = profile.get('name')
+            if name:
+                profiles[name] = profile
+
+        # Then, load profiles from profiles/ directory (overrides inline)
+        profiles_dir = self._base_dir / 'profiles'
+        if profiles_dir.exists() and profiles_dir.is_dir():
+            for profile_file in sorted(profiles_dir.glob('*.yaml')):
+                try:
+                    with open(profile_file) as f:
+                        profile_data = yaml.safe_load(f)
+                    if profile_data and isinstance(profile_data, dict):
+                        # Use filename (without .yaml) as profile name if not specified
+                        name = profile_data.get('name', profile_file.stem)
+                        profile_data['name'] = name
+                        profiles[name] = profile_data
+                except Exception as e:
+                    print(f"Warning: Failed to load profile {profile_file}: {e}")
+
+        # Return as list, maintaining order (inline first, then file-based)
+        result = list(profiles.values())
+
+        # If no profiles loaded, provide a default 'generic' profile
+        if not result:
+            result = [{'name': 'generic'}]
+
+        return result
 
     def _setup_paths(self):
         """Set up all build paths."""

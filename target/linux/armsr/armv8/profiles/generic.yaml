@@ -1,0 +1,24 @@
+# Generic EFI Boot profile for ARM SystemReady
+# Suitable for QEMU virt, cloud VMs, and EFI-compliant hardware
+
+name: generic
+title: "Generic EFI Boot"
+default: true
+
+packages: []
+
+images:
+  - name: combined.img.gz
+    type: combined
+    filesystem: ext4
+    size: "512M"
+  - name: rootfs.img.gz
+    type: rootfs
+    filesystem: ext4
+    size: "256M"
+  - name: rootfs.squashfs.gz
+    type: rootfs
+    filesystem: squashfs
+  - name: initramfs.bin
+    type: initramfs
+    filesystem: initramfs

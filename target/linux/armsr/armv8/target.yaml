@@ -98,33 +98,8 @@ default_packages:
   - dnsmasq         # DNS/DHCP server
   - odhcpd          # DHCPv4/DHCPv6/RA server
 
-profiles:
-  - name: generic
-    title: "Generic EFI Boot"
-    packages: []
-    images:
-      - name: combined.img.gz
-        type: combined
-        filesystem: ext4
-        size: "512M"
-      - name: rootfs.img.gz
-        type: rootfs
-        filesystem: ext4
-        size: "256M"
-      - name: rootfs.squashfs.gz
-        type: rootfs
-        filesystem: squashfs
-      - name: initramfs.bin
-        type: initramfs
-        filesystem: initramfs
-
-  - name: generic-initramfs
-    title: "Generic EFI Boot (initramfs only)"
-    packages: []
-    images:
-      - name: initramfs-kernel.bin
-        type: initramfs
-        filesystem: initramfs
+# Device profiles are loaded from profiles/*.yaml
+# See profiles/generic.yaml, profiles/generic-initramfs.yaml
 
 image:
   filesystems:

@@ -1,0 +1,12 @@
+# Generic EFI Boot profile (initramfs only)
+# Minimal profile for testing and recovery
+
+name: generic-initramfs
+title: "Generic EFI Boot (initramfs only)"
+
+packages: []
+
+images:
+  - name: initramfs-kernel.bin
+    type: initramfs
+    filesystem: initramfs

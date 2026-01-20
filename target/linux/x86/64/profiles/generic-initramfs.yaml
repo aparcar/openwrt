@@ -1,0 +1,12 @@
+# Generic x86/64 profile (initramfs only)
+# Minimal profile for testing and recovery
+
+name: generic-initramfs
+title: "Generic x86/64 (initramfs only)"
+
+packages: []
+
+images:
+  - name: initramfs-kernel.bin
+    type: initramfs
+    filesystem: initramfs

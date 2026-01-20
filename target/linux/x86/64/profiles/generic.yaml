@@ -1,0 +1,21 @@
+# Generic x86/64 profile
+# Suitable for bare metal, VMs, and cloud instances
+
+name: generic
+title: "Generic x86/64"
+default: true
+
+packages: []
+
+images:
+  - name: combined-efi.img.gz
+    type: combined
+    filesystem: ext4
+    size: "512M"
+  - name: rootfs.img.gz
+    type: rootfs
+    filesystem: ext4
+    size: "256M"
+  - name: rootfs.squashfs.gz
+    type: rootfs
+    filesystem: squashfs
