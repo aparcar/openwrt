@@ -277,6 +277,11 @@ class PackageBuilder:
         for subpkg in source_pkg.subpackages.values():
             all_deps.update(subpkg.runtime_deps)
 
+        # Filter out self-dependencies (source package and its subpackages)
+        # These would create circular hash references
+        own_names = {source_pkg.name} | set(source_pkg.subpackages.keys())
+        all_deps -= own_names
+
         # Get dependency hashes from their stamp files
         for dep_name in sorted(all_deps):
             dep_hash = self._get_dependency_hash(dep_name)
