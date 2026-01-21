@@ -123,7 +123,12 @@ class ImageBuilder:
 
         if apk_rootfs.have_apk():
             print(f"    Using APK to install {len(packages)} packages...")
-            apk_rootfs.create_rootfs(packages)
+            # Include both per-architecture repo (regular packages) and per-target repo (kernel modules)
+            repo_paths = [
+                self.config.build_dir / 'apk-repo' / self.config.arch,  # regular packages
+                self.config.build_dir / 'apk-repo' / self.config.name,  # kernel modules
+            ]
+            apk_rootfs.create_rootfs(packages, repo_paths=repo_paths)
         else:
             # Fallback: copy from staging
             print("    Warning: APK not available, using staging fallback...")
