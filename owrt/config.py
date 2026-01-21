@@ -11,6 +11,34 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 
+# Global default packages installed on all targets (from include/target.mk)
+# These provide the minimal bootable system
+GLOBAL_DEFAULT_PACKAGES = [
+    # Core system
+    'base-files',
+    'busybox',
+    'libc',
+    # Init system
+    'procd',
+    'ubus',
+    'uci',
+    # Filesystem
+    'fstools',
+    # Networking
+    'netifd',
+    # Logging
+    'logd',
+    'urandom-seed',
+    'urngd',
+    # Remote access
+    'dropbear',
+    # SSL/TLS and package management
+    'libustream-mbedtls',
+    'ca-bundle',
+    'uclient-fetch',
+]
+
+
 class Config:
     """Target configuration loaded from YAML."""
 
@@ -348,6 +376,38 @@ class Config:
         if self.profiles:
             return self.profiles[0]['name']
         return 'generic'
+
+    def get_profile_packages(self, profile_name: str) -> List[str]:
+        """Get merged package list for a profile.
+
+        Package sources (in order, later can override with -pkg):
+        1. Global defaults (GLOBAL_DEFAULT_PACKAGES)
+        2. Target defaults (default_packages in target.yaml)
+        3. Profile packages (packages in profile yaml)
+
+        Supports package exclusion with '-' prefix (e.g., '-dropbear').
+        """
+        packages = set(GLOBAL_DEFAULT_PACKAGES)
+
+        # Add target defaults
+        for pkg in self.default_packages:
+            if pkg.startswith('-'):
+                packages.discard(pkg[1:])
+            else:
+                packages.add(pkg)
+
+        # Add profile packages
+        try:
+            profile = self.get_profile(profile_name)
+            for pkg in profile.get('packages', []):
+                if pkg.startswith('-'):
+                    packages.discard(pkg[1:])
+                else:
+                    packages.add(pkg)
+        except ValueError:
+            pass  # Profile not found, use target defaults only
+
+        return sorted(packages)
 
     @classmethod
     def load_target(cls, target_name: str) -> 'Config':

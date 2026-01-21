@@ -95,8 +95,8 @@ class ImageBuilder:
         self.images_dir.mkdir(parents=True, exist_ok=True)
         self.build_dir.mkdir(parents=True, exist_ok=True)
 
-        # Assemble root filesystem
-        self._assemble_rootfs()
+        # Assemble root filesystem with profile-specific packages
+        self._assemble_rootfs(profile_name)
 
         # Build rootfs images (squashfs, etc.)
         rootfs_images = self._build_rootfs_images(profile)
@@ -111,12 +111,12 @@ class ImageBuilder:
 
         print(f"Images generated in: {self.images_dir}")
 
-    def _assemble_rootfs(self):
+    def _assemble_rootfs(self, profile_name: str = 'generic'):
         """Assemble root filesystem using APK package installation."""
         print("  Assembling root filesystem...")
 
-        # Get list of packages to install
-        packages = list(self.config.default_packages)
+        # Get merged package list: global defaults + target defaults + profile packages
+        packages = self.config.get_profile_packages(profile_name)
 
         # Use APKRootfs to install packages
         apk_rootfs = APKRootfs(self.config, verbose=self.verbose)
