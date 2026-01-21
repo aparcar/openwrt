@@ -309,6 +309,7 @@ class KernelModulePackager:
             # Build all modules that have definitions and are either:
             # 1. Built as loadable modules (.ko files exist)
             # 2. Built-in to the kernel (in modules.builtin)
+            # 3. Meta-packages with no files (exist for dependency grouping)
             # Note: hidden modules are still built (needed as dependencies),
             # just not user-selectable in menus
             to_build = []
@@ -325,6 +326,11 @@ class KernelModulePackager:
                     to_build.append(name)
                 elif self.is_module_builtin(kmod):
                     # Module is built-in - create empty package for dep resolution
+                    to_build.append(name)
+                elif not kmod.files:
+                    # Virtual/meta-package with no files
+                    # These exist for dependency grouping (e.g., kmod-usb3, kmod-i2c-core)
+                    # or as placeholders for built-in kernel features
                     to_build.append(name)
 
         # First, create the kernel virtual package that kmods depend on
@@ -482,7 +488,10 @@ class KernelModulePackager:
         # Check if module is built-in (no .ko files but in modules.builtin)
         is_builtin = not ko_paths and self.is_module_builtin(kmod)
 
-        if not ko_paths and not is_builtin:
+        # Check if this is a virtual/meta-package (no files)
+        is_virtual = not kmod.files
+
+        if not ko_paths and not is_builtin and not is_virtual:
             if self.verbose:
                 print(f"    Warning: No built modules found for kmod-{name}")
             return None
@@ -501,6 +510,13 @@ class KernelModulePackager:
             # modules that are compiled into the kernel
             if self.verbose:
                 print(f"    NOTICE: kmod-{name} is built-in, creating empty package")
+        elif is_virtual:
+            # Virtual/meta-package: create empty package for dependency resolution
+            # These packages (like kmod-usb3, kmod-i2c-core) exist to pull in
+            # a group of related modules via dependencies, or as placeholders
+            # for kernel features that are built-in
+            if self.verbose:
+                print(f"    NOTICE: kmod-{name} is a virtual package, creating empty package")
         else:
             # Install module files
             modules_install_dir = staging_dir / 'lib' / 'modules' / self.kernel_version

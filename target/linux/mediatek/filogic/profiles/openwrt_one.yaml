@@ -28,6 +28,7 @@ packages:
   - kmod-usb3
   # Ethernet PHY (2.5GbE WAN port)
   - kmod-phy-airoha-en8811h
+  - airoha-en8811h-firmware
 
 # Hardware specifications
 hardware:
