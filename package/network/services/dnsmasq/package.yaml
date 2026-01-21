@@ -38,10 +38,14 @@ build:
   make_args:
     - "COPTS=-DHAVE_UBUS -DHAVE_POLL_H -DNO_AUTH -DNO_IPSET -DNO_ID -DNO_DHCP6"
     - "PREFIX=/usr"
+    - "BINDIR=/usr/sbin"
+  make_install_args:
+    - "PREFIX=/usr"
+    - "BINDIR=/usr/sbin"
   install_target: install
 
 files:
-  # Built binary
+  # Built binary - dnsmasq installs to BINDIR which we set to /usr/sbin
   - src: "usr/sbin/dnsmasq"
     dst: "/usr/sbin/dnsmasq"
     mode: "0755"
@@ -64,3 +68,16 @@ files:
     dst: "/usr/share/acl.d/dnsmasq_acl.json"
   - src: "${pkg_dir}/files/dnsmasqsec.hotplug"
     dst: "/etc/hotplug.d/ntp/25-dnsmasqsec"
+  - src: "${pkg_dir}/files/50-dnsmasq-migrate-resolv-conf-auto.sh"
+    dst: "/etc/uci-defaults/50-dnsmasq-migrate-resolv-conf-auto.sh"
+    mode: "0755"
+  - src: "${pkg_dir}/files/50-dnsmasq-migrate-ipset.sh"
+    dst: "/etc/uci-defaults/50-dnsmasq-migrate-ipset.sh"
+    mode: "0755"
+
+install:
+  dirs:
+    - /etc/hotplug.d/dhcp
+    - /etc/hotplug.d/neigh
+    - /etc/hotplug.d/ntp
+    - /etc/hotplug.d/tftp

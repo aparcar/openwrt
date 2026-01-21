@@ -550,12 +550,23 @@ class PackageBuilder:
         # Order: package files -> target overlay -> subtarget overlay
         files_sources = []
 
-        # Package's own files directory
+        # Package's own files directory - only use if NO explicit install.files specs
+        # reference the package's files/ directory. Packages with explicit specs (like dnsmasq)
+        # define exactly where each file goes. Packages without (like base-files)
+        # use the files/ directory structure to mirror the target filesystem.
         pkg_files_dir = pkg.pkg_dir / 'files'
-        if pkg_files_dir.exists():
+        install_files = pkg.install.get('files', [])
+        # Check if any file spec references the pkg files directory
+        # Note: ${pkg_dir} is already interpolated by config loading
+        pkg_files_path = str(pkg_files_dir)
+        has_explicit_pkg_files = any(
+            pkg_files_path in f.get('src', '')
+            for f in install_files
+        )
+        if pkg_files_dir.exists() and not has_explicit_pkg_files:
             files_sources.append(pkg_files_dir)
 
-        # Target overlay directories (in priority order)
+        # Target overlay directories (in priority order) - always included
         files_sources.extend(self._get_target_overlay_dirs(pkg.name))
 
         # Copy files from all sources (later sources override earlier)
@@ -568,6 +579,86 @@ class PackageBuilder:
                         dst_file = dest_dir / rel_path
                         dst_file.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(src_file, dst_file)
+
+        # Process explicit install.files specs - copy files to specific destinations
+        # This handles packages like dnsmasq where files need to be renamed/relocated
+        for file_spec in install_files:
+            src_path_orig = file_spec.get('src', '')
+            dst_path = file_spec.get('dst', '')
+            file_mode = file_spec.get('mode')
+
+            if not src_path_orig or not dst_path:
+                continue
+
+            # Replace variables in source path
+            src_path = src_path_orig.replace('${build_dir}', str(build_dir))
+            src_path = src_path.replace('${src_dir}', str(src_dir))
+            src_path = src_path.replace('${pkg_dir}', str(pkg.pkg_dir))
+            src = Path(src_path)
+
+            # If path is relative (built files like usr/sbin/dnsmasq), check install_dir
+            if not src.is_absolute() and not src.exists():
+                src = install_dir / src_path
+
+            if not src.exists():
+                if self.verbose:
+                    print(f"      Warning: {src_path} not found")
+                continue
+
+            # Copy to both staging and install directories
+            for dest_dir in [staging_dir, install_dir]:
+                dst = dest_dir / dst_path.lstrip('/')
+
+                # Skip if source and destination are the same file
+                try:
+                    if src.resolve() == dst.resolve():
+                        continue
+                except (OSError, ValueError):
+                    pass
+
+                # Handle tree: true - copy entire directory tree
+                if file_spec.get('tree', False) and src.is_dir():
+                    for src_file in src.rglob('*'):
+                        if src_file.is_file():
+                            rel_path = src_file.relative_to(src)
+                            dst_file = dst / rel_path
+                            dst_file.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(src_file, dst_file)
+                            if file_mode:
+                                try:
+                                    dst_file.chmod(int(file_mode, 8))
+                                except (ValueError, OSError):
+                                    pass
+                elif src.is_file():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+                    if file_mode:
+                        try:
+                            dst.chmod(int(file_mode, 8))
+                        except (ValueError, OSError):
+                            pass
+
+        # Create directories from install.dirs
+        for dir_spec in pkg.install.get('dirs', []):
+            for dest_dir in [staging_dir, install_dir]:
+                (dest_dir / dir_spec.lstrip('/')).mkdir(parents=True, exist_ok=True)
+
+        # Create symlinks from install.symlinks
+        for link_spec in pkg.install.get('symlinks', []):
+            link_target = link_spec.get('src', '')  # What the link points to
+            link_dst = link_spec.get('dst', '')  # Where the link is created
+            if link_target and link_dst:
+                for dest_dir in [staging_dir, install_dir]:
+                    link_path = dest_dir / link_dst.lstrip('/')
+                    link_path.parent.mkdir(parents=True, exist_ok=True)
+                    if link_path.is_symlink():
+                        link_path.unlink()
+                    elif link_path.exists():
+                        link_path.unlink()
+                    try:
+                        link_path.symlink_to(link_target)
+                    except Exception:
+                        pass
 
         # Process install.staging section - copy headers/libs to shared staging
         # This is needed for packages that provide development files for other packages
@@ -1688,12 +1779,22 @@ endian = '{self.config.cpu.get("endian", "little")}'
         # Later directories override earlier ones
         files_sources = []
 
-        # Package's own files directory
+        # Package's own files directory - only use if NO explicit install.files specs
+        # reference the package's files/ directory. Packages with explicit specs (like dnsmasq)
+        # define exactly where each file goes. Packages without (like base-files)
+        # use the files/ directory structure to mirror the target filesystem.
         pkg_files_dir = pkg.pkg_dir / 'files'
-        if pkg_files_dir.exists():
+        # Check if any file spec references the pkg files directory
+        # Note: ${pkg_dir} is already interpolated by config loading
+        pkg_files_path = str(pkg_files_dir)
+        has_explicit_pkg_files = any(
+            pkg_files_path in f.get('src', '')
+            for f in install.get('files', [])
+        )
+        if pkg_files_dir.exists() and not has_explicit_pkg_files:
             files_sources.append(pkg_files_dir)
 
-        # Target overlay directories (in priority order)
+        # Target overlay directories (in priority order) - always included
         files_sources.extend(self._get_target_overlay_dirs(pkg.name))
 
         # Copy files from all sources (later sources override earlier)

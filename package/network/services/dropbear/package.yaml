@@ -45,7 +45,7 @@ build:
 
 install:
   files:
-    # Built binaries (config/init files are in files/ directory structure)
+    # Built binaries
     - src: "${build_dir}/${name}"
       dst: "/usr/sbin/${name}"
       mode: "0755"
@@ -57,6 +57,18 @@ install:
       mode: "0755"
     - src: "${build_dir}/dropbearconvert"
       dst: "/usr/bin/dropbearconvert"
+      mode: "0755"
+    # Init script and config files
+    - src: "${pkg_dir}/files/dropbear.init"
+      dst: "/etc/init.d/dropbear"
+      mode: "0755"
+    - src: "${pkg_dir}/files/dropbear.config"
+      dst: "/etc/config/dropbear"
+    - src: "${pkg_dir}/files/dropbear.failsafe"
+      dst: "/etc/rc.d/failsafe/dropbear"
+      mode: "0755"
+    - src: "${pkg_dir}/files/dropbear.defaults"
+      dst: "/etc/uci-defaults/50-dropbear"
       mode: "0755"
   symlinks:
     - src: "/usr/bin/dbclient"
