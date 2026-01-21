@@ -181,6 +181,11 @@ class DependencyResolver:
             if provider:
                 name = provider.package_name
 
+        # Check if this is already a resolved target (e.g., 'kernel', 'toolchain')
+        # This handles special build targets that aren't packages
+        if name in self._targets:
+            return self._targets[name]
+
         # Load package config
         pkg = self._load_package(name)
         if not pkg:
