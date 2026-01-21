@@ -1,0 +1,37 @@
+# MediaTek MT7981 Wireless Offload (WO) firmware
+# Required for WiFi offload engine on MT7981-based devices
+
+name: mt7981-wo-firmware
+version: "20251125"
+release: 1
+license: MediaTek-firmware
+maintainer: OpenWrt Team
+
+source:
+  type: tarball
+  url: "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20251125.tar.xz"
+  sha256: "eb807a01c52882ac97ef5b678d4a246b209e6165ac1287d62a5f93a09ee93cd2"
+
+metadata:
+  section: firmware
+  category: Firmware
+  title: MediaTek MT7981 offload firmware
+  description: |
+    Wireless offload (WO) firmware for MediaTek MT7981 SoC.
+    Required for WiFi packet processing offload on MT7981-based devices
+    like OpenWrt One.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  dirs:
+    - /lib/firmware/mediatek
+  files:
+    - src: "linux-firmware-${version}/mediatek/mt7981_wo.bin"
+      dst: "/lib/firmware/mediatek/mt7981_wo.bin"
+      mode: "0644"
