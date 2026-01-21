@@ -85,6 +85,9 @@ subpackages:
       - src: "usr/sbin/logread"
         dst: "/usr/sbin/logread"
         mode: "0755"
+      - src: "${pkg_dir}/files/log.init"
+        dst: "/etc/init.d/log"
+        mode: "0755"
 
   getrandom:
     description: "OpenWrt getrandom system helper"

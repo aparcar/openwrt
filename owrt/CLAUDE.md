@@ -65,6 +65,10 @@ The `build.sh` script handles Docker containerization automatically:
 # IMPORTANT: Always use build.sh to clean package stamps, not rm -rf directly
 # Example: ./build.sh clean package libmnl
 
+# Force rebuild a package after changing package.yaml:
+# Combine clean and build in ONE command to avoid multiple prompts
+./build.sh -t mediatek-filogic clean package hostapd && ./build.sh -t mediatek-filogic package hostapd
+
 # Options
 ./build.sh -t armsr-armv8     # Specify target
 ./build.sh -p generic         # Specify profile
