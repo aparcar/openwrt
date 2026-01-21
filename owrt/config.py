@@ -116,8 +116,8 @@ class Config:
         self.images_dir = self.bin_dir / 'targets' / self.board / self.subtarget
         self.packages_output_dir = self.bin_dir / 'packages' / self.arch
 
-        # Download cache (shared across targets)
-        self.dl_dir = Path(os.environ.get('DL_DIR', self.build_dir / 'dl'))
+        # Download cache (shared across all targets at root level)
+        self.dl_dir = Path(os.environ.get('DL_DIR', self.root_dir / 'dl'))
 
     def _load_kernel_config(self, target_kernel: Dict[str, Any]) -> Dict[str, Any]:
         """Load base kernel package and merge with target-specific overrides."""
@@ -641,6 +641,49 @@ class PackageConfig:
     def clear_registry(cls):
         """Clear the subpackage registry (for testing)."""
         cls._subpackage_registry.clear()
+
+    @classmethod
+    def find_all_packages(cls) -> List['PackageConfig']:
+        """Find and load all source packages.
+
+        Returns a list of all source PackageConfig objects (not subpackages).
+        Searches the package/ directory tree for package.yaml files.
+        """
+        from pathlib import Path
+
+        root_dir = Path(__file__).parent.parent
+        packages = []
+        seen = set()
+
+        # Search roots
+        package_root = root_dir / 'package'
+        search_roots = [package_root]
+
+        # Also check toolchain/
+        toolchain_dir = root_dir / 'toolchain'
+        if toolchain_dir.exists():
+            search_roots.append(toolchain_dir)
+
+        for search_root in search_roots:
+            if not search_root.exists():
+                continue
+
+            # Recursively find all package.yaml files
+            for pkg_yaml in search_root.rglob('package.yaml'):
+                pkg_dir = pkg_yaml.parent
+
+                # Skip if already seen
+                if pkg_dir in seen:
+                    continue
+                seen.add(pkg_dir)
+
+                try:
+                    pkg = cls.load(pkg_dir)
+                    packages.append(pkg)
+                except Exception:
+                    pass
+
+        return packages
 
 
 def compute_package_content_hash(pkg: PackageConfig, toolchain_info: Optional[Dict[str, str]] = None) -> str:

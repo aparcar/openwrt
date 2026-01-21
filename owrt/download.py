@@ -30,7 +30,7 @@ def get_download_filename(pkg: PackageConfig) -> Optional[str]:
     """Get OpenWrt-compatible download filename for a package.
 
     For tarballs: uses original filename from URL
-    For git: creates {name}-{YYYY.MM.DD}~{commit8}.tar.xz (OpenWrt mirror format)
+    For git: creates {name}-{YYYY.MM.DD}~{commit8}.tar.zst (OpenWrt mirror format)
 
     Returns None if package has no downloadable source.
     """
@@ -51,7 +51,7 @@ def get_download_filename(pkg: PackageConfig) -> Optional[str]:
         return url.split('/')[-1]
 
     if src_type == 'git':
-        # OpenWrt mirror naming: {name}-{YYYY.MM.DD}~{8-char-commit}.tar.xz
+        # OpenWrt mirror naming: {name}-{YYYY.MM.DD}~{8-char-commit}.tar.zst
         # pkg.version contains the date (e.g., "2025.12.08")
         # source.version contains the git commit hash
         git_version = source.get('version', 'HEAD')
@@ -59,7 +59,7 @@ def get_download_filename(pkg: PackageConfig) -> Optional[str]:
             return f"{pkg.name}-git.tar.zst"
         # Use package version (date) and 8-char commit abbreviation
         commit_abbrev = git_version[:8] if len(git_version) > 8 else git_version
-        return f"{pkg.name}-{pkg.version}~{commit_abbrev}.tar.xz"
+        return f"{pkg.name}-{pkg.version}~{commit_abbrev}.tar.zst"
 
     return None
 
@@ -278,14 +278,14 @@ def _git_clone_to_tarball(
         if git_dir.exists():
             shutil.rmtree(git_dir)
 
-        # Create tarball with xz compression (matches OpenWrt mirror format)
+        # Create tarball with zstd compression (matches OpenWrt mirror format)
         # Use tar with transform to set archive root directory name
         archive_name = dest.stem.replace('.tar', '')
 
-        # Use xz compression to match OpenWrt sources mirror
+        # Use zstd compression to match OpenWrt sources mirror
         subprocess.run(
             ['tar', '-C', tmpdir, '--transform', f's,^src,{archive_name},',
-             '-cJf', str(dest), 'src'],
+             '--zstd', '-cf', str(dest), 'src'],
             check=True,
         )
 

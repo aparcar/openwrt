@@ -51,11 +51,13 @@ class APKPackager:
             else:
                 self.apk_binary = None
 
-        # Directories
-        self.packages_dir = config.build_dir / 'packages' / config.name
+        # Directories - use per-architecture paths since packages are shared
+        # across targets with the same architecture (e.g., armsr-armv8 and
+        # mediatek-filogic both use aarch64)
+        self.packages_dir = config.build_dir / 'packages' / config.arch
         self.staging_dir = config.staging_dir
-        self.output_dir = config.build_dir / 'apk-packages' / config.name
-        self.repo_dir = config.build_dir / 'apk-repo' / config.name
+        self.output_dir = config.build_dir / 'apk-packages' / config.arch
+        self.repo_dir = config.build_dir / 'apk-repo' / config.arch
 
     def have_apk(self) -> bool:
         """Check if apk binary is available."""
@@ -119,7 +121,11 @@ class APKPackager:
             # Add install scripts if defined
             # Scripts are defined in package.yaml under 'scripts' section
             # Format: scripts: { postinst: "script content", preinst: "...", etc }
-            scripts = getattr(pkg, 'scripts', None) or pkg._raw_data.get('scripts', {})
+            scripts = getattr(pkg, 'scripts', None) or {}
+            if not scripts:
+                # Fallback to raw data lookup for PackageConfig
+                raw_data = getattr(pkg, '_raw_data', None) or getattr(pkg, '_data', {})
+                scripts = raw_data.get('scripts', {})
             if scripts:
                 # APK script types: pre-install, post-install, pre-deinstall, post-deinstall, trigger
                 script_type_map = {
@@ -335,7 +341,8 @@ class APKRootfs:
                 self.apk_binary = None
 
         self.rootfs_dir = config.rootfs_dir
-        self.repo_dir = config.build_dir / 'apk-repo' / config.name
+        # Use per-architecture repo directory (packages are shared across targets with same arch)
+        self.repo_dir = config.build_dir / 'apk-repo' / config.arch
 
     def have_apk(self) -> bool:
         """Check if apk binary is available."""

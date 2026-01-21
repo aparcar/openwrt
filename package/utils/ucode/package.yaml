@@ -23,7 +23,7 @@ metadata:
 
 dependencies:
   build:
-    - libjson-c
+    - libjson-c-dev
     - libubox-dev
     - libubus-dev
     - libuci-dev
@@ -122,3 +122,14 @@ subpackages:
     files:
       - src: "usr/lib/ucode/log.so"
         dst: "/usr/lib/ucode/"
+
+  libucode-dev:
+    description: "ucode development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libucode
+        - libjson-c-dev
+    files:
+      - src: "usr/include/ucode/*.h"
+        dst: "/usr/include/ucode/"

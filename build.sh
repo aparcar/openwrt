@@ -493,10 +493,23 @@ clean() {
             log_success "Build artifacts cleaned"
             ;;
         stamps)
+            # Get architecture for target
+            local arch
+            arch=$(python3 -c "
+import sys
+sys.path.insert(0, '${SCRIPT_DIR}')
+from owrt.config import Config
+c = Config.load_target('${TARGET}')
+print(c.arch)
+" 2>/dev/null || echo "aarch64")
+            # Clean target stamps (toolchain, kernel, image)
             rm -rf "${BUILD_DIR}/${TARGET}/stamp"
-            rm -rf "${BUILD_DIR}/packages/${TARGET}/stamp"
-            rm -rf "${BUILD_DIR}/apk-packages/${TARGET}" "${BUILD_DIR}/apk-repo/${TARGET}"
-            log_success "Stamps and APK directories cleaned for ${TARGET}"
+            # Clean package stamps (per-architecture)
+            rm -rf "${BUILD_DIR}/packages/${arch}/stamp"
+            # Clean APK packages and repos (both target and arch dirs)
+            rm -rf "${BUILD_DIR}/apk-packages/${TARGET}" "${BUILD_DIR}/apk-packages/${arch}"
+            rm -rf "${BUILD_DIR}/apk-repo/${TARGET}" "${BUILD_DIR}/apk-repo/${arch}"
+            log_success "All stamps and APK directories cleaned for ${TARGET} (arch: ${arch})"
             ;;
         all)
             rm -rf "${BUILD_DIR}" "${OUTPUT_DIR}"
@@ -517,12 +530,25 @@ clean() {
                 log_error "Package name required: clean package <name>"
                 exit 1
             fi
-            rm -rf "${BUILD_DIR}/packages/${TARGET}/${pkg_name}"
-            rm -rf "${BUILD_DIR}/packages/${TARGET}/stamp/${pkg_name}."*
+            # Get architecture for target
+            local arch
+            arch=$(python3 -c "
+import sys
+sys.path.insert(0, '${SCRIPT_DIR}')
+from owrt.config import Config
+c = Config.load_target('${TARGET}')
+print(c.arch)
+" 2>/dev/null || echo "aarch64")
+            # Clean package build directory
+            rm -rf "${BUILD_DIR}/packages/${arch}/${pkg_name}"
+            # Clean package stamps
+            rm -rf "${BUILD_DIR}/packages/${arch}/stamp/${pkg_name}."*
+            # Clean APK files
             rm -rf "${BUILD_DIR}/apk-packages/${TARGET}/${pkg_name}-"*.apk
-            rm -rf "${BUILD_DIR}/apk-repo/${TARGET}/aarch64/${pkg_name}-"*.apk
-            rm -rf "${BUILD_DIR}/${TARGET}/stamp/${pkg_name}.stamp"
-            log_success "Package ${pkg_name} cleaned for ${TARGET}"
+            rm -rf "${BUILD_DIR}/apk-packages/${arch}/${pkg_name}-"*.apk
+            rm -rf "${BUILD_DIR}/apk-repo/${TARGET}/${arch}/${pkg_name}-"*.apk
+            rm -rf "${BUILD_DIR}/apk-repo/${arch}/${arch}/${pkg_name}-"*.apk
+            log_success "Package ${pkg_name} cleaned for ${TARGET} (arch: ${arch})"
             ;;
         rootfs)
             rm -rf "${BUILD_DIR}/rootfs/${TARGET}"

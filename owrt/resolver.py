@@ -293,38 +293,20 @@ class DependencyResolver:
         """Find the source package that would auto-generate a -dev package.
 
         E.g., 'libubus-dev' -> find source package 'ubus' which has 'libubus' subpackage.
+        This searches for a -dev subpackage using the standard find_package mechanism.
         """
-        from pathlib import Path
-
-        # Extract base name (e.g., 'libubus' from 'libubus-dev')
+        # Extract base name (e.g., 'libubox' from 'libubox-dev')
         base_name = dev_name[:-4]  # Remove '-dev' suffix
 
-        poc_dir = Path(__file__).parent.parent
-        packages_dir = poc_dir / 'packages'
-
-        if not packages_dir.exists():
-            return None
-
-        # Search all packages for one that has a lib* subpackage matching base_name
-        for pkg_path in packages_dir.iterdir():
-            if not pkg_path.is_dir() or not (pkg_path / 'package.yaml').exists():
-                continue
-
-            try:
-                pkg = PackageConfig.load(pkg_path)
-
-                # Check if this package has a subpackage matching the base name
-                if pkg.has_subpackages and base_name in pkg.subpackages:
-                    # Found it - return a reference to this source package
-                    # The -dev package will be auto-generated during build
-                    return pkg.subpackages[base_name]
-
-                # Also check if the package name itself matches
-                if pkg.name == base_name:
-                    return pkg
-
-            except Exception:
-                pass
+        # Use the standard find_package mechanism to find the base package
+        # This handles the actual package directory structure (package/libs/libubox/, etc.)
+        base_pkg = PackageConfig.find_package(base_name)
+        if base_pkg:
+            # Found the base package - return it so the source gets built
+            # which will produce the -dev subpackage
+            if isinstance(base_pkg, SubpackageConfig):
+                return base_pkg  # Already a subpackage reference
+            return base_pkg
 
         return None
 

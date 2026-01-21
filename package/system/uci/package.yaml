@@ -23,7 +23,7 @@ metadata:
 # Build dependencies for the source
 dependencies:
   build:
-    - libubox
+    - libubox-dev
 
 build:
   system: cmake

@@ -64,3 +64,29 @@ subpackages:
       - src: "usr/bin/cert_req"
         dst: "/usr/bin/"
         mode: "0755"
+
+  libmbedtls-dev:
+    description: "mbedtls development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libmbedtls
+    files:
+      - src: "usr/include/mbedtls/*.h"
+        dst: "/usr/include/mbedtls/"
+      - src: "usr/include/everest/**/*.h"
+        dst: "/usr/include/everest/"
+      - src: "usr/include/psa/*.h"
+        dst: "/usr/include/psa/"
+      - src: "usr/lib/libmbedcrypto.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedtls.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedx509.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/pkgconfig/mbedtls.pc"
+        dst: "/usr/lib/pkgconfig/"
+      - src: "usr/lib/pkgconfig/mbedx509.pc"
+        dst: "/usr/lib/pkgconfig/"
+      - src: "usr/lib/pkgconfig/mbedcrypto.pc"
+        dst: "/usr/lib/pkgconfig/"

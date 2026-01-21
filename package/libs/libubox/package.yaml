@@ -78,3 +78,17 @@ subpackages:
         mode: "0755"
       - src: "usr/share/libubox/jshn.sh"
         dst: "/usr/share/libubox/jshn.sh"
+
+  libubox-dev:
+    description: "libubox development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/include/libubox/*.h"
+        dst: "/usr/include/libubox/"
+      - src: "usr/lib/libubox.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libblobmsg_json.a"
+        dst: "/usr/lib/"

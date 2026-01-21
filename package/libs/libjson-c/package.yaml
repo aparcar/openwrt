@@ -28,7 +28,22 @@ build:
   configure_args:
     - "-DDISABLE_EXTRA_LIBS=TRUE"
 
-install:
-  files:
-    - src: "usr/lib/libjson-c.so*"
-      dst: "/usr/lib/"
+subpackages:
+  libjson-c:
+    description: "JSON-C library"
+    section: libs
+    files:
+      - src: "usr/lib/libjson-c.so*"
+        dst: "/usr/lib/"
+
+  libjson-c-dev:
+    description: "JSON-C development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libjson-c
+    files:
+      - src: "usr/include/json-c/*.h"
+        dst: "/usr/include/json-c/"
+      - src: "usr/lib/pkgconfig/json-c.pc"
+        dst: "/usr/lib/pkgconfig/"

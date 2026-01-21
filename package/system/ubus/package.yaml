@@ -24,8 +24,8 @@ metadata:
 # Build dependencies for the source (applies to all subpackages)
 dependencies:
   build:
-    - libubox
-    - libjson-c
+    - libubox-dev
+    - libjson-c-dev
 
 build:
   system: cmake
@@ -69,3 +69,17 @@ subpackages:
       - src: "usr/bin/ubus"
         dst: "/bin/ubus"
         mode: "0755"
+
+  libubus-dev:
+    description: "libubus development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libubus
+    files:
+      - src: "usr/include/libubus.h"
+        dst: "/usr/include/"
+      - src: "usr/include/ubusmsg.h"
+        dst: "/usr/include/"
+      - src: "usr/include/ubus_common.h"
+        dst: "/usr/include/"

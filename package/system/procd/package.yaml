@@ -23,10 +23,10 @@ metadata:
 # Build dependencies for the source
 dependencies:
   build:
-    - libjson-c
-    - libubox
-    - libubus
-    - libuci
+    - libjson-c-dev
+    - libubox-dev
+    - libubus-dev
+    - libuci-dev
     - libudebug
     - libblobmsg-json
     - libjson-script
