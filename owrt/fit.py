@@ -739,30 +739,63 @@ class MetadataBuilder:
         """
         Append sysupgrade metadata to an image.
 
-        Uses fwtool if available, otherwise appends raw JSON.
+        Uses fwtool to insert metadata JSON into the firmware image.
+        This metadata is used by sysupgrade to verify device compatibility.
 
         Returns:
             Path to modified image
         """
-        metadata = self.generate_metadata(supported_devices)
+        import shutil
+        import tempfile
 
-        # Try using fwtool
+        if not image.exists():
+            print(f"    Warning: Image not found for metadata: {image}")
+            return image
+
+        metadata = self.generate_metadata(supported_devices)
+        print(f"    Appending sysupgrade metadata...")
+
+        # Find fwtool binary
+        fwtool_bin = None
+        if self.host_staging:
+            fwtool_path = self.host_staging / 'bin' / 'fwtool'
+            if fwtool_path.exists():
+                fwtool_bin = str(fwtool_path)
+
+        if not fwtool_bin:
+            # Try to find in PATH
+            fwtool_bin = shutil.which('fwtool')
+
+        if not fwtool_bin:
+            print(f"    Warning: fwtool not found, skipping metadata insertion")
+            print(f"      Searched: {self.host_staging / 'bin' / 'fwtool' if self.host_staging else 'PATH'}")
+            return image
+
+        # Write metadata to temp file to avoid shell escaping issues
         try:
-            # Use full path to fwtool if host_staging is available
-            fwtool_bin = 'fwtool'
-            if self.host_staging:
-                fwtool_path = self.host_staging / 'bin' / 'fwtool'
-                if fwtool_path.exists():
-                    fwtool_bin = str(fwtool_path)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                f.write(metadata)
+                metadata_file = f.name
+
+            # Use fwtool to insert metadata
             run_command(
-                ['sh', '-c', f'echo \'{metadata}\' | {fwtool_bin} -I - {image}'],
+                [fwtool_bin, '-I', metadata_file, str(image)],
                 verbose=self.verbose,
             )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            # Fallback: append raw metadata
-            # This is a simplified approach - real fwtool uses specific format
-            if self.verbose:
-                print(f"  fwtool not available, skipping metadata insertion")
+            print(f"      Metadata: {metadata[:60]}...")
+
+            # Clean up temp file
+            Path(metadata_file).unlink(missing_ok=True)
+
+        except subprocess.CalledProcessError as e:
+            print(f"    Warning: fwtool failed: {e}")
+            # Clean up temp file on error
+            if 'metadata_file' in locals():
+                Path(metadata_file).unlink(missing_ok=True)
+        except Exception as e:
+            print(f"    Warning: Metadata insertion failed: {e}")
+            if 'metadata_file' in locals():
+                Path(metadata_file).unlink(missing_ok=True)
 
         # Generate SHA256 hash
         hash_file = image.with_suffix(image.suffix + '.sha256sum')
