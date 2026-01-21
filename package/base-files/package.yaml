@@ -31,6 +31,7 @@ install:
     - /etc/init.d
     - /etc/config
     - /lib
+    - /lib/apk/packages
     - /lib/functions
     - /lib/preinit
     - /mnt

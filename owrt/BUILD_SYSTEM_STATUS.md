@@ -180,7 +180,7 @@ owrt/
   - [x] `provides` field for virtual packages
   - [ ] `conflicts` field
   - [ ] `replaces` field
-  - [ ] `alternatives` for busybox-style symlinks
+  - [x] `alternatives` for busybox-style symlinks (format: `PRIORITY:TARGET:SOURCE`)
   - [ ] `menu` field for grouping in menuconfig
   - [ ] `kconfig` field for kernel dependencies
 

@@ -53,17 +53,19 @@ subpackages:
         mode: "0755"
       - src: "usr/lib/libvalidate.so"
         dst: "/lib/libvalidate.so"
-    symlinks:
-      - src: "/sbin/kmodloader"
-        dst: "/sbin/rmmod"
-      - src: "/sbin/kmodloader"
-        dst: "/sbin/insmod"
-      - src: "/sbin/kmodloader"
-        dst: "/sbin/lsmod"
-      - src: "/sbin/kmodloader"
-        dst: "/sbin/modinfo"
-      - src: "/sbin/kmodloader"
-        dst: "/sbin/modprobe"
+    # Alternatives for module commands - busybox provides these at priority 50
+    # ubox provides them at priority 100, so ubox wins when both installed
+    alternatives:
+      - "100:/sbin/rmmod:/sbin/kmodloader"
+      - "100:/sbin/insmod:/sbin/kmodloader"
+      - "100:/sbin/lsmod:/sbin/kmodloader"
+      - "100:/sbin/modinfo:/sbin/kmodloader"
+      - "100:/sbin/modprobe:/sbin/kmodloader"
+    scripts:
+      postinst: |
+        #!/bin/sh
+        [ -f /lib/functions.sh ] && . /lib/functions.sh
+        default_postinst ubox
 
   logd:
     description: "OpenWrt system log implementation"

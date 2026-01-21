@@ -412,6 +412,10 @@ class SubpackageConfig:
         # Install scripts (preinst, postinst, prerm, postrm)
         self.scripts: Dict[str, str] = data.get('scripts', {})
 
+        # Alternatives for busybox-style symlinks (format: "PRIORITY:TARGET:SOURCE")
+        # e.g., "100:/sbin/rmmod:/sbin/kmodloader"
+        self.alternatives: List[str] = data.get('alternatives', [])
+
     @property
     def runtime_deps(self) -> List[str]:
         """Get runtime dependencies."""
@@ -482,6 +486,10 @@ class PackageConfig:
 
         # Install scripts (preinst, postinst, prerm, postrm)
         self.scripts: Dict[str, str] = data.get('scripts', {})
+
+        # Alternatives for busybox-style symlinks (format: "PRIORITY:TARGET:SOURCE")
+        # e.g., "100:/sbin/rmmod:/sbin/kmodloader"
+        self.alternatives: List[str] = data.get('alternatives', [])
 
         # Parse subpackages
         self._subpackages: Dict[str, SubpackageConfig] = {}

@@ -139,6 +139,16 @@ class APKPackager:
                             script_file = f.name
                         cmd.extend(['--script', f'{apk_type}:{script_file}'])
 
+            # Add alternatives file for busybox-style symlinks
+            # Format: "PRIORITY:TARGET:SOURCE" per line (e.g., "100:/sbin/rmmod:/sbin/kmodloader")
+            alternatives = getattr(pkg, 'alternatives', [])
+            if alternatives:
+                # Create /lib/apk/packages/<pkgname>.alternatives in staging dir
+                apk_meta_dir = staging_dir / 'lib' / 'apk' / 'packages'
+                apk_meta_dir.mkdir(parents=True, exist_ok=True)
+                alt_file = apk_meta_dir / f'{pkg_name}.alternatives'
+                alt_file.write_text(' '.join(alternatives))
+
             # Use --files with the staging directory (apk v3 expects a path)
             if staging_dir.exists() and any(staging_dir.iterdir()):
                 cmd.extend(['--files', str(staging_dir)])
