@@ -20,7 +20,8 @@ metadata:
 
 dependencies:
   runtime: []
-  build: []
+  build:
+    - kernel
 
 build:
   system: make
