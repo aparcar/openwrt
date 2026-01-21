@@ -32,6 +32,6 @@ install:
   dirs:
     - /lib/firmware/mediatek
   files:
-    - src: "linux-firmware-${version}/mediatek/mt7981_wo.bin"
+    - src: "mediatek/mt7981_wo.bin"
       dst: "/lib/firmware/mediatek/mt7981_wo.bin"
       mode: "0644"

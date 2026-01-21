@@ -62,6 +62,10 @@ default_packages:
   - eip197-mini-firmware
   - wpad-basic-mbedtls
   - uboot-envtools
+  # Network services
+  - dnsmasq
+  - odhcpd
+  - firewall4
 
 # Device profiles are loaded from profiles/*.yaml
 # See profiles/openwrt_one.yaml, profiles/abt_asr3000.yaml

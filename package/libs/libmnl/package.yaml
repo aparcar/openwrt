@@ -27,6 +27,7 @@ build:
   configure_args:
     - "--enable-shared"
     - "--enable-static"
+    - "--without-doxygen"
 
 files:
   - src: "usr/lib/libmnl.so*"

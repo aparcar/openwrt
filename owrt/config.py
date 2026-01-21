@@ -534,7 +534,18 @@ class PackageConfig:
         self.metadata = self._interpolate(data.get('metadata', {}))
         self.dependencies = self._interpolate(data.get('dependencies', {}))
         self.build = self._interpolate(data.get('build', {}))
-        self.install = self._interpolate(data.get('install', {}))
+
+        # Install section - merge install: section with top-level files: and symlinks:
+        # This allows packages to use either format
+        install_data = data.get('install', {})
+        if 'files' not in install_data and 'files' in data:
+            install_data = install_data.copy()
+            install_data['files'] = data['files']
+        if 'symlinks' not in install_data and 'symlinks' in data:
+            install_data = install_data.copy()
+            install_data['symlinks'] = data['symlinks']
+        self.install = self._interpolate(install_data)
+
         self.kernel = self._interpolate(data.get('kernel', {}))
 
         # Virtual package support

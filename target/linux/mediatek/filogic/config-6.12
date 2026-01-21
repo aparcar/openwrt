@@ -561,3 +561,4 @@ CONFIG_MAC80211_LEDS=y
 # WiFi support will be provided by external mt76 package
 # CONFIG_MT76_CORE is not set
 # CONFIG_MT7915E is not set
+CONFIG_RELAY=y

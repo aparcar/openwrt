@@ -32,9 +32,9 @@ install:
   dirs:
     - /lib/firmware/airoha
   files:
-    - src: "linux-firmware-${version}/airoha/EthMD32.dm.bin"
+    - src: "airoha/EthMD32.dm.bin"
       dst: "/lib/firmware/airoha/EthMD32.dm.bin"
       mode: "0644"
-    - src: "linux-firmware-${version}/airoha/EthMD32.DSP.bin"
+    - src: "airoha/EthMD32.DSP.bin"
       dst: "/lib/firmware/airoha/EthMD32.DSP.bin"
       mode: "0644"

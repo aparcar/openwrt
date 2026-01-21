@@ -300,6 +300,16 @@ class PackageIsolation:
         elif self.verbose:
             print(f"      Installed deps with APK (including transitive)")
 
+        # Remove libtool .la files from staging - they cause linking issues
+        # because they contain hardcoded paths that don't resolve in cross-compile
+        lib_dir = staging_dir / 'usr' / 'lib'
+        if lib_dir.exists():
+            for la_file in lib_dir.glob('*.la'):
+                try:
+                    la_file.unlink()
+                except Exception:
+                    pass
+
     def _build_isolated_env(
         self,
         base_env: Dict[str, str],

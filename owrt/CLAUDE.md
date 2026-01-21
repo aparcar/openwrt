@@ -62,6 +62,9 @@ The `build.sh` script handles Docker containerization automatically:
 ./build.sh clean rootfs       # Clean rootfs and image stamps
 ./build.sh clean all          # Clean everything
 
+# IMPORTANT: Always use build.sh to clean package stamps, not rm -rf directly
+# Example: ./build.sh clean package libmnl
+
 # Options
 ./build.sh -t armsr-armv8     # Specify target
 ./build.sh -p generic         # Specify profile

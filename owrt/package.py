@@ -330,8 +330,8 @@ class PackageBuilder:
         """Get target-specific file overlay directories for a package.
 
         Returns directories in order of priority (lowest to highest):
-        1. Target-level base-files (e.g., targets/<target>/base-files/target/)
-        2. Subtarget-level base-files (e.g., targets/<target>/base-files/subtarget/)
+        1. Target-level base-files (from target/linux/<board>/base-files/)
+        2. Subtarget-level base-files (from target/linux/<board>/<subtarget>/base-files/)
 
         Currently only applies to 'base-files' package. Future enhancement could
         support per-package overlays via package.yaml configuration.
@@ -348,18 +348,24 @@ class PackageBuilder:
         if pkg_name != 'base-files':
             return overlay_dirs
 
-        # Look for target overlay directories
-        target_dir = self.config.poc_dir / 'targets' / self.config.name
+        # Get board and subtarget from config
+        board = self.config.board
+        subtarget = self.config.subtarget
+        openwrt_dir = self.config.openwrt_dir
 
         # Target-level overlay (from target/linux/<board>/base-files)
-        target_overlay = target_dir / 'base-files' / 'target'
+        target_overlay = openwrt_dir / 'target' / 'linux' / board / 'base-files'
         if target_overlay.exists():
             overlay_dirs.append(target_overlay)
+            if self.verbose:
+                print(f"      Found target overlay: {target_overlay}")
 
         # Subtarget-level overlay (from target/linux/<board>/<subtarget>/base-files)
-        subtarget_overlay = target_dir / 'base-files' / 'subtarget'
+        subtarget_overlay = openwrt_dir / 'target' / 'linux' / board / subtarget / 'base-files'
         if subtarget_overlay.exists():
             overlay_dirs.append(subtarget_overlay)
+            if self.verbose:
+                print(f"      Found subtarget overlay: {subtarget_overlay}")
 
         return overlay_dirs
 
@@ -1601,6 +1607,8 @@ endian = '{self.config.cpu.get("endian", "little")}'
                     run_command(make_install_args, cwd=make_cwd, env=env, verbose=self.verbose)
                 except Exception:
                     pass  # Ignore errors for per-package install
+                # Also remove libtool .la files from pkg_install_dir
+                self._fix_libtool_files(pkg_install_dir)
 
         # Install development files to staging (mirrors OpenWrt's Build/InstallDev)
         # This ensures headers, libraries, and pkg-config files are available for dependent packages
@@ -1616,11 +1624,27 @@ endian = '{self.config.cpu.get("endian", "little")}'
             src_path = src_path.replace('${pkg_dir}', str(pkg.pkg_dir))
             src_path = src_path.replace('${toolchain_dir}', str(self.toolchain.toolchain_dir))
             src = Path(src_path)
+            # If path is relative (no variable substitution happened and doesn't start with /),
+            # treat it as relative to src_dir
+            if not src.is_absolute():
+                src = src_dir / src
 
             for install_dir in install_dirs:
                 dst = install_dir / file_spec['dst'].lstrip('/')
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                if src.exists():
+
+                # Handle tree: true - copy entire directory tree
+                if file_spec.get('tree', False) and src.is_dir():
+                    for src_file in src.rglob('*'):
+                        if src_file.is_file():
+                            rel_path = src_file.relative_to(src)
+                            dst_file = dst / rel_path
+                            dst_file.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(src_file, dst_file)
+                            mode = file_spec.get('mode')
+                            if mode:
+                                dst_file.chmod(int(mode, 8))
+                elif src.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
                     mode = file_spec.get('mode')
                     if mode:
@@ -1779,6 +1803,10 @@ endian = '{self.config.cpu.get("endian", "little")}'
 
             # Copy files matching the subpackage's file patterns
             files_spec = pkg.install.get('files', [])
+
+            # Get kernel version for variable substitution
+            kernel_version = self.config.kernel.get('full_version', '6.12')
+
             for file_entry in files_spec:
                 src_pattern = file_entry.get('src', '')
                 dst_path = file_entry.get('dst', '')
@@ -1787,11 +1815,17 @@ endian = '{self.config.cpu.get("endian", "little")}'
                 if not src_pattern:
                     continue
 
-                # Handle variable substitution (e.g., ${pkg_dir}/files/...)
+                # Handle variable substitution for dst_path
+                if '${' in dst_path:
+                    dst_path = dst_path.replace('${KERNEL_VERSION}', kernel_version)
+                    dst_path = dst_path.replace('${pkg_dir}', str(pkg_dir))
+
+                # Handle variable substitution for src_pattern (e.g., ${pkg_dir}/files/...)
                 if '${' in src_pattern:
                     src_pattern = src_pattern.replace('${pkg_dir}', str(pkg_dir))
                     src_pattern = src_pattern.replace('${src_dir}', str(src_dir))
                     src_pattern = src_pattern.replace('${build_dir}', str(build_dir))
+                    src_pattern = src_pattern.replace('${KERNEL_VERSION}', kernel_version)
                     src_path = Path(src_pattern)
                     if src_path.exists():
                         matched_files = [src_path]
