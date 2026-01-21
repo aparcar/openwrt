@@ -17,10 +17,11 @@ dts_load_address: "0x43f00000"
 
 # Device-specific packages
 packages:
-  # WiFi
-  - kmod-mt7915e
-  - mt7981-firmware
-  - mt7981-wo-firmware
+  # WiFi - disabled due to kernel/driver incompatibility
+  # WiFi support requires external mt76 package
+  # - kmod-mt7915e
+  # - mt7981-firmware
+  # - mt7981-wo-firmware
   # RTC
   - kmod-rtc-pcf8563
   # USB 3.0

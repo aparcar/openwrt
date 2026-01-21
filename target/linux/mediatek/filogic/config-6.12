@@ -557,8 +557,7 @@ CONFIG_MAC80211_RC_DEFAULT="minstrel_ht"
 CONFIG_MAC80211_LEDS=y
 
 # MediaTek MT76 WiFi drivers
-CONFIG_MT76_CORE=m
-CONFIG_MT76_LEDS=y
-CONFIG_MT76_CONNAC_LIB=m
-CONFIG_MT7915E=m
-CONFIG_MT798X_WMAC=y
+# NOTE: CONFIG_MT7915E disabled due to kernel/driver incompatibility
+# WiFi support will be provided by external mt76 package
+# CONFIG_MT76_CORE is not set
+# CONFIG_MT7915E is not set
