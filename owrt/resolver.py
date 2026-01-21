@@ -15,6 +15,14 @@ from .config import Config, PackageConfig, SubpackageConfig
 
 
 @dataclass
+class ConditionalDep:
+    """Parsed conditional dependency."""
+    condition: str  # The condition (e.g., 'IPV6', 'PACKAGE_foo')
+    dependency: str  # The actual dependency name
+    negated: bool  # True if condition is negated (!)
+
+
+@dataclass
 class ProviderInfo:
     """Information about a package that provides a virtual name."""
     package_name: str
@@ -67,6 +75,9 @@ class DependencyResolver:
         self._packages: Dict[str, PackageConfig] = {}
         self._targets: Dict[str, BuildTarget] = {}
         self._providers: Dict[str, List[ProviderInfo]] = {}
+        # Context for conditional dependencies
+        self._enabled_features: Set[str] = set(config.features)
+        self._requested_packages: Set[str] = set()
 
     def resolve(
         self,
@@ -87,6 +98,7 @@ class DependencyResolver:
         """
         self._targets.clear()
         self._providers.clear()
+        self._requested_packages = set(packages)
 
         # Pre-scan all packages to build provider registry
         self._scan_providers()
@@ -225,9 +237,11 @@ class DependencyResolver:
 
         # Resolve build and runtime dependencies (deduplicated)
         # Include deps from all subpackages too, but skip internal subpackage deps
-        all_deps = set(pkg.build_deps) | set(pkg.runtime_deps)
+        # Filter conditional dependencies based on enabled features/packages
+        all_deps = set(self._filter_dependencies(pkg.build_deps))
+        all_deps |= set(self._filter_dependencies(pkg.runtime_deps))
         for subpkg in pkg.subpackages.values():
-            for dep in subpkg.runtime_deps:
+            for dep in self._filter_dependencies(subpkg.runtime_deps):
                 if dep not in subpackage_names:  # Skip sibling subpackages
                     all_deps.add(dep)
 
@@ -371,6 +385,95 @@ class DependencyResolver:
         if providers:
             return providers[0]  # Already sorted by priority
         return None
+
+    def _parse_conditional_dep(self, dep: str) -> Tuple[Optional[ConditionalDep], str]:
+        """Parse a dependency string that may be conditional.
+
+        OpenWrt conditional dependency formats:
+        - 'libc' - unconditional dependency
+        - '+IPV6:libc' - depends on libc if IPV6 feature is enabled
+        - '+!IPV6:libc' - depends on libc if IPV6 feature is NOT enabled
+        - '+PACKAGE_foo:bar' - depends on bar if package foo is selected
+
+        Args:
+            dep: Dependency string (e.g., '+IPV6:libc' or 'libc')
+
+        Returns:
+            Tuple of (ConditionalDep or None, actual dependency name)
+        """
+        if not dep.startswith('+'):
+            # Unconditional dependency
+            return None, dep
+
+        # Parse conditional: +CONDITION:dep or +!CONDITION:dep
+        if ':' not in dep:
+            # Malformed conditional, treat as unconditional
+            return None, dep
+
+        condition_part, actual_dep = dep[1:].split(':', 1)
+
+        negated = condition_part.startswith('!')
+        if negated:
+            condition_part = condition_part[1:]
+
+        return ConditionalDep(
+            condition=condition_part,
+            dependency=actual_dep,
+            negated=negated,
+        ), actual_dep
+
+    def _evaluate_condition(self, cond: ConditionalDep) -> bool:
+        """Evaluate a conditional dependency.
+
+        Condition types:
+        - Feature conditions: Check if feature is in config.features
+        - Package conditions (PACKAGE_*): Check if package is requested
+        - Kernel config (TODO): Would check kernel config options
+
+        Args:
+            cond: The conditional dependency to evaluate
+
+        Returns:
+            True if the dependency should be included, False to skip
+        """
+        condition = cond.condition
+
+        # Check for PACKAGE_* condition
+        if condition.startswith('PACKAGE_'):
+            pkg_name = condition[8:]  # Remove 'PACKAGE_' prefix
+            result = pkg_name in self._requested_packages
+        else:
+            # Feature condition - check enabled features
+            result = condition in self._enabled_features
+
+        # Apply negation if needed
+        if cond.negated:
+            result = not result
+
+        return result
+
+    def _filter_dependencies(self, deps: List[str]) -> List[str]:
+        """Filter dependencies based on conditions.
+
+        Args:
+            deps: List of dependency strings (may include conditionals)
+
+        Returns:
+            List of actual dependency names (conditionals evaluated)
+        """
+        result = []
+        for dep in deps:
+            cond, actual_dep = self._parse_conditional_dep(dep)
+
+            if cond is None:
+                # Unconditional dependency
+                result.append(actual_dep)
+            elif self._evaluate_condition(cond):
+                # Conditional dependency with condition met
+                result.append(actual_dep)
+            # else: condition not met, skip this dependency
+
+        return result
 
     def _scan_providers(self) -> None:
         """Scan all packages to build the provider registry.

@@ -116,6 +116,29 @@ class APKPackager:
             if provides:
                 cmd.extend(['--info', f'provides:{" ".join(provides)}'])
 
+            # Add install scripts if defined
+            # Scripts are defined in package.yaml under 'scripts' section
+            # Format: scripts: { postinst: "script content", preinst: "...", etc }
+            scripts = getattr(pkg, 'scripts', None) or pkg._raw_data.get('scripts', {})
+            if scripts:
+                # APK script types: pre-install, post-install, pre-deinstall, post-deinstall, trigger
+                script_type_map = {
+                    'preinst': 'pre-install',
+                    'postinst': 'post-install',
+                    'prerm': 'pre-deinstall',
+                    'postrm': 'post-deinstall',
+                    'trigger': 'trigger',
+                }
+                for script_name, script_content in scripts.items():
+                    apk_type = script_type_map.get(script_name, script_name)
+                    if script_content:
+                        # Write script to temp file and reference it
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                            f.write(script_content)
+                            script_file = f.name
+                        cmd.extend(['--script', f'{apk_type}:{script_file}'])
+
             # Use --files with the staging directory (apk v3 expects a path)
             if staging_dir.exists() and any(staging_dir.iterdir()):
                 cmd.extend(['--files', str(staging_dir)])
@@ -371,7 +394,6 @@ class APKRootfs:
             '--initdb',
             '--usermode',
             '--allow-untrusted',
-            '--no-scripts',  # Don't run post-install scripts during initial install
             '--no-network',
         ]
 
@@ -382,8 +404,14 @@ class APKRootfs:
         cmd.append('add')
         cmd.extend(packages)
 
+        # Set IPKG_INSTROOT so post-install scripts know they're running
+        # during image creation (not on a live system). OpenWrt scripts
+        # check this and skip runtime operations like service restarts.
+        env = os.environ.copy()
+        env['IPKG_INSTROOT'] = str(self.rootfs_dir)
+
         try:
-            run_command(cmd, verbose=self.verbose)
+            run_command(cmd, verbose=self.verbose, env=env)
             print(f"  Installed {len(packages)} packages to rootfs")
         except Exception as e:
             print(f"  Warning: APK install failed: {e}")

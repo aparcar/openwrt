@@ -409,6 +409,9 @@ class SubpackageConfig:
         # User/group creation (format: "user=uid:group=gid" or ":group=gid")
         self.userid: List[str] = data.get('userid', [])
 
+        # Install scripts (preinst, postinst, prerm, postrm)
+        self.scripts: Dict[str, str] = data.get('scripts', {})
+
     @property
     def runtime_deps(self) -> List[str]:
         """Get runtime dependencies."""
@@ -476,6 +479,9 @@ class PackageConfig:
 
         # User/group creation (format: "user=uid:group=gid" or ":group=gid")
         self.userid: List[str] = data.get('userid', [])
+
+        # Install scripts (preinst, postinst, prerm, postrm)
+        self.scripts: Dict[str, str] = data.get('scripts', {})
 
         # Parse subpackages
         self._subpackages: Dict[str, SubpackageConfig] = {}

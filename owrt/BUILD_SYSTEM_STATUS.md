@@ -85,7 +85,7 @@ owrt/
 - [x] Virtual packages (PROVIDES) with priority system
 - [x] Circular dependency detection
 - [x] Topological sorting for build order
-- [ ] Conditional dependencies (not supported)
+- [x] Conditional dependencies (`+CONDITION:dep`, `+!CONDITION:dep`, `+PACKAGE_*:dep`)
 
 ### 8. Image Generation (`image.py`, `fit.py`)
 - [x] Rootfs assembly from APK packages
@@ -111,7 +111,7 @@ owrt/
   - [x] GPT partition table
   - [x] FAT32 ESP with kernel
   - [x] Combined disk images
-- [ ] Post-install scripts (disabled currently)
+- [x] Post-install scripts (via APK `--script` and `IPKG_INSTROOT` env)
 
 ### 9. Bootloader Building (`bootloader.py`)
 - [x] ARM Trusted Firmware (TF-A) building
@@ -213,7 +213,7 @@ owrt/
 
 #### 2.1 Dependency Resolution
 - [x] **Virtual packages** - PROVIDES support implemented
-- [ ] **Conditional dependencies** - `+IPV6:libc` style not supported
+- [x] **Conditional dependencies** - `+IPV6:libc`, `+!COND:dep`, `+PACKAGE_*:dep`
 
 #### 2.2 Configuration System
 - [ ] **menuconfig replacement** - TUI for package selection
@@ -247,9 +247,7 @@ owrt/
 
 ## Known Issues
 
-1. **Post-install scripts**: Not executed during rootfs assembly (APK uses --no-scripts)
-2. **Conditional dependencies**: Not supported in resolver
-3. **Package versions**: Some package versions are newer than what's on sources.openwrt.org mirror - when git.openwrt.org is down, these packages cannot be downloaded
+1. **Package versions**: Some package versions are newer than what's on sources.openwrt.org mirror - when git.openwrt.org is down, these packages cannot be downloaded
 
 **Workaround for git.openwrt.org downtime:**
 - The build system automatically falls back to sources.openwrt.org mirror
@@ -264,6 +262,8 @@ owrt/
 - ~~UBI images~~: Working with ubinize
 - ~~Sysupgrade format~~: Working with fwtool metadata
 - ~~DTB overlays~~: Implemented via profile `dts_overlay` field
+- ~~Post-install scripts~~: Enabled via APK `--script` and `IPKG_INSTROOT` env
+- ~~Conditional dependencies~~: `+CONDITION:dep`, `+!COND:dep`, `+PACKAGE_*:dep` supported
 
 ## Quick Reference
 
