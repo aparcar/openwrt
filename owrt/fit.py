@@ -699,15 +699,47 @@ class MetadataBuilder:
         target: str = "",
         board: str = "",
         host_staging: Optional[Path] = None,
+        source_dir: Optional[Path] = None,
         verbose: bool = False,
     ):
         self.version_dist = version_dist
         self.version_number = version_number
-        self.revision = revision
+        self.revision = revision or self._get_git_revision(source_dir)
         self.target = target
         self.board = board
         self.host_staging = host_staging
         self.verbose = verbose
+
+    def _get_git_revision(self, source_dir: Optional[Path] = None) -> str:
+        """Get git revision in OpenWrt format: r<count>-<short_hash>."""
+        try:
+            cwd = str(source_dir) if source_dir else None
+
+            # Get commit count
+            result = subprocess.run(
+                ['git', 'rev-list', '--count', 'HEAD'],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+            )
+            if result.returncode != 0:
+                return ""
+            count = result.stdout.strip()
+
+            # Get short hash
+            result = subprocess.run(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+            )
+            if result.returncode != 0:
+                return ""
+            short_hash = result.stdout.strip()
+
+            return f"r{count}-{short_hash}"
+        except Exception:
+            return ""
 
     def generate_metadata(
         self,

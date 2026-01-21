@@ -56,6 +56,9 @@ class PipelineContext:
     work_dir: Path = field(default_factory=lambda: Path("/tmp"))
     output_dir: Path = field(default_factory=lambda: Path("/tmp"))
 
+    # Source directory (for git revision)
+    source_dir: Optional[Path] = None
+
     # Current working file (passed through pipeline)
     current: Optional[Path] = None
 
@@ -247,21 +250,22 @@ class MetadataStep(PipelineStep):
         if not input_file or not input_file.exists():
             raise ValueError("MetadataStep: No input file")
 
-        output_file = ctx.work_dir / f"{input_file.name}.metadata"
-
         if ctx.verbose:
             print("    Appending sysupgrade metadata...")
 
         metadata = MetadataBuilder(
             target=ctx.target,
             board=ctx.board,
+            source_dir=ctx.source_dir,
             verbose=ctx.verbose,
         )
 
-        metadata.append_metadata(input_file, output_file)
+        # Get supported devices from config if provided
+        supported_devices = config.get('supported_devices')
 
-        ctx.current = output_file
-        return output_file
+        metadata.append_metadata(input_file, supported_devices)
+
+        return input_file
 
 
 class UBIStep(PipelineStep):

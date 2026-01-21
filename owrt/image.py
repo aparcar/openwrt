@@ -52,6 +52,7 @@ class ImageBuilder:
             target=f"{config.board}/{config.subtarget}",
             board=config.name,
             host_staging=config.build_dir / 'host-staging',
+            source_dir=config.openwrt_dir,
             verbose=verbose,
         )
 
@@ -796,6 +797,7 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
             profile=profile.get('name', 'generic'),
             work_dir=work_dir,
             output_dir=self.images_dir,
+            source_dir=self.config.openwrt_dir,
             artifacts={},
             verbose=self.verbose,
         )
