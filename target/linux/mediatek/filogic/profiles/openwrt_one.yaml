@@ -16,17 +16,18 @@ dtc_flags:
 dts_load_address: "0x43f00000"
 
 # Device-specific packages
-packages:
-  # WiFi
-  - kmod-mt7915e
-  - kmod-mt7981-firmware
-  - mt7981-wo-firmware
-  # RTC
-  - kmod-rtc-pcf8563
-  # USB
-  - kmod-usb3
-  # Ethernet PHY (2.5G Airoha EN8811H)
-  - kmod-phy-airoha-en8811h
+# TODO: Enable kernel modules for these:
+packages: []
+  # WiFi (needs CONFIG_MT7915E, CONFIG_MT798X_WMAC)
+  # - kmod-mt7915e
+  # - kmod-mt7981-firmware
+  # - mt7981-wo-firmware
+  # RTC (needs CONFIG_RTC_DRV_PCF8563)
+  # - kmod-rtc-pcf8563
+  # USB (needs CONFIG_USB_XHCI_*)
+  # - kmod-usb3
+  # Ethernet PHY (needs CONFIG_AIROHA_EN8811H_PHY)
+  # - kmod-phy-airoha-en8811h
 
 # Hardware specifications
 hardware:
