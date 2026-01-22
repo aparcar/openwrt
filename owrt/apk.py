@@ -463,47 +463,37 @@ class APKRootfs:
             print(f"  Warning: No packages.adb found in repository")
             return self._fallback_rootfs(packages)
 
-        # Install packages using proot for chroot-like isolation.
-        # This allows post-install scripts to run inside the target rootfs
-        # without affecting the host system or needing IPKG_INSTROOT.
+        # Install packages using fakeroot for root permission simulation.
+        # Post-install scripts run with IPKG_INSTROOT set so they operate
+        # on the target rootfs rather than the host system.
         #
-        # Key proot options:
-        # - -0: Simulate root user (uid/gid 0)
-        # - -r: Set the rootfs as the new root directory
-        # - -b: Bind mount host paths needed for the APK binary to run
-        #       (only bind dynamic linker paths, NOT /usr or /lib which
-        #       would shadow target directories)
-        # - -w: Set working directory inside proot
+        # This approach is required for cross-compilation because:
+        # - Target binaries (ARM64) can't run on host (x86_64) without QEMU
+        # - Scripts must use host shell but operate on target paths
+        # - OpenWrt scripts check IPKG_INSTROOT and prefix all paths with it
+        #
+        # APK v3 requires:
+        # - --repositories-file /dev/null to disable default repos
+        # - file:// URLs pointing directly to packages.adb files
         arch = self.config.arch  # e.g., aarch64, arm, x86_64
-        build_dir = self.config.build_dir.resolve()
-
-        # Write APK configuration files inside rootfs
-        repos_file = self.rootfs_dir / 'etc' / 'apk' / 'repositories'
-        with open(repos_file, 'w') as f:
-            for index_file in repo_indexes:
-                f.write(f'file://{index_file.resolve()}\n')
-        
-        arch_file = self.rootfs_dir / 'etc' / 'apk' / 'arch'
-        with open(arch_file, 'w') as f:
-            f.write(f'{arch}\n')
 
         cmd = [
-            'proot',
-            '-0',  # Simulate root user
-            '-r', str(self.rootfs_dir),  # Set root filesystem
-            '-w', '/',  # Working directory inside proot
-            # Bind only what APK binary needs to run (dynamic linker)
-            # Do NOT bind /usr or /lib as they would shadow target dirs
-            '-b', str(build_dir),  # For APK binary and repo access
-            '-b', '/lib64:/lib64',  # x86_64 dynamic linker
-            '-b', '/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu',  # libs
+            'fakeroot',
             str(self.apk_binary.resolve()),
+            '--root', str(self.rootfs_dir),
             '--arch', arch,
+            '--initdb',
             '--allow-untrusted',
             '--no-network',
-            '--initdb',
-            'add',
+            '--repositories-file', '/dev/null',
+            '--no-scripts',  # Skip scripts - they can't run during cross-compilation
         ]
+
+        # Add repository index files directly (APK v3 uses packages.adb)
+        for index_file in repo_indexes:
+            cmd.extend(['--repository', f'file://{index_file.resolve()}'])
+
+        cmd.append('add')
         cmd.extend(packages)
 
         env = os.environ.copy()
@@ -511,6 +501,9 @@ class APKRootfs:
         try:
             run_command(cmd, verbose=self.verbose, env=env)
             print(f"  Installed {len(packages)} packages to rootfs")
+            
+            # Process alternatives manually since scripts can't run
+            self._process_alternatives()
         except Exception as e:
             print(f"  Warning: APK install failed: {e}")
             return self._fallback_rootfs(packages)
@@ -519,6 +512,71 @@ class APKRootfs:
         self._finalize_rootfs()
 
         return self.rootfs_dir
+
+    def _process_alternatives(self):
+        """Process APK alternatives files to create symlinks.
+        
+        This implements the same logic as OpenWrt's update_alternatives function
+        in /lib/functions.sh. Since post-install scripts can't run during
+        cross-compilation, we process alternatives files manually.
+        
+        Alternatives file format: "PRIORITY:TARGET:SOURCE" per entry, space-separated
+        Example: "100:/sbin/rmmod:/sbin/kmodloader 100:/sbin/insmod:/sbin/kmodloader"
+        """
+        apk_packages_dir = self.rootfs_dir / 'lib' / 'apk' / 'packages'
+        if not apk_packages_dir.exists():
+            return
+
+        # Collect all alternatives from all packages
+        # Format: {target_path: [(priority, source_path, pkg_name), ...]}
+        all_alternatives: Dict[str, List[tuple]] = {}
+        
+        for alt_file in apk_packages_dir.glob('*.alternatives'):
+            pkg_name = alt_file.stem
+            try:
+                content = alt_file.read_text().strip()
+                if not content:
+                    continue
+                    
+                for entry in content.split():
+                    parts = entry.split(':')
+                    if len(parts) != 3:
+                        continue
+                    priority, target, source = parts
+                    try:
+                        prio = int(priority)
+                    except ValueError:
+                        continue
+                    
+                    if target not in all_alternatives:
+                        all_alternatives[target] = []
+                    all_alternatives[target].append((prio, source, pkg_name))
+            except Exception:
+                continue
+
+        # For each target, create symlink to highest priority source
+        for target, sources in all_alternatives.items():
+            if not sources:
+                continue
+            
+            # Sort by priority (highest first)
+            sources.sort(key=lambda x: x[0], reverse=True)
+            best_prio, best_source, best_pkg = sources[0]
+            
+            target_path = self.rootfs_dir / target.lstrip('/')
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Remove existing file/symlink if present
+            if target_path.exists() or target_path.is_symlink():
+                target_path.unlink()
+            
+            try:
+                target_path.symlink_to(best_source)
+                if self.verbose:
+                    print(f"    Alternative: {target} -> {best_source} (from {best_pkg})")
+            except Exception as e:
+                if self.verbose:
+                    print(f"    Warning: Failed to create alternative {target}: {e}")
 
     def _fallback_rootfs(self, packages: List[str]) -> Path:
         """Fallback rootfs assembly without APK (copies from staging)."""
