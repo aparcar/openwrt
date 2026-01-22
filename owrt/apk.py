@@ -430,8 +430,10 @@ class APKRootfs:
             shutil.rmtree(self.rootfs_dir)
         self.rootfs_dir.mkdir(parents=True)
 
-        # Create basic directory structure required by APK
-        for d in ['lib/apk/db', 'etc/apk', 'var/cache/apk']:
+        # Create basic directory structure required by APK and proot
+        for d in ['lib/apk/db', 'etc/apk', 'var/cache/apk', 'var/log',
+                  'bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/lib', 'lib',
+                  'etc', 'var', 'tmp', 'dev', 'proc', 'sys']:
             (self.rootfs_dir / d).mkdir(parents=True, exist_ok=True)
 
         if not self.have_apk():
@@ -461,37 +463,50 @@ class APKRootfs:
             print(f"  Warning: No packages.adb found in repository")
             return self._fallback_rootfs(packages)
 
-        # Install packages using fakeroot to simulate root permissions.
-        # APK v3 requires pointing directly to packages.adb files with file:// URLs.
-        # We use --repositories-file /dev/null to disable default repo config.
-        # Post-install scripts check IPKG_INSTROOT to know they're running
-        # during image creation (not on a live system).
+        # Install packages using proot for chroot-like isolation.
+        # This allows post-install scripts to run inside the target rootfs
+        # without affecting the host system or needing IPKG_INSTROOT.
+        #
+        # Key proot options:
+        # - -0: Simulate root user (uid/gid 0)
+        # - -r: Set the rootfs as the new root directory
+        # - -b: Bind mount host paths needed for the APK binary to run
+        #       (only bind dynamic linker paths, NOT /usr or /lib which
+        #       would shadow target directories)
+        # - -w: Set working directory inside proot
         arch = self.config.arch  # e.g., aarch64, arm, x86_64
+        build_dir = self.config.build_dir.resolve()
+
+        # Write APK configuration files inside rootfs
+        repos_file = self.rootfs_dir / 'etc' / 'apk' / 'repositories'
+        with open(repos_file, 'w') as f:
+            for index_file in repo_indexes:
+                f.write(f'file://{index_file.resolve()}\n')
         
+        arch_file = self.rootfs_dir / 'etc' / 'apk' / 'arch'
+        with open(arch_file, 'w') as f:
+            f.write(f'{arch}\n')
+
         cmd = [
-            'fakeroot',
-            str(self.apk_binary),
-            '--root', str(self.rootfs_dir),
+            'proot',
+            '-0',  # Simulate root user
+            '-r', str(self.rootfs_dir),  # Set root filesystem
+            '-w', '/',  # Working directory inside proot
+            # Bind only what APK binary needs to run (dynamic linker)
+            # Do NOT bind /usr or /lib as they would shadow target dirs
+            '-b', str(build_dir),  # For APK binary and repo access
+            '-b', '/lib64:/lib64',  # x86_64 dynamic linker
+            '-b', '/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu',  # libs
+            str(self.apk_binary.resolve()),
             '--arch', arch,
-            '--initdb',
             '--allow-untrusted',
             '--no-network',
-            '--repositories-file', '/dev/null',  # Disable default repos
+            '--initdb',
+            'add',
         ]
-
-        # Add repository index files directly (APK v3 uses packages.adb)
-        # Must use file:// URL pointing to the packages.adb file itself
-        for index_file in repo_indexes:
-            cmd.extend(['--repository', f'file://{index_file.resolve()}'])
-
-        cmd.append('add')
         cmd.extend(packages)
 
-        # Set IPKG_INSTROOT so post-install scripts know they're running
-        # during image creation (not on a live system). OpenWrt scripts
-        # check this and skip runtime operations like service restarts.
         env = os.environ.copy()
-        env['IPKG_INSTROOT'] = str(self.rootfs_dir)
 
         try:
             run_command(cmd, verbose=self.verbose, env=env)
