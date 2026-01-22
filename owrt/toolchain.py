@@ -380,13 +380,26 @@ class ToolchainBuilder:
 
         stamp.touch()
 
-    def get_env(self) -> dict:
-        """Get environment variables for using this toolchain."""
+    def get_env(self, use_ccache: bool = False) -> dict:
+        """Get environment variables for using this toolchain.
+
+        Args:
+            use_ccache: If True, prepend 'ccache' to CC and CXX variables.
+                       Requires ccache to be installed and CCACHE_DIR to be set.
+        """
         env = os.environ.copy()
         env['PATH'] = f"{self.toolchain_dir / 'bin'}:{env.get('PATH', '')}"
         env['CROSS_COMPILE'] = self.config.cross_compile
-        env['CC'] = f'{self.target}-gcc'
-        env['CXX'] = f'{self.target}-g++'
+
+        cc = f'{self.target}-gcc'
+        cxx = f'{self.target}-g++'
+
+        if use_ccache:
+            cc = f'ccache {cc}'
+            cxx = f'ccache {cxx}'
+
+        env['CC'] = cc
+        env['CXX'] = cxx
         env['AR'] = f'{self.target}-ar'
         env['AS'] = f'{self.target}-as'
         env['LD'] = f'{self.target}-ld'

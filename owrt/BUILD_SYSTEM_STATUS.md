@@ -154,6 +154,12 @@ owrt/
 - [x] APK packages per-architecture
 - [x] Avoids rebuilds when switching between armsr-armv8 and mediatek-filogic (both aarch64)
 
+### 15. ccache Integration (`toolchain.py`, `package.py`, `kernel.py`)
+- [x] Optional ccache support via `--ccache` flag or `USE_CCACHE=1`
+- [x] Prepends `ccache` to CC/CXX environment variables
+- [x] Docker volume mount for persistent cache (`build/.ccache`)
+- [x] Works with all build systems (autotools, cmake, meson, make)
+
 ---
 
 ## What's Missing (TODO List)
@@ -223,7 +229,7 @@ owrt/
 - [x] **Hash-based package cache keys**
 - [x] **Skip rebuild if inputs unchanged**
 - [x] **Dependency cascading**
-- [ ] **ccache integration**
+- [x] **ccache integration** - Optional compilation cache via `--ccache` flag
 
 ### Phase 3: Advanced Features
 
@@ -275,6 +281,7 @@ owrt/
 ./build.sh toolchain        # Toolchain only
 ./build.sh tools            # Host tools (lua, apk, mtd-utils)
 ./build.sh clean all        # Clean everything
+./build.sh --ccache firmware  # Build with ccache enabled
 ```
 
 ### CLI Commands

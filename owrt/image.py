@@ -511,14 +511,25 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
             'i386': 'x86',
         }.get(self.config.arch, 'arm')
 
+        # OpenWrt squashfs options from include/image.mk
+        # LZMA_XZ_OPTIONS := -Xpreset 9 -Xe -Xlc 0 -Xlp 2 -Xpb 2
         cmd = [
             'mksquashfs',
             str(self.rootfs_dir),
             str(output),
             '-noappend',
             '-comp', 'xz',
+            '-Xpreset', '9',
+            '-Xe',
+            '-Xlc', '0',
+            '-Xlp', '2',
+            '-Xpb', '2',
             '-Xbcj', bcj_filter,
             '-b', '256K',
+            # Create device nodes (OpenWrt: -p '/dev d 755 0 0' -p '/dev/console c 600 0 0 5 1')
+            '-p', '/dev d 755 0 0',
+            '-p', '/dev/console c 600 0 0 5 1',
+            '-no-xattrs',
         ]
 
         try:

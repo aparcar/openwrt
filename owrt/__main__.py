@@ -25,12 +25,14 @@ from owrt.tool import ToolBuilder, ToolConfig
 @click.group()
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--jobs', '-j', default=None, type=int, help='Number of parallel jobs')
+@click.option('--ccache/--no-ccache', default=False, help='Use ccache for compilation')
 @click.pass_context
-def cli(ctx, verbose, jobs):
+def cli(ctx, verbose, jobs, ccache):
     """OpenWrt Modern Build System - Proof of Concept"""
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     ctx.obj['jobs'] = jobs or os.cpu_count()
+    ctx.obj['ccache'] = ccache
 
 
 @cli.group()
@@ -401,7 +403,7 @@ def kernel_build(ctx, target, force):
     click.echo(f"Building kernel for {target}...")
 
     config = Config.load_target(target)
-    builder = KernelBuilder(config, verbose=ctx.obj['verbose'], jobs=ctx.obj['jobs'])
+    builder = KernelBuilder(config, verbose=ctx.obj['verbose'], jobs=ctx.obj['jobs'], use_ccache=ctx.obj['ccache'])
 
     if force:
         builder.clean()
@@ -475,7 +477,8 @@ def build(ctx, target, profile, packages, force):
 
     # Step 2: Kernel
     click.echo("\n[2/4] Building kernel...")
-    k_builder = KernelBuilder(config, verbose=verbose, jobs=jobs)
+    use_ccache = ctx.obj['ccache']
+    k_builder = KernelBuilder(config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     if force or not k_builder.is_built():
         k_builder.build()
     else:
@@ -483,7 +486,7 @@ def build(ctx, target, profile, packages, force):
 
     # Step 3: Packages
     click.echo("\n[3/4] Building packages...")
-    pkg_builder = PackageBuilder(config, verbose=verbose, jobs=jobs)
+    pkg_builder = PackageBuilder(config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     package_list = list(config.default_packages) + list(packages)
     pkg_builder.build_packages(package_list, force=force)
 
@@ -610,7 +613,8 @@ def firmware(ctx, config_file, force):
 
     # Step 2: Kernel (with config overrides)
     click.echo("\n[2/4] Building kernel...")
-    k_builder = KernelBuilder(target_config, verbose=verbose, jobs=jobs)
+    use_ccache = ctx.obj['ccache']
+    k_builder = KernelBuilder(target_config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     if force or not k_builder.is_built():
         kernel_overrides = build_config.get_kernel_config_overrides()
         if kernel_overrides:
@@ -624,7 +628,7 @@ def firmware(ctx, config_file, force):
 
     # Step 3: Packages
     click.echo("\n[3/4] Building packages...")
-    pkg_builder = PackageBuilder(target_config, verbose=verbose, jobs=jobs)
+    pkg_builder = PackageBuilder(target_config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     package_list = build_config.get_all_packages()
     click.echo(f"  Building {len(package_list)} packages...")
     pkg_builder.build_packages(package_list, force=force)
@@ -657,6 +661,7 @@ def package(ctx, target, package_name, force, no_apk):
         config,
         verbose=ctx.obj['verbose'],
         jobs=ctx.obj['jobs'],
+        use_ccache=ctx.obj['ccache'],
     )
     # single_package=True: skip dep resolution (ninja handles it)
     builder.build_packages([package_name], force=force, create_apk=not no_apk, single_package=True)

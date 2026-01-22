@@ -54,6 +54,7 @@ class PackageBuilder:
         config: Config,
         verbose: bool = False,
         jobs: Optional[int] = None,
+        use_ccache: bool = False,
     ):
         """
         Initialize the package builder.
@@ -62,10 +63,12 @@ class PackageBuilder:
             config: Target configuration
             verbose: Enable verbose output
             jobs: Number of parallel jobs
+            use_ccache: Enable ccache for compilation
         """
         self.config = config
         self.verbose = verbose
         self.jobs = jobs or os.cpu_count()
+        self.use_ccache = use_ccache
 
         # Paths
         self.packages_dir = config.packages_dir
@@ -1252,7 +1255,7 @@ endian = '{endian}'
             pkg: Package configuration
             pkg_staging_dir: Per-package staging directory
         """
-        env = self.toolchain.get_env()
+        env = self.toolchain.get_env(use_ccache=self.use_ccache)
         toolchain_dir = self.toolchain.toolchain_dir
         target = self.config.target_tuple
 

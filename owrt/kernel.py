@@ -30,10 +30,11 @@ class KernelBuilder:
 
     KERNEL_URL_BASE = "https://cdn.kernel.org/pub/linux/kernel"
 
-    def __init__(self, config: Config, verbose: bool = False, jobs: Optional[int] = None):
+    def __init__(self, config: Config, verbose: bool = False, jobs: Optional[int] = None, use_ccache: bool = False):
         self.config = config
         self.verbose = verbose
         self.jobs = jobs or os.cpu_count()
+        self.use_ccache = use_ccache
 
         # Kernel version info
         self.version = config.kernel['version']
@@ -723,7 +724,7 @@ class KernelBuilder:
 
     def _get_build_env(self) -> dict:
         """Get environment for kernel builds."""
-        env = self.toolchain.get_env()
+        env = self.toolchain.get_env(use_ccache=self.use_ccache)
         env['KBUILD_BUILD_HOST'] = 'openwrt'
         env['KBUILD_BUILD_USER'] = 'builder'
         # For reproducible builds

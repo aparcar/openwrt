@@ -15,6 +15,7 @@
 #   JOBS            - Number of parallel jobs (default: $(nproc))
 #   VERBOSE         - Set to 1 for verbose output
 #   SKIP_DOCKER     - Set to 1 to run without Docker (requires local deps)
+#   USE_CCACHE      - Set to 1 to enable ccache for compilation
 #
 
 set -e
@@ -30,6 +31,8 @@ TARGET="${TARGET:-armsr-armv8}"
 PROFILE="${PROFILE:-generic}"
 JOBS="${JOBS:-$(nproc)}"
 VERBOSE="${VERBOSE:-0}"
+USE_CCACHE="${USE_CCACHE:-0}"
+CCACHE_DIR="${CCACHE_DIR:-${SCRIPT_DIR}/build/.ccache}"
 
 # Load config.yaml if it exists (unless TARGET/PROFILE are explicitly set via env)
 load_config_yaml() {
@@ -137,6 +140,21 @@ check_docker() {
     else
         log_warn "Docker not found, running without containerization"
         return 1
+    fi
+}
+
+# Get ccache flag for Python CLI
+get_ccache_flag() {
+    if [[ "${USE_CCACHE}" == "1" ]]; then
+        echo "--ccache"
+    fi
+}
+
+# Get ccache Docker options (volume mount and env vars)
+get_ccache_docker_opts() {
+    if [[ "${USE_CCACHE}" == "1" ]]; then
+        mkdir -p "${CCACHE_DIR}"
+        echo "-v ${CCACHE_DIR}:/ccache -e CCACHE_DIR=/ccache -e CCACHE_BASEDIR=/openwrt"
     fi
 }
 
@@ -323,17 +341,19 @@ build_firmware() {
 
         # Run Ninja build
         log_info "Running Ninja build..."
+        local ccache_flag=$(get_ccache_flag)
         docker run --rm \
             -u "$(id -u):$(id -g)" \
             -v "${ROOT_DIR}:/openwrt" \
             -v "${BUILD_DIR}:/build" \
             -v "${OUTPUT_DIR}:/build/output" \
+            $(get_ccache_docker_opts) \
             -w /openwrt \
             -e BUILD_DIR=/build \
             -e DL_DIR=/build/dl \
             -e OUTPUT_DIR=/build/output \
             "${TOOLCHAIN_IMAGE}" \
-            python3 -m owrt ${verbose_flag} -j "${JOBS}" ninja run "${TARGET}" --profile "${PROFILE}"
+            python3 -m owrt ${verbose_flag} ${ccache_flag} -j "${JOBS}" ninja run "${TARGET}" --profile "${PROFILE}"
     else
         ensure_toolchain
         ensure_host_tools
@@ -346,8 +366,9 @@ build_firmware() {
 
         # Run Ninja build
         log_info "Running Ninja build..."
-        BUILD_DIR="${BUILD_DIR}" DL_DIR="${DL_DIR}" OUTPUT_DIR="${OUTPUT_DIR}" \
-            python3 -m owrt ${verbose_flag} -j "${JOBS}" ninja run "${TARGET}" --profile "${PROFILE}"
+        local ccache_flag=$(get_ccache_flag)
+        BUILD_DIR="${BUILD_DIR}" DL_DIR="${DL_DIR}" OUTPUT_DIR="${OUTPUT_DIR}" CCACHE_DIR="${CCACHE_DIR}" \
+            python3 -m owrt ${verbose_flag} ${ccache_flag} -j "${JOBS}" ninja run "${TARGET}" --profile "${PROFILE}"
     fi
 
     log_success "Firmware built successfully"
@@ -371,6 +392,8 @@ build_package() {
         verbose_flag="-v"
     fi
 
+    local ccache_flag=$(get_ccache_flag)
+
     if check_docker; then
         ensure_toolchain_image
         ensure_host_tools
@@ -381,11 +404,12 @@ build_package() {
                 -u "$(id -u):$(id -g)" \
                 -v "${ROOT_DIR}:/openwrt" \
                 -v "${BUILD_DIR}:/build" \
+                $(get_ccache_docker_opts) \
                 -w /openwrt \
                 -e BUILD_DIR=/build \
                 -e DL_DIR=/build/dl \
                 "${TOOLCHAIN_IMAGE}" \
-                python3 -m owrt ${verbose_flag} -j "${JOBS}" package "${TARGET}" "${pkg}"
+                python3 -m owrt ${verbose_flag} ${ccache_flag} -j "${JOBS}" package "${TARGET}" "${pkg}"
         done
     else
         ensure_toolchain
@@ -394,8 +418,8 @@ build_package() {
         cd "${SCRIPT_DIR}"
         for pkg in "${packages[@]}"; do
             log_info "Building package: ${pkg}"
-            BUILD_DIR="${BUILD_DIR}" DL_DIR="${DL_DIR}" \
-                python3 -m owrt ${verbose_flag} -j "${JOBS}" package "${TARGET}" "${pkg}"
+            BUILD_DIR="${BUILD_DIR}" DL_DIR="${DL_DIR}" CCACHE_DIR="${CCACHE_DIR}" \
+                python3 -m owrt ${verbose_flag} ${ccache_flag} -j "${JOBS}" package "${TARGET}" "${pkg}"
         done
     fi
 
@@ -457,6 +481,12 @@ show_info() {
         echo "  TC image:    ${TOOLCHAIN_IMAGE}"
     else
         echo "  Docker:      no (native build)"
+    fi
+
+    if [[ "${USE_CCACHE}" == "1" ]]; then
+        echo "  ccache:      enabled (${CCACHE_DIR})"
+    else
+        echo "  ccache:      disabled"
     fi
     echo ""
 
@@ -587,6 +617,7 @@ Options:
   -p, --profile   Device profile (default: generic)
   -j, --jobs      Parallel jobs (default: \$(nproc))
   -v, --verbose   Enable verbose output
+  --ccache        Enable ccache for compilation
 
 Environment Variables:
   TARGET          Target to build (same as -t)
@@ -594,6 +625,8 @@ Environment Variables:
   JOBS            Parallel jobs (same as -j)
   VERBOSE         Set to 1 for verbose output
   SKIP_DOCKER     Set to 1 to run without Docker
+  USE_CCACHE      Set to 1 to enable ccache (same as --ccache)
+  CCACHE_DIR      ccache directory (default: build/.ccache)
 
 Examples:
   $0                                         # Full build with defaults (armsr-armv8)
@@ -631,6 +664,10 @@ parse_args() {
                 ;;
             -v|--verbose)
                 VERBOSE=1
+                shift
+                ;;
+            --ccache)
+                USE_CCACHE=1
                 shift
                 ;;
             -h|--help)

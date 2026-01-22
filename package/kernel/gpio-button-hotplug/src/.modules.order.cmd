@@ -1,0 +1,1 @@
+savedcmd_/openwrt/package/kernel/gpio-button-hotplug/src/modules.order := {   echo /openwrt/package/kernel/gpio-button-hotplug/src/gpio-button-hotplug.o; :; } > /openwrt/package/kernel/gpio-button-hotplug/src/modules.order

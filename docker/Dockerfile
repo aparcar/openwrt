@@ -90,6 +90,8 @@ RUN apt-get update && apt-get install -y \
     cmake \
     meson \
     pkg-config \
+    # Compilation cache
+    ccache \
     # Python dependencies
     python3-yaml \
     python3-jsonschema \
