@@ -1,0 +1,217 @@
+# grub2 - GRand Unified Bootloader
+# Synced with OpenWrt package/boot/grub2/Makefile
+#
+# NOTE: GRUB2 is a bootloader that requires special handling:
+# 1. Host tools (grub-mkimage) must be built first
+# 2. Target binaries don't go to rootfs but to STAGING_DIR_IMAGE
+# 3. Image generation uses grub-mkimage to create platform-specific images
+# 4. The PoC currently uses EFI stub kernels instead of GRUB for simplicity
+#
+# Full GRUB integration would require:
+# - Host tool building in tool.py
+# - Integration with image.py to call grub-mkimage
+# - Platform-specific grub.cfg generation
+
+name: grub2
+version: "2.12"
+release: 1
+license: GPL-3.0-or-later
+
+source:
+  type: tarball
+  url: "https://ftp.gnu.org/gnu/grub/grub-2.12.tar.xz"
+  sha256: "f3c97391f7c4eaa677a78e090c7e97e6dc47b16f655f04683ebd37bef7fe0faa"
+
+metadata:
+  section: boot
+  category: Boot Loaders
+  title: GRand Unified Bootloader
+  description: |
+    GNU GRUB is a Multiboot boot loader. It was derived from GRUB, the
+    GRand Unified Bootloader, which was originally designed and implemented
+    by Erich Stefan Boleyn.
+  maintainer: OpenWrt Developers
+  url: https://www.gnu.org/software/grub/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: autotools
+  parallel: true
+  # Disable optimizations that break GRUB
+  build_flags:
+    no_gc_sections: true
+    no_lto: true
+  configure_args:
+    - "--disable-werror"
+    - "--disable-nls"
+    - "--disable-device-mapper"
+    - "--disable-libzfs"
+    - "--disable-liblzma"
+    - "--disable-grub-mkfont"
+
+# Host tools definition - built on the host to create boot images
+host_build:
+  configure_args:
+    - "--disable-grub-mkfont"
+    - "--disable-werror"
+    - "--disable-libzfs"
+    - "--disable-nls"
+    - "--with-platform=none"
+  install:
+    - "grub-mkimage"
+    - "grub-editenv"
+
+# Multiple variants for different platforms
+# Each variant builds grub-core modules for a specific platform
+variants:
+  pc:
+    package_name: grub2
+    description: "GRand Unified Bootloader (BIOS)"
+    target_restrict: x86
+    configure_args:
+      - "--with-platform=pc"
+    conflicts:
+      - grub2-efi
+    # grub-mkimage modules for BIOS boot
+    mkimage_modules:
+      - at_keyboard
+      - biosdisk
+      - boot
+      - chain
+      - configfile
+      - fat
+      - linux
+      - ls
+      - part_gpt
+      - part_msdos
+      - reboot
+      - search
+      - serial
+      - test
+      - vga
+      - ext2
+    # Output files created in STAGING_DIR_IMAGE/grub2/
+    staging_files:
+      - boot.img
+      - cdboot.img
+      - gpt-core.img
+      - generic-core.img
+      - eltorito.img
+      - legacy-core.img
+
+  efi:
+    package_name: grub2-efi
+    description: "GRand Unified Bootloader (x86 EFI)"
+    target_restrict: x86
+    configure_args:
+      - "--with-platform=efi"
+    conflicts:
+      - grub2
+    mkimage_modules:
+      - at_keyboard
+      - boot
+      - chain
+      - configfile
+      - fat
+      - linux
+      - ls
+      - part_gpt
+      - part_msdos
+      - reboot
+      - serial
+      - test
+      - efi_gop
+      - efi_uga
+      - iso9660
+    staging_files:
+      - bootx64.efi    # or bootia32.efi for 32-bit
+      - iso-bootx64.efi
+
+  efi-arm:
+    package_name: grub2-efi-arm
+    description: "GRand Unified Bootloader (ARM EFI)"
+    default: true
+    target_restrict: armsr
+    configure_args:
+      - "--with-platform=efi"
+    mkimage_modules:
+      - boot
+      - chain
+      - configfile
+      - fat
+      - linux
+      - ls
+      - part_gpt
+      - part_msdos
+      - reboot
+      - search
+      - search_fs_uuid
+      - search_label
+      - serial
+      - efi_gop
+      - lsefi
+      - minicmd
+      - ext2
+    staging_files:
+      - bootaa64.efi   # or bootarm.efi for 32-bit ARM
+      - iso-bootaa64.efi
+
+  efi-loongarch64:
+    package_name: grub2-efi-loongarch64
+    description: "GRand Unified Bootloader (LoongArch64 EFI)"
+    target_restrict: loongarch64
+    configure_args:
+      - "--with-platform=efi"
+    mkimage_modules:
+      - boot
+      - chain
+      - configfile
+      - fat
+      - linux
+      - ls
+      - lsefi
+      - minicmd
+      - part_gpt
+      - part_msdos
+      - reboot
+      - search
+      - search_fs_uuid
+      - search_label
+      - serial
+      - efi_gop
+      - all_video
+      - gfxterm
+      - ext2
+    staging_files:
+      - bootloongarch64.efi
+
+subpackages:
+  grub2-editenv:
+    description: "Grub2 Environment editor"
+    section: utils
+    category: Utilities
+    submenu: Boot Loaders
+    target_restrict: x86
+    files:
+      - src: "grub-editenv"
+        dst: "/usr/sbin/grub-editenv"
+        mode: "0755"
+
+  grub2-bios-setup:
+    description: "Grub2 BIOS boot setup tool"
+    section: utils
+    category: Utilities
+    submenu: Boot Loaders
+    target_restrict: x86
+    files:
+      - src: "grub-bios-setup"
+        dst: "/usr/sbin/grub-bios-setup"
+        mode: "0755"
+
+# Bootloader packages don't install to rootfs - they create images
+# that are used during firmware image generation
+install:
+  staging_only: true
