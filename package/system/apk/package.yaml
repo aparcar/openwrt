@@ -30,6 +30,10 @@ dependencies:
     - zlib
     - libmbedtls-dev
 
+# Cannot be installed alongside OpenSSL variant
+conflicts:
+  - apk-openssl
+
 build:
   system: meson
   parallel: true

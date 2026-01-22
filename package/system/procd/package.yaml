@@ -31,6 +31,10 @@ dependencies:
     - libblobmsg-json
     - libjson-script
 
+# Cannot be installed alongside SELinux variant
+conflicts:
+  - procd-selinux
+
 build:
   system: cmake
   parallel: true

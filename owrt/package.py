@@ -33,7 +33,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Set, Any, Union
 
-from .config import Config, PackageConfig, SubpackageConfig
+from .config import Config, PackageConfig, SubpackageConfig, VariantConfig
 from .toolchain import ToolchainBuilder
 from .utils import run_command, download_file, extract_archive, apply_patches
 from .apk import APKPackager, APKRepository
@@ -119,9 +119,9 @@ class PackageBuilder:
         """Get the assembled dependencies directory for a package."""
         return self.packages_dir / pkg_name / 'deps'
 
-    def _get_source_package_name(self, pkg: Union[PackageConfig, SubpackageConfig]) -> str:
-        """Get the source package name (handles subpackages)."""
-        if isinstance(pkg, SubpackageConfig):
+    def _get_source_package_name(self, pkg: Union[PackageConfig, SubpackageConfig, VariantConfig]) -> str:
+        """Get the source package name (handles subpackages and variants)."""
+        if isinstance(pkg, (SubpackageConfig, VariantConfig)):
             return pkg.source_name
         return pkg.name
 
@@ -215,7 +215,7 @@ class PackageBuilder:
 
         return pkg
 
-    def _compute_package_hash(self, pkg: PackageConfig) -> str:
+    def _compute_package_hash(self, pkg: Union[PackageConfig, SubpackageConfig, VariantConfig]) -> str:
         """Compute content hash of package inputs for change detection.
 
         Includes:
@@ -225,13 +225,23 @@ class PackageBuilder:
         - Version and release info
         - Toolchain version (GCC, libc)
         - Dependency hashes (cascading rebuilds)
+        - For variants: variant-specific build options
         """
         h = hashlib.sha256()
 
-        # Get the package directory (for subpackages, use source package dir)
+        # Get the package directory (for subpackages/variants, use source package dir)
         if isinstance(pkg, SubpackageConfig):
             pkg_dir = pkg.parent.pkg_dir
             source_pkg = pkg.parent
+        elif isinstance(pkg, VariantConfig):
+            pkg_dir = pkg.parent.pkg_dir
+            source_pkg = pkg.parent
+            # Include variant name and options in hash
+            h.update(f"variant:{pkg.name}".encode())
+            h.update(f"cmake_options:{pkg.cmake_options}".encode())
+            h.update(f"configure_args:{pkg.configure_args}".encode())
+            h.update(f"cflags:{pkg.cflags}".encode())
+            h.update(f"ldflags:{pkg.ldflags}".encode())
         else:
             pkg_dir = pkg.pkg_dir
             source_pkg = pkg
@@ -277,12 +287,17 @@ class PackageBuilder:
         # Include dependency hashes for cascading rebuilds
         # Collect all deps (build + runtime, including from subpackages)
         all_deps = set(source_pkg.build_deps) | set(source_pkg.runtime_deps)
-        for subpkg in source_pkg.subpackages.values():
-            all_deps.update(subpkg.runtime_deps)
+        
+        # For source packages with subpackages, also include subpackage deps
+        if hasattr(source_pkg, 'subpackages'):
+            for subpkg in source_pkg.subpackages.values():
+                all_deps.update(subpkg.runtime_deps)
 
         # Filter out self-dependencies (source package and its subpackages)
         # These would create circular hash references
-        own_names = {source_pkg.name} | set(source_pkg.subpackages.keys())
+        own_names = {source_pkg.name}
+        if hasattr(source_pkg, 'subpackages'):
+            own_names |= set(source_pkg.subpackages.keys())
         all_deps -= own_names
 
         # Get dependency hashes from their stamp files
@@ -373,9 +388,10 @@ class PackageBuilder:
         return overlay_dirs
 
     def _build_package(self, name: str, force: bool = False, create_apk: bool = True):
-        """Build a single package or create APK for a subpackage.
+        """Build a single package or create APK for a subpackage/variant.
 
         For subpackages: ensures the source is compiled first, then creates the APK.
+        For variants: compiles with variant-specific options, then creates the APK.
         For regular packages: compiles source and creates APK.
 
         Uses hash-based stamps for change detection:
@@ -392,6 +408,12 @@ class PackageBuilder:
 
         if not pkg:
             print(f"    {name}: WARNING - package definition not found, skipping")
+            return
+
+        # For variants, build with variant-specific options
+        # Variants need separate compilation (different build options/dependencies)
+        if isinstance(pkg, VariantConfig):
+            self._build_variant(pkg, name, force=force, create_apk=create_apk)
             return
 
         # For subpackages, resolve to source package (unless name == source_name)
@@ -495,10 +517,115 @@ class PackageBuilder:
             self._create_auto_dev_package(pkg, pkg_install_dir)
             apk_stamp.touch()
 
+    def _build_variant(self, variant: VariantConfig, name: str, force: bool = False, create_apk: bool = True):
+        """Build a variant package with variant-specific options.
+
+        Variants are like subpackages but require separate compilation because they
+        have different build options (cmake_options, configure_args, cflags, etc.).
+
+        Each variant:
+        1. Downloads/extracts the same source as the parent package
+        2. Compiles with variant-specific build options
+        3. Creates an APK with variant-specific dependencies and conflicts
+        """
+        source_name = variant.source_name
+
+        # Compute hash including variant-specific options
+        pkg_hash = self._compute_package_hash(variant)
+        stamp = self.stamp_dir / f'{name}.built_{pkg_hash}'
+        apk_stamp = self.stamp_dir / f'{name}.apk_{pkg_hash}'
+
+        if not force and stamp.exists():
+            if create_apk and not apk_stamp.exists():
+                self._create_apk_from_existing_variant(variant, name)
+            else:
+                print(f"    {name}: already built (hash {pkg_hash}), skipping")
+            return
+
+        # Clean old stamps
+        self._clean_old_stamps(name, 'built')
+        self._clean_old_stamps(name, 'apk')
+
+        print(f"    {name}: building variant (hash {pkg_hash})...")
+
+        # Clean old build artifacts
+        pkg_build_base = self.packages_dir / name
+        if pkg_build_base.exists():
+            shutil.rmtree(pkg_build_base)
+
+        # Create build directories
+        build_dir = self.packages_dir / name / 'build'
+        pkg_install_dir = self.packages_dir / name / 'ipkg-install'
+        build_dir.mkdir(parents=True, exist_ok=True)
+        pkg_install_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get per-package staging directory
+        pkg_staging_dir = self._get_package_staging_dir(name)
+        pkg_staging_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download and extract source (from parent package definition)
+        src_dir = self._prepare_source(variant, build_dir.parent)
+
+        # Build using appropriate build system with variant-specific options
+        # The variant's .build property already merges parent + variant options
+        build_system = variant.build_system
+        env = self._get_build_env(variant, pkg_staging_dir=pkg_staging_dir)
+
+        # Apply variant-specific CFLAGS
+        if variant.cflags:
+            existing_cflags = env.get('CFLAGS', '')
+            env['CFLAGS'] = f"{existing_cflags} {' '.join(variant.cflags)}"
+
+        # Apply variant-specific LDFLAGS
+        if variant.ldflags:
+            existing_ldflags = env.get('LDFLAGS', '')
+            env['LDFLAGS'] = f"{existing_ldflags} {' '.join(variant.ldflags)}"
+
+        # Get fakechroot isolation backend
+        isolation = self._get_isolation()
+
+        if isolation and build_system != 'none':
+            self._build_with_isolation(
+                isolation, variant, src_dir, build_dir, pkg_staging_dir, pkg_install_dir, env
+            )
+        else:
+            if build_system == 'autotools':
+                self._build_autotools(variant, src_dir, build_dir, env)
+            elif build_system == 'cmake':
+                self._build_cmake(variant, src_dir, build_dir, env)
+            elif build_system == 'meson':
+                self._build_meson(variant, src_dir, build_dir, env)
+            elif build_system == 'make':
+                self._build_make(variant, src_dir, build_dir, env)
+            elif build_system == 'none':
+                pass
+            else:
+                print(f"      Unknown build system: {build_system}")
+                return
+
+            self._install_package(variant, src_dir, build_dir, env, pkg_install_dir, pkg_staging_dir)
+
+        stamp.touch()
+        self._built.add(name)
+
+        if create_apk:
+            self._create_apk_package(variant, pkg_install_dir)
+            apk_stamp.touch()
+
+    def _create_apk_from_existing_variant(self, variant: VariantConfig, name: str):
+        """Create APK from existing built variant."""
+        pkg_install_dir = self.packages_dir / name / 'ipkg-install'
+        if pkg_install_dir.exists():
+            self._create_apk_package(variant, pkg_install_dir)
+            pkg_hash = self._compute_package_hash(variant)
+            self._clean_old_stamps(name, 'apk')
+            apk_stamp = self.stamp_dir / f'{name}.apk_{pkg_hash}'
+            apk_stamp.touch()
+
     def _build_with_isolation(
         self,
         isolation: FakechrootIsolation,
-        pkg: PackageConfig,
+        pkg: Union[PackageConfig, VariantConfig],
         src_dir: Path,
         build_dir: Path,
         staging_dir: Path,
@@ -773,7 +900,10 @@ class PackageBuilder:
             '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY',
             '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY',
             f'-DCMAKE_C_FLAGS={base_cflags}',
-        ] + pkg.build.get('configure_args', [])
+        ]
+        # Add configure_args (general) and cmake_options (cmake-specific)
+        cmake_args.extend(pkg.build.get('configure_args', []))
+        cmake_args.extend(pkg.build.get('cmake_options', []))
 
         # Quote arguments properly to handle semicolons and special characters
         cmake_cmd = ' '.join(shlex.quote(arg) for arg in cmake_args)
@@ -1865,12 +1995,18 @@ endian = '{self.config.cpu.get("endian", "little")}'
                     if self.verbose:
                         print(f"      staging: {pattern} -> {dst_path}")
 
-    def _create_apk_package(self, pkg: Union[PackageConfig, SubpackageConfig], pkg_install_dir: Path):
+    def _create_apk_package(self, pkg: Union[PackageConfig, SubpackageConfig, VariantConfig], pkg_install_dir: Path):
         """Create APK package from installed files."""
         if not self._apk_packager:
             return
 
-        apk_file = self._apk_packager.create_package(pkg, self.packages_dir / pkg.name, pkg_install_dir)
+        # For variants, use package_name instead of name for directory lookup
+        if isinstance(pkg, VariantConfig):
+            pkg_name = pkg.package_name
+        else:
+            pkg_name = pkg.name
+
+        apk_file = self._apk_packager.create_package(pkg, self.packages_dir / pkg_name, pkg_install_dir)
         if apk_file:
             self._apk_files.append(apk_file)
             # Add to repository

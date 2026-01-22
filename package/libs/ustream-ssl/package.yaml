@@ -2,15 +2,15 @@
 # Synced with OpenWrt package/libs/ustream-ssl/Makefile
 
 name: ustream-ssl
-version: "2025.10.03"
+version: "2024.07.28"
 release: 1
 license: ISC
 
 source:
   type: git
   url: "https://git.openwrt.org/project/ustream-ssl.git"
-  version: "5a81c108d20e24724ed847cc4be033f2a74e6635"
-  sha256: "e251189ed315f22ab63dc6f17b03178676e10c21fff0cdd863b294a3c51a1b5b"
+  version: "99bd3d2b167ccdffb6de072d02c380cb37b23e33"
+  sha256: "d3a07151ec361cc4483406a6d01ebbf6ddf627e54f5a5b6676f265614797ee84"
 
 metadata:
   section: libs
@@ -24,25 +24,61 @@ metadata:
 dependencies:
   runtime:
     - libubox
-    - libmbedtls
   build:
     - libubox-dev
-    - libmbedtls-dev
 
 build:
   system: cmake
   parallel: true
-  configure_args:
-    - "-DMBEDTLS=on"
 
-subpackages:
-  libustream-mbedtls:
+install:
+  files:
+    - src: "usr/lib/libustream-ssl.so"
+      dst: "/lib/libustream-ssl.so"
+
+# Variants allow building the same source with different SSL backends.
+# Each variant produces a separate binary package with its own dependencies
+# and build options. Only one variant can be installed at a time.
+variants:
+  mbedtls:
+    package_name: libustream-mbedtls
     description: "ustream SSL library (mbedtls)"
-    section: libs
+    default: true
     dependencies:
       runtime:
-        - libubox
         - libmbedtls
-    files:
-      - src: "usr/lib/libustream-ssl.so"
-        dst: "/lib/libustream-ssl.so"
+      build:
+        - libmbedtls-dev
+    cmake_options:
+      - "-DMBEDTLS=on"
+    conflicts:
+      - libustream-openssl
+      - libustream-wolfssl
+
+  openssl:
+    package_name: libustream-openssl
+    description: "ustream SSL library (openssl)"
+    dependencies:
+      runtime:
+        - libopenssl
+      build:
+        - libopenssl-dev
+    conflicts:
+      - libustream-mbedtls
+      - libustream-wolfssl
+
+  wolfssl:
+    package_name: libustream-wolfssl
+    description: "ustream SSL library (wolfssl)"
+    dependencies:
+      runtime:
+        - libwolfssl
+      build:
+        - libwolfssl-dev
+    cflags:
+      - "-I${STAGING_DIR}/usr/include/wolfssl"
+    cmake_options:
+      - "-DWOLFSSL=on"
+    conflicts:
+      - libustream-mbedtls
+      - libustream-openssl

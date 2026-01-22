@@ -45,6 +45,9 @@ subpackages:
   nftables:
     description: "nftables userspace utility"
     section: net
+    # This is the JSON variant, conflicts with non-JSON variant
+    conflicts:
+      - nftables-nojson
     dependencies:
       runtime:
         - libnftables

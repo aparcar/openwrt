@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from .config import Config, PackageConfig
+from .config import Config, PackageConfig, VariantConfig
 from .utils import run_command
 
 
@@ -123,14 +123,14 @@ class APKPackager:
 
     def create_package(
         self,
-        pkg: PackageConfig,
+        pkg,  # PackageConfig, SubpackageConfig, or VariantConfig
         pkg_dir: Path,
         staging_dir: Path,
     ) -> Optional[Path]:
         """Create an APK package from a built package.
 
         Args:
-            pkg: Package configuration
+            pkg: Package configuration (PackageConfig, SubpackageConfig, or VariantConfig)
             pkg_dir: Package build directory (contains src/, build/)
             staging_dir: Package staging directory (contains installed files)
 
@@ -149,7 +149,8 @@ class APKPackager:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         arch = self._get_apk_arch()
-        pkg_name = pkg.name
+        # For variants, use package_name instead of name
+        pkg_name = getattr(pkg, 'package_name', None) or pkg.name
         version = f"{pkg.version}-r{pkg.release}"
 
         # APK filename format: name-version.apk
@@ -318,7 +319,7 @@ type default_postinst >/dev/null 2>&1 && default_postinst "$0" "$@"
 
         return None
 
-    def _build_metadata(self, pkg: PackageConfig, arch: str) -> Dict[str, str]:
+    def _build_metadata(self, pkg, arch: str) -> Dict[str, str]:
         """Build metadata dictionary for apk v3 mkpkg.
 
         Returns a dict where each key-value pair becomes --info KEY:VALUE
@@ -328,22 +329,36 @@ type default_postinst >/dev/null 2>&1 && default_postinst "$0" "$@"
         - version (not pkgver)
         - description (not pkgdesc)
         - arch, license, origin, url, depend, provides
+
+        Args:
+            pkg: PackageConfig, SubpackageConfig, or VariantConfig
+            arch: Target architecture
         """
         version = f"{pkg.version}-r{pkg.release}"
 
         # Get description, taking first line only
-        desc = pkg.metadata.get('description', pkg.metadata.get('title', pkg.name))
+        desc = pkg.metadata.get('description', pkg.metadata.get('title', ''))
+        if not desc:
+            # Fallback for variants
+            desc = getattr(pkg, 'description', '')
+        # Use package_name for variants, name for others
+        pkg_name = getattr(pkg, 'package_name', None) or pkg.name
+        if not desc:
+            desc = pkg_name
         if desc:
             desc = desc.strip().split('\n')[0]
 
+        # For variants, origin is the source package name
+        origin = getattr(pkg, 'source_name', None) or pkg_name
+
         metadata = {
-            'name': pkg.name,
+            'name': pkg_name,
             'version': version,
             'description': desc,
             'url': pkg.metadata.get('url', ''),
             'arch': arch,
             'license': pkg.license or 'unknown',
-            'origin': pkg.name,
+            'origin': origin,
         }
 
         # Note: dependencies and provides are handled separately in create_package

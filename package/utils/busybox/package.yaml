@@ -27,6 +27,10 @@ dependencies:
   runtime: []
   build: []
 
+# Cannot be installed alongside SELinux variant
+conflicts:
+  - busybox-selinux
+
 build:
   system: custom
   parallel: true

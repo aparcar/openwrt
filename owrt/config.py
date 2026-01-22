@@ -439,6 +439,126 @@ class Config:
         return cls(data, target_file.parent)
 
 
+class VariantConfig:
+    """Configuration for a package variant (e.g., different SSL backends).
+    
+    Variants allow building the same source with different dependencies
+    and build options. For example, ustream-ssl can be built with mbedtls,
+    openssl, or wolfssl backends.
+    """
+
+    def __init__(self, name: str, data: Dict[str, Any], parent: 'PackageConfig'):
+        self.name = name
+        self.parent = parent
+        self._data = data
+
+        # Variant-specific package name (e.g., "libustream-mbedtls")
+        self.package_name = data.get('package_name', f"{parent.name}-{name}")
+        
+        # Whether this is the default variant
+        self.default: bool = data.get('default', False)
+        
+        # Variant-specific description
+        self.description = data.get('description', f"{parent.name} ({name})")
+        
+        # Variant-specific dependencies (merged with parent's)
+        self._dependencies = data.get('dependencies', {})
+        
+        # Conflicts with other variants
+        self.conflicts: List[str] = data.get('conflicts', [])
+        
+        # Replaces (for package migration)
+        self.replaces: List[str] = data.get('replaces', [])
+        
+        # Variant-specific build options
+        self.configure_args: List[str] = data.get('configure_args', [])
+        self.cmake_options: List[str] = data.get('cmake_options', [])
+        self.meson_options: List[str] = data.get('meson_options', [])
+        self.cflags: List[str] = data.get('cflags', [])
+        self.ldflags: List[str] = data.get('ldflags', [])
+        
+        # Variant-specific install files (if different from parent)
+        self.install = data.get('install', parent.install)
+
+    @property
+    def version(self) -> str:
+        return self.parent.version
+
+    @property
+    def release(self) -> int:
+        return self.parent.release
+
+    @property
+    def license(self) -> str:
+        return self.parent.license
+
+    @property
+    def pkg_dir(self) -> Path:
+        return self.parent.pkg_dir
+
+    @property
+    def source(self) -> Dict[str, Any]:
+        return self.parent.source
+
+    @property
+    def build(self) -> Dict[str, Any]:
+        """Get build config merged with variant-specific options."""
+        build = dict(self.parent.build)
+        
+        # Merge configure_args
+        if self.configure_args:
+            existing = build.get('configure_args', [])
+            build['configure_args'] = existing + self.configure_args
+        
+        # Merge cmake_options
+        if self.cmake_options:
+            existing = build.get('cmake_options', [])
+            build['cmake_options'] = existing + self.cmake_options
+            
+        # Merge meson_options
+        if self.meson_options:
+            existing = build.get('meson_options', [])
+            build['meson_options'] = existing + self.meson_options
+        
+        return build
+
+    @property
+    def runtime_deps(self) -> List[str]:
+        """Get runtime dependencies (parent + variant-specific)."""
+        parent_deps = self.parent.dependencies.get('runtime', [])
+        variant_deps = self._dependencies.get('runtime', [])
+        return parent_deps + variant_deps
+
+    @property
+    def build_deps(self) -> List[str]:
+        """Get build dependencies (parent + variant-specific)."""
+        parent_deps = self.parent.dependencies.get('build', [])
+        variant_deps = self._dependencies.get('build', [])
+        return parent_deps + variant_deps
+
+    @property
+    def build_system(self) -> str:
+        return self.parent.build_system
+
+    @property
+    def source_name(self) -> str:
+        """Get the source package name (for build tracking)."""
+        return self.parent.name
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Get metadata with variant description."""
+        meta = dict(self.parent.metadata)
+        meta['description'] = self.description
+        return meta
+
+    def add_variable(self, name: str, value: str):
+        self.parent.add_variable(name, value)
+
+    def expand(self, s: str) -> str:
+        return self.parent.expand(s)
+
+
 class SubpackageConfig:
     """Configuration for a subpackage within a source package."""
 
@@ -588,6 +708,39 @@ class PackageConfig:
                 # Register in class-level registry
                 PackageConfig._subpackage_registry[subpkg_name] = subpkg
 
+        # Parse variants (different build configurations, e.g., SSL backends)
+        self._variants: Dict[str, VariantConfig] = {}
+        self._default_variant: Optional[str] = None
+        variant_data = data.get('variants', {})
+        if isinstance(variant_data, dict):
+            for variant_name, variant_info in variant_data.items():
+                variant = VariantConfig(variant_name, variant_info, self)
+                self._variants[variant_name] = variant
+                # Register variant's package_name in subpackage registry for lookup
+                PackageConfig._subpackage_registry[variant.package_name] = variant
+                if variant.default:
+                    self._default_variant = variant_name
+
+    @property
+    def variants(self) -> Dict[str, VariantConfig]:
+        """Get all variants."""
+        return self._variants
+
+    @property
+    def has_variants(self) -> bool:
+        """Check if this package defines variants."""
+        return len(self._variants) > 0
+
+    def get_variant(self, name: str) -> Optional[VariantConfig]:
+        """Get a specific variant by name."""
+        return self._variants.get(name)
+
+    def get_default_variant(self) -> Optional[VariantConfig]:
+        """Get the default variant, if any."""
+        if self._default_variant:
+            return self._variants.get(self._default_variant)
+        return None
+
     @property
     def subpackages(self) -> Dict[str, SubpackageConfig]:
         """Get all subpackages."""
@@ -666,16 +819,16 @@ class PackageConfig:
 
     @classmethod
     def find_package(cls, name: str) -> Optional['PackageConfig']:
-        """Find and load a package or subpackage by name.
+        """Find and load a package, subpackage, or variant by name.
 
-        If a source package has subpackages, returns the subpackage if one
-        matches the requested name (even if the source has the same name).
+        If a source package has subpackages or variants, returns the appropriate
+        config if one matches the requested name.
 
         Searches the package/ directory tree for package.yaml files.
         """
         root_dir = Path(__file__).parent.parent
 
-        # Check if already in subpackage registry
+        # Check if already in subpackage/variant registry
         if name in cls._subpackage_registry:
             return cls._subpackage_registry[name]
 
@@ -719,6 +872,12 @@ class PackageConfig:
                     # Check subpackages
                     if name in pkg.subpackages:
                         return pkg.subpackages[name]
+
+                    # Check variants by their package_name
+                    if pkg.has_variants:
+                        for variant in pkg.variants.values():
+                            if variant.package_name == name:
+                                return variant
                 except Exception:
                     pass
 
