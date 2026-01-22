@@ -1,1 +1,0 @@
-savedcmd_/openwrt/package/kernel/gpio-button-hotplug/src/gpio-button-hotplug.mod := printf '%s\n'   gpio-button-hotplug.o | awk '!x[$$0]++ { print("/openwrt/package/kernel/gpio-button-hotplug/src/"$$0) }' > /openwrt/package/kernel/gpio-button-hotplug/src/gpio-button-hotplug.mod

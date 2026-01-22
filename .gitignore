@@ -39,6 +39,14 @@ git-src
 /build/
 /output/
 
+# Kernel module build artifacts
+*.ko
+*.mod
+*.mod.c
+Module.symvers
+modules.order
+.*.cmd
+
 # Python
 __pycache__/
 *.py[cod]
@@ -65,6 +73,10 @@ venv/
 *.tmp
 *.temp
 *.log
+
+# Test coverage
+.coverage
+htmlcov/
 # Build artifacts (legacy poc location)
 poc/build/
 poc/output/

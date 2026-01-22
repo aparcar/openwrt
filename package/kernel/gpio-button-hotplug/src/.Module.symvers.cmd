@@ -1,1 +1,0 @@
-savedcmd_/openwrt/package/kernel/gpio-button-hotplug/src/Module.symvers :=  scripts/mod/modpost -M   -E     -o /openwrt/package/kernel/gpio-button-hotplug/src/Module.symvers -T /openwrt/package/kernel/gpio-button-hotplug/src/modules.order -i Module.symvers -e 
