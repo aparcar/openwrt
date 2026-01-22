@@ -1,0 +1,50 @@
+# px5g-wolfssl - X.509 certificate generator using wolfssl
+# Synced with OpenWrt package/utils/px5g-wolfssl/Makefile
+
+name: px5g-wolfssl
+version: "1"
+release: 9
+license: GPL-2.0-or-later
+
+# No external source - uses local px5g-wolfssl.c
+source:
+  type: local
+
+metadata:
+  section: utils
+  category: Utilities
+  submenu: Encryption
+  title: X.509 certificate generator (using WolfSSL)
+  description: |
+    Px5g is a tiny X.509 certificate generator.
+    It suitable to create key files and certificates in DER
+    and PEM format for use with stunnel, uhttpd and others.
+  maintainer: Paul Spooren <mail@aparcar.org>
+
+dependencies:
+  runtime:
+    - libwolfssl
+  build:
+    - libwolfssl-dev
+
+provides:
+  - px5g
+
+conflicts:
+  - px5g-mbedtls
+  - px5g-standalone
+
+build:
+  system: custom
+  parallel: false
+  commands:
+    compile: |
+      ${CC} ${CPPFLAGS} ${CFLAGS} -Wl,--gc-sections \
+        -o px5g ${pkg_dir}/px5g-wolfssl.c \
+        ${LDFLAGS} -lwolfssl
+
+install:
+  files:
+    - src: "${build_dir}/px5g"
+      dst: "/usr/sbin/px5g"
+      mode: "0755"

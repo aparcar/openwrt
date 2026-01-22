@@ -1,0 +1,63 @@
+# tcpdump - Network monitoring and data acquisition tool
+# Synced with OpenWrt package/network/utils/tcpdump/Makefile
+
+name: tcpdump
+version: "4.99.5"
+release: 1
+license: BSD-3-Clause
+
+source:
+  type: tarball
+  url: "https://www.tcpdump.org/release/tcpdump-4.99.5.tar.gz"
+  sha256: "8c75856e00addeeadf70dad67c9ff3dd368536b2b8563abf6854d7c764cd3adb"
+
+metadata:
+  section: net
+  category: Network
+  title: Network monitoring and data acquisition tool
+  description: |
+    tcpdump is a command-line network traffic analyzer.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+  url: https://www.tcpdump.org/
+
+dependencies:
+  runtime:
+    - libpcap
+  build:
+    - libpcap
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--without-cap-ng"
+    - "--without-crypto"
+
+# Two variants: full and mini
+variants:
+  full:
+    package_name: tcpdump
+    description: "Network monitoring and data acquisition tool"
+    default: true
+    conflicts:
+      - tcpdump-mini
+
+  mini:
+    package_name: tcpdump-mini
+    description: "Network monitoring and data acquisition tool (minimal version)"
+    provides:
+      - tcpdump
+    conflicts:
+      - tcpdump
+    cflags:
+      - "-DTCPDUMP_MINI"
+    configure_args:
+      - "--disable-smb"
+    make_args:
+      - "TCPDUMP_MINI=1"
+
+install:
+  files:
+    - src: "usr/bin/tcpdump"
+      dst: "/usr/bin/tcpdump"
+      mode: "0755"

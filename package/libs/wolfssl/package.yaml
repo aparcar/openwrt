@@ -1,0 +1,134 @@
+# wolfssl - SSL library optimized for embedded systems
+# Synced with OpenWrt package/libs/wolfssl/Makefile
+
+name: wolfssl
+version: "5.8.4"
+release: 1
+license: GPL-3.0-or-later
+
+source:
+  type: tarball
+  url: "https://github.com/wolfSSL/wolfssl/archive/v5.8.4-stable.tar.gz"
+  sha256: "2b702b7a66b0067bfd284408827b1e59288b357b0dd758d0089c062395f2a522"
+
+metadata:
+  section: libs
+  category: Libraries
+  submenu: SSL
+  title: wolfSSL Library
+  description: |
+    wolfSSL (formerly CyaSSL) is an SSL library optimized for small
+    footprint, both on disk and for memory use.
+  maintainer: Eneas U de Queiroz <cotequeiroz@gmail.com>
+  url: https://www.wolfssl.com/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: autotools
+  parallel: true
+  # Disable NLS
+  extra_cflags: "-fomit-frame-pointer -DFP_MAX_BITS=8192"
+  configure_args:
+    - "--enable-reproducible-build"
+    - "--enable-lighty"
+    - "--enable-opensslall"
+    - "--enable-opensslextra"
+    - "--enable-sni"
+    - "--enable-stunnel"
+    - "--enable-altcertchains"
+    - "--disable-crypttests"
+    - "--disable-examples"
+    - "--disable-jobserver"
+    # Default feature set (most common options enabled)
+    - "--enable-aesccm"
+    - "--enable-certgen"
+    - "--enable-chacha"
+    - "--enable-poly1305"
+    - "--enable-dh"
+    - "--enable-arc4"
+    - "--enable-tlsv10"
+    - "--enable-tls13"
+    - "--enable-session-ticket"
+    - "--disable-dtls"
+    - "--enable-curve25519"
+    - "--disable-curve448"
+    - "--enable-openvpn"
+    # OCSP support
+    - "--enable-ocsp"
+    - "--enable-ocspstapling"
+    - "--enable-ocspstapling2"
+    # wpa_supplicant support
+    - "--enable-wpas"
+    - "--enable-fortress"
+    - "--enable-fastmath"
+
+# Variants for different hardware acceleration options
+variants:
+  regular:
+    package_name: libwolfssl
+    description: "wolfSSL library"
+    default: true
+    provides:
+      - libcyassl
+      - libssl
+    conflicts:
+      - libwolfsslcpu-crypto
+
+  cpu-crypto:
+    package_name: libwolfsslcpu-crypto
+    description: "wolfSSL library with AES CPU instructions"
+    provides:
+      - libwolfssl
+      - libcyassl
+      - libssl
+    conflicts:
+      - libwolfssl
+    # This variant uses CPU crypto instructions (Intel AESNI or ARMv8 Crypto Extension)
+    configure_args:
+      # For aarch64: --enable-armasm with -mcpu=...+crypto
+      # For x86_64: --enable-intelasm
+      - "--enable-armasm"
+    cflags:
+      # Add crypto extension flag for ARM
+      - "-march=armv8-a+crypto"
+
+subpackages:
+  libwolfssl-dev:
+    description: "wolfSSL development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libwolfssl
+    files:
+      - src: "usr/include/wolfssl/*.h"
+        dst: "/usr/include/wolfssl/"
+      - src: "usr/include/cyassl/*.h"
+        dst: "/usr/include/cyassl/"
+      - src: "usr/lib/libwolfssl.la"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libwolfssl.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/pkgconfig/wolfssl.pc"
+        dst: "/usr/lib/pkgconfig/"
+
+  wolfssl-benchmark:
+    description: "wolfSSL Benchmark Utility"
+    section: utils
+    dependencies:
+      runtime:
+        - libwolfssl
+    build:
+      configure_args:
+        - "--enable-crypttests"
+    files:
+      - src: "wolfcrypt/benchmark/.libs/benchmark"
+        dst: "/usr/bin/wolfssl-benchmark"
+        mode: "0755"
+
+install:
+  files:
+    - src: "usr/lib/libwolfssl.so*"
+      dst: "/usr/lib/"

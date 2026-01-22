@@ -1,0 +1,50 @@
+# px5g-mbedtls - X.509 certificate generator using mbedtls
+# Synced with OpenWrt package/utils/px5g-mbedtls/Makefile
+
+name: px5g-mbedtls
+version: "1"
+release: 11
+license: LGPL-2.1
+
+# No external source - uses local px5g-mbedtls.c
+source:
+  type: local
+
+metadata:
+  section: utils
+  category: Utilities
+  submenu: Encryption
+  title: X.509 certificate generator (using mbedtls)
+  description: |
+    Px5g is a tiny standalone X.509 certificate generator.
+    It suitable to create key files and certificates in DER
+    and PEM format for use with stunnel, uhttpd and others.
+  maintainer: Jo-Philipp Wich <jo@mein.io>
+
+dependencies:
+  runtime:
+    - libmbedtls
+  build:
+    - libmbedtls-dev
+
+provides:
+  - px5g
+
+conflicts:
+  - px5g-wolfssl
+  - px5g-standalone
+
+build:
+  system: custom
+  parallel: false
+  commands:
+    compile: |
+      ${CC} ${CPPFLAGS} ${CFLAGS} -Wl,--gc-sections -Wall -Werror \
+        -o px5g ${pkg_dir}/px5g-mbedtls.c \
+        ${LDFLAGS} -lmbedtls -lmbedx509 -lmbedcrypto
+
+install:
+  files:
+    - src: "${build_dir}/px5g"
+      dst: "/usr/sbin/px5g"
+      mode: "0755"

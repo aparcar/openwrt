@@ -1,0 +1,238 @@
+# ppp - Point-to-Point Protocol daemon
+# Synced with OpenWrt package/network/services/ppp/Makefile
+
+name: ppp
+version: "2.5.2"
+release: 2
+license: BSD-4-Clause
+
+source:
+  type: git
+  url: "https://github.com/ppp-project/ppp"
+  version: "9f612dc02c34509f062ed63b60bcc7e937e25178"
+  sha256: "381668ce1547afeaf599f08ae37935bfd3d5841747c62bca5a870c11e3e9bedb"
+
+metadata:
+  section: net
+  category: Network
+  title: PPP daemon
+  description: |
+    This package contains the PPP (Point-to-Point Protocol) daemon.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+  url: https://ppp.samba.org/
+
+dependencies:
+  runtime:
+    - kmod-ppp
+  build:
+    - libpcap
+
+build:
+  system: autotools
+  parallel: true
+  fixup: autoreconf
+  configure_args:
+    - "--disable-cbcp"
+    - "--disable-eaptls"
+    - "--disable-mslanman"
+    - "--disable-openssl-engine"
+    - "--disable-peap"
+    - "--disable-systemd"
+    - "--enable-ipv6cp"
+    - "--enable-microsoft-extensions"
+    - "--enable-plugins"
+    - "--with-atm"
+    - "--with-static-pcap"
+    - "--without-openssl"
+    - "--without-pam"
+    - "--without-pcap"
+    - "--without-srp"
+
+conffiles:
+  - /etc/ppp/chap-secrets
+  - /etc/ppp/filter
+  - /etc/ppp/ip-down
+  - /etc/ppp/ip-up
+  - /etc/ppp/ipv6-down
+  - /etc/ppp/ipv6-up
+  - /etc/ppp/options
+
+# Two variants: default and multilink
+variants:
+  default:
+    package_name: ppp
+    description: "PPP daemon"
+    default: true
+    conflicts:
+      - ppp-multilink
+
+  multilink:
+    package_name: ppp-multilink
+    description: "PPP daemon (with multilink support)"
+    provides:
+      - ppp
+    conflicts:
+      - ppp
+    configure_args:
+      - "--enable-multilink"
+
+subpackages:
+  ppp-dev:
+    description: "PPP development files"
+    section: devel
+    files:
+      - src: "usr/include/pppd/*.h"
+        dst: "/usr/include/pppd/"
+      - src: "usr/lib/pkgconfig/pppd.pc"
+        dst: "/usr/lib/pkgconfig/"
+
+  ppp-mod-pppoa:
+    description: "PPPoA plugin"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+        - linux-atm
+        - kmod-pppoa
+    files:
+      - src: "usr/lib/pppd/2.5.2/pppoatm.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+
+  ppp-mod-pppoe:
+    description: "PPPoE plugin"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+        - kmod-pppoe
+    files:
+      - src: "usr/lib/pppd/2.5.2/pppoe.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+
+  ppp-mod-radius:
+    description: "RADIUS plugin"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+    conffiles:
+      - /etc/ppp/radius.conf
+      - /etc/ppp/radius/
+    files:
+      - src: "usr/lib/pppd/2.5.2/radius.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+      - src: "${pkg_dir}/files/etc/ppp/radius.conf"
+        dst: "/etc/ppp/"
+      - src: "${pkg_dir}/files/etc/ppp/radius/"
+        dst: "/etc/ppp/radius/"
+
+  ppp-mod-pppol2tp:
+    description: "PPPoL2TP plugin"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+        - kmod-pppol2tp
+    files:
+      - src: "usr/lib/pppd/2.5.2/pppol2tp.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+
+  ppp-mod-pptp:
+    description: "PPtP plugin"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+        - kmod-pptp
+        - kmod-mppe
+        - resolveip
+    files:
+      - src: "usr/lib/pppd/2.5.2/pptp.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+      - src: "${pkg_dir}/files/etc/ppp/options.pptp"
+        dst: "/etc/ppp/"
+
+  ppp-mod-passwordfd:
+    description: "PAP/CHAP secret from filedescriptor"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+    files:
+      - src: "usr/lib/pppd/2.5.2/passwordfd.so"
+        dst: "/usr/lib/pppd/2.5.2/"
+
+  chat:
+    description: "Establish conversation with a modem"
+    section: net
+    files:
+      - src: "usr/sbin/chat"
+        dst: "/usr/sbin/chat"
+        mode: "0755"
+
+  pppdump:
+    description: "Read PPP record file"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+    files:
+      - src: "usr/sbin/pppdump"
+        dst: "/usr/sbin/pppdump"
+        mode: "0755"
+
+  pppstats:
+    description: "Report PPP statistics"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+    files:
+      - src: "usr/sbin/pppstats"
+        dst: "/usr/sbin/pppstats"
+        mode: "0755"
+
+  pppoe-discovery:
+    description: "Perform a PPPoE-discovery process"
+    section: net
+    dependencies:
+      runtime:
+        - ppp
+        - ppp-mod-pppoe
+    files:
+      - src: "usr/sbin/pppoe-discovery"
+        dst: "/usr/sbin/pppoe-discovery"
+        mode: "0755"
+
+install:
+  files:
+    - src: "usr/sbin/pppd"
+      dst: "/usr/sbin/pppd"
+      mode: "0755"
+    - src: "${pkg_dir}/files/etc/ppp/chap-secrets"
+      dst: "/etc/ppp/chap-secrets"
+      mode: "0600"
+    - src: "${pkg_dir}/files/etc/ppp/filter"
+      dst: "/etc/ppp/filter"
+    - src: "${pkg_dir}/files/etc/ppp/options"
+      dst: "/etc/ppp/options"
+    - src: "${pkg_dir}/files/ppp.sh"
+      dst: "/lib/netifd/proto/ppp.sh"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/netifd/ppp-up"
+      dst: "/lib/netifd/ppp-up"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/netifd/ppp6-up"
+      dst: "/lib/netifd/ppp6-up"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/netifd/ppp-down"
+      dst: "/lib/netifd/ppp-down"
+      mode: "0755"
+  # Create plugin directory
+  dirs:
+    - path: "/usr/lib/pppd/2.5.2"
+      mode: "0755"
+  # Symlink for resolv.conf
+  symlinks:
+    - src: "/tmp/resolv.conf.ppp"
+      dst: "/etc/ppp/resolv.conf"

@@ -1,0 +1,68 @@
+# ethtool - Display or change ethernet card settings
+# Synced with OpenWrt package/network/utils/ethtool/Makefile
+
+name: ethtool
+version: "6.15"
+release: 1
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://mirrors.edge.kernel.org/pub/software/network/ethtool/ethtool-6.15.tar.xz"
+  sha256: "9477c365114d910120aaec5336a1d16196c833d8486f7c6da67bedef57880ade"
+
+metadata:
+  section: net
+  category: Network
+  title: Display or change ethernet card settings
+  description: |
+    ethtool is a small utility for examining and tuning your ethernet-based
+    network interface.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+  url: https://www.kernel.org/pub/software/network/ethtool/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: autotools
+  parallel: true
+  fixup: autoreconf
+  configure_args:
+    # Enable support for input_xfrm with kernels newer than 6.6
+    - "--enable-rss-input-xfrm"
+
+# Two variants: tiny (default) and full (with netlink support)
+variants:
+  tiny:
+    package_name: ethtool
+    description: "Display or change ethernet card settings"
+    default: true
+    configure_args:
+      - "--disable-netlink"
+      - "--disable-pretty-dump"
+    conflicts:
+      - ethtool-full
+
+  full:
+    package_name: ethtool-full
+    description: "Display or change ethernet card settings (full)"
+    provides:
+      - ethtool
+    dependencies:
+      runtime:
+        - libmnl
+      build:
+        - libmnl-dev
+    configure_args:
+      - "--enable-netlink"
+      - "--enable-pretty-dump"
+    conflicts:
+      - ethtool
+
+install:
+  files:
+    - src: "ethtool"
+      dst: "/usr/sbin/ethtool"
+      mode: "0755"
