@@ -466,6 +466,14 @@ class SubpackageConfig:
         self.provides: List[str] = data.get('provides', [])
         self.default_variant: bool = data.get('default_variant', False)
 
+        # Conflicts - packages that cannot be installed alongside this one
+        # In APK, conflicts are expressed as !pkgname in the depends field
+        self.conflicts: List[str] = data.get('conflicts', [])
+
+        # Replaces - packages whose files this package can take over
+        # Used for package renames or splitting packages
+        self.replaces: List[str] = data.get('replaces', [])
+
         # User/group creation (format: "user=uid:group=gid" or ":group=gid")
         self.userid: List[str] = data.get('userid', [])
 
@@ -551,6 +559,14 @@ class PackageConfig:
         # Virtual package support
         self.provides: List[str] = data.get('provides', [])
         self.default_variant: bool = data.get('default_variant', False)
+
+        # Conflicts - packages that cannot be installed alongside this one
+        # In APK, conflicts are expressed as !pkgname in the depends field
+        self.conflicts: List[str] = data.get('conflicts', [])
+
+        # Replaces - packages whose files this package can take over
+        # Used for package renames or splitting packages
+        self.replaces: List[str] = data.get('replaces', [])
 
         # User/group creation (format: "user=uid:group=gid" or ":group=gid")
         self.userid: List[str] = data.get('userid', [])

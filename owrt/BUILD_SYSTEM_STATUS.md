@@ -192,8 +192,8 @@ owrt/
 
 - [ ] **Package YAML schema enhancements**
   - [x] `provides` field for virtual packages
-  - [ ] `conflicts` field
-  - [ ] `replaces` field
+  - [x] `conflicts` field (expressed as !pkgname in APK depends)
+  - [x] `replaces` field for package renames/file takeover
   - [x] `alternatives` for busybox-style symlinks (format: `PRIORITY:TARGET:SOURCE`)
   - [ ] `menu` field for grouping in menuconfig
   - [ ] `kconfig` field for kernel dependencies

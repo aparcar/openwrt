@@ -174,13 +174,24 @@ class APKPackager:
                     cmd.extend(['--info', f'{key}:{value}'])
 
             # Add dependencies as space-separated list (APK v3 format)
-            if pkg.runtime_deps:
-                cmd.extend(['--info', f'depends:{" ".join(pkg.runtime_deps)}'])
+            # Conflicts are expressed as !pkgname in the depends field (APK convention)
+            deps = list(pkg.runtime_deps) if pkg.runtime_deps else []
+            conflicts = getattr(pkg, 'conflicts', [])
+            if conflicts:
+                deps.extend([f'!{c}' for c in conflicts])
+            if deps:
+                cmd.extend(['--info', f'depends:{" ".join(deps)}'])
 
             # Add provides as space-separated list
             provides = getattr(pkg, 'provides', [])
             if provides:
                 cmd.extend(['--info', f'provides:{" ".join(provides)}'])
+
+            # Add replaces as space-separated list
+            # Used for package renames or when this package takes over files from another
+            replaces = getattr(pkg, 'replaces', [])
+            if replaces:
+                cmd.extend(['--info', f'replaces:{" ".join(replaces)}'])
 
             # Add install scripts
             # Scripts are defined in package.yaml under 'scripts' section
