@@ -701,6 +701,8 @@ class APKRootfs:
             ('bin/sh', 'busybox'),
             ('bin/ash', 'busybox'),
             ('sbin/init', '../bin/busybox'),
+            # /init symlink for initramfs boot (kernel looks for /init first)
+            ('init', '/sbin/init'),
         ]
 
         for link, target in symlinks:
