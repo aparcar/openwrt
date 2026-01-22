@@ -194,6 +194,47 @@ class KernelModulePackager:
         # Cache of built-in module paths (from modules.builtin)
         self._builtin_modules: Set[str] = set()
 
+        # Toolchain path for stripping
+        self._toolchain_bin = self.config.toolchain_dir / 'bin'
+        self._cross_prefix = self.config.target_tuple
+
+    def strip_module(self, module_path: Path) -> bool:
+        """
+        Strip a kernel module to remove debug info and reduce size.
+
+        Uses objcopy to remove debug sections, similar to OpenWrt's strip-kmod.sh.
+        This can reduce module size by 90%+ (e.g., mac80211.ko from 31MB to ~2MB).
+        """
+        objcopy = self._toolchain_bin / f'{self._cross_prefix}-objcopy'
+        if not objcopy.exists():
+            if self.verbose:
+                print(f"    Warning: objcopy not found at {objcopy}, skipping strip")
+            return False
+
+        try:
+            # Use objcopy to strip debug info and unnecessary sections
+            # Based on OpenWrt's scripts/strip-kmod.sh
+            cmd = [
+                str(objcopy),
+                '-R', '.comment',
+                '-R', '.note.GNU-stack',
+                '-R', '.note.gnu.build-id',
+                '-x',  # Remove all non-global symbols
+                '-G', '__this_module',  # Keep only __this_module global
+                '--strip-unneeded',
+                str(module_path),
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                if self.verbose:
+                    print(f"    Warning: Failed to strip {module_path.name}: {result.stderr}")
+                return False
+            return True
+        except Exception as e:
+            if self.verbose:
+                print(f"    Warning: Error stripping {module_path.name}: {e}")
+            return False
+
     def discover_built_modules(self) -> Dict[str, Path]:
         """Discover all built kernel modules (.ko files)."""
         if self._built_modules:
@@ -527,6 +568,8 @@ class KernelModulePackager:
                 dest_path = modules_install_dir / ko_rel_path
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ko_src_path, dest_path)
+                # Strip debug info to reduce size (31MB -> ~2MB for mac80211)
+                self.strip_module(dest_path)
 
             # Create autoload config with priority (only for actual modules)
             # /etc/modules.d/<priority>-<module_name>

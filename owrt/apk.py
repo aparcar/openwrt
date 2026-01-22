@@ -63,6 +63,67 @@ class APKPackager:
         """Check if apk binary is available."""
         return self.apk_binary is not None and self.apk_binary.exists()
 
+    def strip_binaries(self, directory: Path) -> int:
+        """
+        Strip ELF binaries and shared libraries in a directory tree.
+
+        Uses the cross-compiler's strip tool to remove debug symbols and
+        unnecessary sections, significantly reducing binary sizes.
+
+        Args:
+            directory: Root directory to recursively search for binaries
+
+        Returns:
+            Number of files stripped
+        """
+        if not directory.exists():
+            return 0
+
+        # Get cross-strip binary
+        toolchain_bin = self.config.toolchain_dir / 'bin'
+        strip_binary = toolchain_bin / f'{self.config.target_tuple}-strip'
+        if not strip_binary.exists():
+            if self.verbose:
+                print(f"    Warning: strip not found at {strip_binary}, skipping")
+            return 0
+
+        stripped_count = 0
+
+        # Find all regular files and check if they're ELF binaries
+        for filepath in directory.rglob('*'):
+            if not filepath.is_file() or filepath.is_symlink():
+                continue
+
+            # Skip kernel modules (handled separately in kmod.py)
+            if filepath.suffix == '.ko':
+                continue
+
+            # Check if file is an ELF binary by reading magic bytes
+            try:
+                with open(filepath, 'rb') as f:
+                    magic = f.read(4)
+                    if magic != b'\x7fELF':
+                        continue
+            except (IOError, PermissionError):
+                continue
+
+            # Strip the binary
+            try:
+                result = subprocess.run(
+                    [str(strip_binary), '--strip-unneeded', str(filepath)],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    stripped_count += 1
+                elif self.verbose:
+                    print(f"    Warning: Failed to strip {filepath.name}: {result.stderr}")
+            except Exception as e:
+                if self.verbose:
+                    print(f"    Warning: Error stripping {filepath.name}: {e}")
+
+        return stripped_count
+
     def create_package(
         self,
         pkg: PackageConfig,
@@ -99,6 +160,12 @@ class APKPackager:
 
         # Build metadata key-value pairs for apk v3 mkpkg
         metadata = self._build_metadata(pkg, arch)
+
+        # Strip binaries to reduce package size (removes debug symbols)
+        if staging_dir.exists():
+            stripped = self.strip_binaries(staging_dir)
+            if stripped > 0 and self.verbose:
+                print(f"    Stripped {stripped} binaries")
 
         try:
             # Build the command with --info KEY:VALUE pairs
