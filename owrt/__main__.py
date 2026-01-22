@@ -141,10 +141,11 @@ def toolchain_info(ctx, target):
 @click.pass_context
 def toolchain_build(ctx, target, force, dry_run):
     """Build the cross-compilation toolchain for TARGET"""
-    from owrt.docker_wrapper import should_use_docker, run_in_docker
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
 
-    # Check if we should run in Docker (use base image, not toolchain image)
-    if should_use_docker(ctx.obj) and not dry_run:
+    # All builds must run in containers - launch Docker if not already inside (skip for dry-run)
+    if not is_inside_docker() and not dry_run:
         args = ['toolchain', 'build', target]
         if force:
             args.append('-f')
@@ -421,6 +422,23 @@ def kernel():
 @click.pass_context
 def kernel_build(ctx, target, force):
     """Build the Linux kernel for TARGET"""
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
+
+    # All builds must run in containers - launch Docker if not already inside
+    if not is_inside_docker():
+        args = ['kernel', 'build', target]
+        if force:
+            args.append('-f')
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=True,  # Use toolchain image for kernel build
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     click.echo(f"Building kernel for {target}...")
 
     config = Config.load_target(target)
@@ -482,10 +500,11 @@ def kernel_modules(ctx, target):
 @click.pass_context
 def build(ctx, target, profile, packages, force):
     """Build complete firmware for TARGET"""
-    from owrt.docker_wrapper import should_use_docker, run_in_docker
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
 
-    # Check if we should run in Docker
-    if should_use_docker(ctx.obj):
+    # All builds must run in containers - launch Docker if not already inside
+    if not is_inside_docker():
         args = ['build', target, '-p', profile]
         for pkg in packages:
             args.extend(['-P', pkg])
@@ -693,10 +712,11 @@ def package(ctx, target, package_name, force, no_apk):
     Each package runs in an isolated filesystem with dependencies installed
     via APK. Packages cannot see or modify other packages' build artifacts.
     """
-    from owrt.docker_wrapper import should_use_docker, run_in_docker
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
 
-    # Check if we should run in Docker
-    if should_use_docker(ctx.obj):
+    # All builds must run in containers - launch Docker if not already inside
+    if not is_inside_docker():
         args = ['package', target, package_name]
         if force:
             args.append('-f')
@@ -835,10 +855,11 @@ def download(ctx, target, package, jobs):
 @click.pass_context
 def image(ctx, target, profile):
     """Generate firmware images for TARGET"""
-    from owrt.docker_wrapper import should_use_docker, run_in_docker
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
 
-    # Check if we should run in Docker
-    if should_use_docker(ctx.obj):
+    # All builds must run in containers - launch Docker if not already inside
+    if not is_inside_docker():
         args = ['image', target, '-p', profile]
         sys.exit(run_in_docker(
             args=args,
@@ -934,10 +955,11 @@ def ninja_generate(ctx, target, profile, packages):
 @click.pass_context
 def ninja_run(ctx, target, profile, packages, targets, force):
     """Run Ninja build for TARGET"""
-    from owrt.docker_wrapper import should_use_docker, run_in_docker
+    from owrt.docker_wrapper import run_in_docker
+    from owrt.container import is_inside_docker
 
-    # Check if we should run in Docker
-    if should_use_docker(ctx.obj):
+    # All builds must run in containers - launch Docker if not already inside
+    if not is_inside_docker():
         args = ['ninja', 'run', target, '-p', profile]
         for pkg in packages:
             args.extend(['-P', pkg])
