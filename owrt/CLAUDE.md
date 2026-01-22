@@ -265,9 +265,13 @@ STAMP_PREPARED=$(PKG_BUILD_DIR)/.prepared_$(shell $(call find_md5,${CURDIR} $(PK
 - Use `patch -p1` (strips `a/` and `b/` prefixes)
 
 ### APK v3
-- Uses `apk mkpkg` to create packages (different from v2)
+**IMPORTANT: This project ALWAYS uses APK v3 format, never v2.**
+
+Key differences from APK v2:
+- Uses `apk mkpkg` to create packages (not `apk add --build`)
 - Uses `apk extract` to view/extract package contents (not tar)
-- Uses `apk mkndx` to create repository index (not `apk index`)
+- Uses `apk mkndx` to create repository index (produces `packages.adb`, not `APKINDEX.tar.gz`)
+- Index file is `packages.adb` (v3) not `APKINDEX.tar.gz` (v2)
 - Requires PKGINFO file with specific format
 - See `apk.py` for metadata generation
 

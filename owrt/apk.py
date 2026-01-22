@@ -461,29 +461,28 @@ class APKRootfs:
             print(f"  Warning: No packages.adb found in repository")
             return self._fallback_rootfs(packages)
 
-        # Install packages
-        # --allow-untrusted needed for unsigned packages
-        # --arch specifies target architecture (not host arch)
-        # --repository points to directory containing packages.adb
-        # --no-scripts: skip postinst scripts during image build
-        #   (most OpenWrt scripts check IPKG_INSTROOT anyway)
-        # --usermode: create usermode database (no root required)
+        # Install packages using fakeroot to simulate root permissions.
+        # APK v3 requires pointing directly to packages.adb files with file:// URLs.
+        # We use --repositories-file /dev/null to disable default repo config.
+        # Post-install scripts check IPKG_INSTROOT to know they're running
+        # during image creation (not on a live system).
         arch = self.config.arch  # e.g., aarch64, arm, x86_64
+        
         cmd = [
+            'fakeroot',
             str(self.apk_binary),
             '--root', str(self.rootfs_dir),
             '--arch', arch,
             '--initdb',
-            '--usermode',
-            '--no-scripts',
             '--allow-untrusted',
             '--no-network',
+            '--repositories-file', '/dev/null',  # Disable default repos
         ]
 
-        # Add repository directories (APK expects directory containing packages.adb)
+        # Add repository index files directly (APK v3 uses packages.adb)
+        # Must use file:// URL pointing to the packages.adb file itself
         for index_file in repo_indexes:
-            repo_dir = index_file.parent
-            cmd.extend(['--repository', str(repo_dir)])
+            cmd.extend(['--repository', f'file://{index_file.resolve()}'])
 
         cmd.append('add')
         cmd.extend(packages)
