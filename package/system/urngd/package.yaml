@@ -47,6 +47,6 @@ subpackages:
       - src: "usr/sbin/urngd"
         dst: "/sbin/urngd"
         mode: "0755"
-      - src: "${pkg_dir}/files/etc/init.d/urngd"
+      - src: "${pkg_dir}/files/urngd.init"
         dst: "/etc/init.d/urngd"
         mode: "0755"
