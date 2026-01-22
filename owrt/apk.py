@@ -11,6 +11,7 @@ Based on OpenWrt's include/package-pack.mk.
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -181,32 +182,46 @@ class APKPackager:
             if provides:
                 cmd.extend(['--info', f'provides:{" ".join(provides)}'])
 
-            # Add install scripts if defined
+            # Add install scripts
             # Scripts are defined in package.yaml under 'scripts' section
             # Format: scripts: { postinst: "script content", preinst: "...", etc }
+            #
+            # All packages get a default postinst that calls default_postinst from
+            # /lib/functions.sh - this enables init.d scripts, creates alternatives,
+            # adds users/groups, etc. Custom postinst scripts can override this.
             scripts = getattr(pkg, 'scripts', None) or {}
             if not scripts:
                 # Fallback to raw data lookup for PackageConfig
                 raw_data = getattr(pkg, '_raw_data', None) or getattr(pkg, '_data', {})
                 scripts = raw_data.get('scripts', {})
-            if scripts:
-                # APK script types: pre-install, post-install, pre-deinstall, post-deinstall, trigger
-                script_type_map = {
-                    'preinst': 'pre-install',
-                    'postinst': 'post-install',
-                    'prerm': 'pre-deinstall',
-                    'postrm': 'post-deinstall',
-                    'trigger': 'trigger',
-                }
-                for script_name, script_content in scripts.items():
-                    apk_type = script_type_map.get(script_name, script_name)
-                    if script_content:
-                        # Write script to temp file and reference it
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
-                            f.write(script_content)
-                            script_file = f.name
-                        cmd.extend(['--script', f'{apk_type}:{script_file}'])
+            
+            # Add default postinst if not overridden
+            # This calls OpenWrt's default_postinst which handles:
+            # - Enabling init.d scripts via rc.common
+            # - Creating alternatives symlinks
+            # - Adding users/groups from .rusers files
+            if 'postinst' not in scripts:
+                scripts['postinst'] = '''#!/bin/sh
+[ -f "$IPKG_INSTROOT/lib/functions.sh" ] && . "$IPKG_INSTROOT/lib/functions.sh"
+type default_postinst >/dev/null 2>&1 && default_postinst "$0" "$@"
+'''
+            
+            # APK script types: pre-install, post-install, pre-deinstall, post-deinstall, trigger
+            script_type_map = {
+                'preinst': 'pre-install',
+                'postinst': 'post-install',
+                'prerm': 'pre-deinstall',
+                'postrm': 'post-deinstall',
+                'trigger': 'trigger',
+            }
+            for script_name, script_content in scripts.items():
+                apk_type = script_type_map.get(script_name, script_name)
+                if script_content:
+                    # Write script to temp file and reference it
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                        f.write(script_content)
+                        script_file = f.name
+                    cmd.extend(['--script', f'{apk_type}:{script_file}'])
 
             # Add alternatives file for busybox-style symlinks
             # Format: "PRIORITY:TARGET:SOURCE" per line (e.g., "100:/sbin/rmmod:/sbin/kmodloader")
@@ -464,13 +479,8 @@ class APKRootfs:
             return self._fallback_rootfs(packages)
 
         # Install packages using fakeroot for root permission simulation.
-        # Post-install scripts run with IPKG_INSTROOT set so they operate
-        # on the target rootfs rather than the host system.
-        #
-        # This approach is required for cross-compilation because:
-        # - Target binaries (ARM64) can't run on host (x86_64) without QEMU
-        # - Scripts must use host shell but operate on target paths
-        # - OpenWrt scripts check IPKG_INSTROOT and prefix all paths with it
+        # Use --no-scripts during APK install, then run postinst scripts
+        # manually with host bash (same approach as OpenWrt's rootfs.mk).
         #
         # APK v3 requires:
         # - --repositories-file /dev/null to disable default repos
@@ -486,7 +496,7 @@ class APKRootfs:
             '--allow-untrusted',
             '--no-network',
             '--repositories-file', '/dev/null',
-            '--no-scripts',  # Skip scripts - they can't run during cross-compilation
+            '--no-scripts',  # Don't run scripts - we'll run them manually with host bash
         ]
 
         # Add repository index files directly (APK v3 uses packages.adb)
@@ -502,8 +512,10 @@ class APKRootfs:
             run_command(cmd, verbose=self.verbose, env=env)
             print(f"  Installed {len(packages)} packages to rootfs")
             
-            # Process alternatives manually since scripts can't run
-            self._process_alternatives()
+            # Run postinst scripts manually with host bash
+            # This is how OpenWrt handles it in rootfs.mk - scripts are
+            # extracted from scripts.tar and run with IPKG_INSTROOT set
+            self._run_postinst_scripts()
         except Exception as e:
             print(f"  Warning: APK install failed: {e}")
             return self._fallback_rootfs(packages)
@@ -513,70 +525,149 @@ class APKRootfs:
 
         return self.rootfs_dir
 
-    def _process_alternatives(self):
-        """Process APK alternatives files to create symlinks.
+    def _generate_list_files(self):
+        """Generate .list files from APK installed database.
         
-        This implements the same logic as OpenWrt's update_alternatives function
-        in /lib/functions.sh. Since post-install scripts can't run during
-        cross-compilation, we process alternatives files manually.
-        
-        Alternatives file format: "PRIORITY:TARGET:SOURCE" per entry, space-separated
-        Example: "100:/sbin/rmmod:/sbin/kmodloader 100:/sbin/insmod:/sbin/kmodloader"
+        APK v3 stores file lists in lib/apk/db/installed, but default_postinst
+        expects .list files in lib/apk/packages/. We parse the installed db
+        and generate .list files so postinst scripts can find init.d entries.
         """
-        apk_packages_dir = self.rootfs_dir / 'lib' / 'apk' / 'packages'
-        if not apk_packages_dir.exists():
-            return
-
-        # Collect all alternatives from all packages
-        # Format: {target_path: [(priority, source_path, pkg_name), ...]}
-        all_alternatives: Dict[str, List[tuple]] = {}
+        installed_db = self.rootfs_dir / 'lib' / 'apk' / 'db' / 'installed'
+        packages_dir = self.rootfs_dir / 'lib' / 'apk' / 'packages'
         
-        for alt_file in apk_packages_dir.glob('*.alternatives'):
-            pkg_name = alt_file.stem
-            try:
-                content = alt_file.read_text().strip()
-                if not content:
-                    continue
-                    
-                for entry in content.split():
-                    parts = entry.split(':')
-                    if len(parts) != 3:
-                        continue
-                    priority, target, source = parts
-                    try:
-                        prio = int(priority)
-                    except ValueError:
-                        continue
-                    
-                    if target not in all_alternatives:
-                        all_alternatives[target] = []
-                    all_alternatives[target].append((prio, source, pkg_name))
-            except Exception:
-                continue
+        if not installed_db.exists():
+            return
+        
+        packages_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Parse APK v3 installed database
+        # Format: P:pkgname, F:dir, R:file (relative to current F:)
+        current_pkg = None
+        current_dir = ''
+        pkg_files = {}
+        
+        for line in installed_db.read_text().splitlines():
+            if line.startswith('P:'):
+                current_pkg = line[2:]
+                pkg_files[current_pkg] = []
+                current_dir = ''
+            elif line.startswith('F:') and current_pkg:
+                current_dir = '/' + line[2:]
+            elif line.startswith('R:') and current_pkg:
+                filepath = current_dir + '/' + line[2:]
+                pkg_files[current_pkg].append(filepath)
+        
+        # Write .list files
+        for pkgname, files in pkg_files.items():
+            if files:
+                list_file = packages_dir / f'{pkgname}.list'
+                list_file.write_text('\n'.join(files) + '\n')
 
-        # For each target, create symlink to highest priority source
-        for target, sources in all_alternatives.items():
-            if not sources:
-                continue
+    def _run_postinst_scripts(self):
+        """Run postinst scripts manually with host bash.
+        
+        APK stores scripts in lib/apk/db/scripts.tar.gz. We extract them
+        and run each *.post-install script with IPKG_INSTROOT set so
+        they operate on the target rootfs.
+        
+        This matches OpenWrt's rootfs.mk prepare_rootfs approach.
+        """
+        import gzip
+        
+        # First generate .list files so default_postinst can find init.d entries
+        self._generate_list_files()
+        
+        scripts_tar_gz = self.rootfs_dir / 'lib' / 'apk' / 'db' / 'scripts.tar.gz'
+        scripts_tar = self.rootfs_dir / 'lib' / 'apk' / 'db' / 'scripts.tar'
+        
+        if not scripts_tar_gz.exists():
+            if self.verbose:
+                print("    No scripts.tar.gz found, skipping postinst")
+            return
+        
+        # Decompress scripts.tar.gz
+        with gzip.open(scripts_tar_gz, 'rb') as f_in:
+            scripts_tar.write_bytes(f_in.read())
+        
+        # Extract post-install scripts
+        scripts_dir = self.rootfs_dir / 'lib' / 'apk' / 'db'
+        postinst_scripts = []
+        
+        with tarfile.open(scripts_tar, 'r') as tar:
+            for member in tar.getmembers():
+                if member.name.endswith('.post-install'):
+                    tar.extract(member, scripts_dir)
+                    postinst_scripts.append(scripts_dir / member.name)
+        
+        if not postinst_scripts:
+            if self.verbose:
+                print("    No post-install scripts found")
+            return
+        
+        # Run each postinst script with host bash and IPKG_INSTROOT set
+        base_env = os.environ.copy()
+        base_env['IPKG_INSTROOT'] = str(self.rootfs_dir)
+        
+        # Find bash on the host
+        bash = shutil.which('bash') or '/bin/bash'
+        
+        failed = []
+        for script in sorted(postinst_scripts):
+            # Extract package name from script filename
+            # Format: pkgname-version.X1hash.post-install
+            # e.g., dnsmasq-2.91-r2.X1cfc6d0f39f1014b467f4e59fadf81db9aacb7283.post-install
+            name = script.name
+            # Remove .post-install suffix
+            if name.endswith('.post-install'):
+                name = name[:-len('.post-install')]
+            # Remove hash part (.X1...)
+            if '.X1' in name:
+                name = name[:name.index('.X1')]
+            # Remove version (-N.N.N-rN or -N-rN)
+            # This regex matches version patterns at the end
+            match = re.match(r'^(.+?)-\d+[\d.]*-r\d+$', name)
+            if match:
+                pkgname = match.group(1)
+            else:
+                pkgname = name
             
-            # Sort by priority (highest first)
-            sources.sort(key=lambda x: x[0], reverse=True)
-            best_prio, best_source, best_pkg = sources[0]
-            
-            target_path = self.rootfs_dir / target.lstrip('/')
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Remove existing file/symlink if present
-            if target_path.exists() or target_path.is_symlink():
-                target_path.unlink()
+            env = base_env.copy()
+            env['pkgname'] = pkgname
             
             try:
-                target_path.symlink_to(best_source)
-                if self.verbose:
-                    print(f"    Alternative: {target} -> {best_source} (from {best_pkg})")
+                result = subprocess.run(
+                    [bash, str(script)],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.rootfs_dir)
+                )
+                if result.returncode != 0:
+                    failed.append((script.name, result.returncode, result.stderr))
+                elif self.verbose:
+                    print(f"    Ran: {script.name} (pkg={pkgname})")
             except Exception as e:
-                if self.verbose:
-                    print(f"    Warning: Failed to create alternative {target}: {e}")
+                failed.append((script.name, -1, str(e)))
+        
+        if failed:
+            print(f"    Warning: {len(failed)} postinst scripts failed:")
+            for name, code, err in failed[:5]:  # Show first 5 failures
+                print(f"      {name}: exit {code}")
+                if err and self.verbose:
+                    print(f"        {err[:100]}")
+        
+        # Clean up extracted scripts from tar (like OpenWrt does)
+        for script in postinst_scripts:
+            try:
+                script.unlink()
+            except Exception:
+                pass
+        
+        # Re-compress scripts.tar
+        with open(scripts_tar, 'rb') as f_in:
+            with gzip.open(scripts_tar_gz, 'wb') as f_out:
+                f_out.write(f_in.read())
+        scripts_tar.unlink()
 
     def _fallback_rootfs(self, packages: List[str]) -> Path:
         """Fallback rootfs assembly without APK (copies from staging)."""

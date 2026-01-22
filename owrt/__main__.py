@@ -702,7 +702,9 @@ def apk_index(ctx, target):
     from .apk import APKRepository
 
     config = Config.load_target(target)
-    repo_dir = config.build_dir / 'apk-repo' / config.name
+    # Use arch-based path - packages are shared across targets with same arch
+    # Structure: apk-repo/{arch}/{arch}/*.apk (APKRepository creates the nested arch dir)
+    repo_dir = config.build_dir / 'apk-repo' / config.arch
     arch_dir = repo_dir / config.arch  # APK v3 uses arch-specific subdirs
 
     if not arch_dir.exists():
