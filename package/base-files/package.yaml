@@ -104,6 +104,9 @@ install:
     - src: "${pkg_dir}/files/lib/functions/service.sh"
       dst: "/lib/functions/service.sh"
       mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/leds.sh"
+      dst: "/lib/functions/leds.sh"
+      mode: "0644"
     # Preinit scripts (sourced in order by /etc/preinit)
     - src: "${pkg_dir}/files/lib/preinit/02_default_set_state"
       dst: "/lib/preinit/02_default_set_state"
