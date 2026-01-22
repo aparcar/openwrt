@@ -513,24 +513,43 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
 
         # OpenWrt squashfs options from include/image.mk
         # LZMA_XZ_OPTIONS := -Xpreset 9 -Xe -Xlc 0 -Xlp 2 -Xpb 2
-        cmd = [
-            'mksquashfs',
-            str(self.rootfs_dir),
-            str(output),
-            '-noappend',
-            '-comp', 'xz',
-            '-Xpreset', '9',
-            '-Xe',
-            '-Xlc', '0',
-            '-Xlp', '2',
-            '-Xpb', '2',
-            '-Xbcj', bcj_filter,
-            '-b', '256K',
-            # Create device nodes (OpenWrt: -p '/dev d 755 0 0' -p '/dev/console c 600 0 0 5 1')
-            '-p', '/dev d 755 0 0',
-            '-p', '/dev/console c 600 0 0 5 1',
-            '-no-xattrs',
-        ]
+        # Use host-built mksquashfs4 which has LZMA_XZ_SUPPORT and XZ_EXTENDED_OPTIONS
+        mksquashfs = self.config.build_dir / 'host-staging' / 'bin' / 'mksquashfs4'
+        if not mksquashfs.exists():
+            # Fall back to system mksquashfs without extended options
+            print("    Warning: mksquashfs4 not found, using system mksquashfs without extended XZ options")
+            mksquashfs = 'mksquashfs'
+            cmd = [
+                str(mksquashfs),
+                str(self.rootfs_dir),
+                str(output),
+                '-noappend',
+                '-comp', 'xz',
+                '-Xbcj', bcj_filter,
+                '-b', '256K',
+                '-p', '/dev d 755 0 0',
+                '-p', '/dev/console c 600 0 0 5 1',
+                '-no-xattrs',
+            ]
+        else:
+            cmd = [
+                str(mksquashfs),
+                str(self.rootfs_dir),
+                str(output),
+                '-noappend',
+                '-comp', 'xz',
+                '-Xpreset', '9',
+                '-Xe',
+                '-Xlc', '0',
+                '-Xlp', '2',
+                '-Xpb', '2',
+                '-Xbcj', bcj_filter,
+                '-b', '256K',
+                # Create device nodes (OpenWrt: -p '/dev d 755 0 0' -p '/dev/console c 600 0 0 5 1')
+                '-p', '/dev d 755 0 0',
+                '-p', '/dev/console c 600 0 0 5 1',
+                '-no-xattrs',
+            ]
 
         try:
             run_command(cmd, verbose=self.verbose)

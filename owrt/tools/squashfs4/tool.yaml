@@ -1,0 +1,45 @@
+# squashfs4 - SquashFS tools with XZ extended options
+# Synced with OpenWrt tools/squashfs4/Makefile
+# Provides mksquashfs4 with LZMA_XZ_SUPPORT and XZ_EXTENDED_OPTIONS
+# which enable -Xpreset, -Xe, -Xlc, -Xlp, -Xpb options required by OpenWrt
+
+name: squashfs4
+version: "4.7.4"
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://github.com/plougher/squashfs-tools"
+  commit: "53e5a67aac42e0bc9ad4a249156d7d549ce7436c"
+
+metadata:
+  title: SquashFS tools
+  description: |
+    mksquashfs and unsquashfs built with XZ extended options support.
+    The extended options (-Xpreset, -Xe, -Xlc, -Xlp, -Xpb) allow fine-tuned
+    LZMA compression settings that reduce firmware image size.
+
+dependencies: []
+
+build:
+  system: custom
+  parallel: true
+  # Use patches from original OpenWrt tree
+  patch_dir: ../../../tools/squashfs4/patches
+
+  compile_script: |
+    make -j${JOBS} -C squashfs-tools \
+      LZ4_SUPPORT=0 \
+      LZO_SUPPORT=0 \
+      ZSTD_SUPPORT=0 \
+      GZIP_SUPPORT=1 \
+      XZ_SUPPORT=1 \
+      LZMA_XZ_SUPPORT=1 \
+      XZ_EXTENDED_OPTIONS=1 \
+      EXTRA_CFLAGS="-I${STAGING_DIR}/include ${CFLAGS}" \
+      mksquashfs unsquashfs
+
+  install_script: |
+    install -d ${DESTDIR}/bin
+    install -m 0755 squashfs-tools/mksquashfs ${DESTDIR}/bin/mksquashfs4
+    install -m 0755 squashfs-tools/unsquashfs ${DESTDIR}/bin/unsquashfs4
