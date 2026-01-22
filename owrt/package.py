@@ -879,12 +879,20 @@ class PackageBuilder:
         target = self.config.target_tuple
         commands = []
 
-        # Base CFLAGS for cross-compilation
-        base_cflags = '-Os -pipe -ffunction-sections -fdata-sections'
+        # Base CFLAGS for cross-compilation (include staging headers)
+        base_cflags = '-Os -pipe -I/staging/usr/include -ffunction-sections -fdata-sections'
         # Add package-specific cflags (e.g., extra include paths like libnl-tiny)
         pkg_cflags = pkg.build.get('cflags', '')
         if pkg_cflags:
             base_cflags = f'{base_cflags} {pkg_cflags}'
+
+        # LDFLAGS for linking (include staging libs)
+        # Note: CMAKE_*_LINKER_FLAGS can be overwritten by project CMakeLists.txt,
+        # so we also use CMAKE_C_STANDARD_LIBRARIES which is always appended to link commands
+        base_ldflags = '-L/staging/usr/lib -Wl,-rpath-link=/staging/usr/lib -Wl,--gc-sections'
+        shared_ldflags = f'{base_ldflags} -Wl,-Bsymbolic-functions'
+        # Standard libraries are appended to every link command and cannot be overwritten
+        standard_libs = '-L/staging/usr/lib -Wl,-rpath-link=/staging/usr/lib'
 
         # Use in-source build - run cmake from source directory
         # This matches OpenWrt's behavior and works with packages that use
@@ -892,14 +900,31 @@ class PackageBuilder:
         cmake_args = [
             'cmake', '.',  # Configure in source directory
             '-DCMAKE_SYSTEM_NAME=Linux',
+            f'-DCMAKE_SYSTEM_PROCESSOR={self.config.arch}',
             f'-DCMAKE_C_COMPILER=/toolchain/bin/{target}-gcc',
             f'-DCMAKE_CXX_COMPILER=/toolchain/bin/{target}-g++',
             '-DCMAKE_BUILD_TYPE=Release',
             '-DCMAKE_INSTALL_PREFIX=/usr',
-            '-DCMAKE_FIND_ROOT_PATH=/staging;/toolchain',  # Semicolon separates paths
+            # FIND_ROOT_PATH needs to include paths where libs are (staging/usr and toolchain/)
+            '-DCMAKE_FIND_ROOT_PATH=/staging/usr;/toolchain/',
+            '-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER',
             '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY',
             '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY',
-            f'-DCMAKE_C_FLAGS={base_cflags}',
+            # Also set CMAKE_LIBRARY_PATH explicitly for FIND_LIBRARY
+            '-DCMAKE_LIBRARY_PATH=/staging/usr/lib',
+            f'-DCMAKE_C_FLAGS:STRING={base_cflags}',
+            f'-DCMAKE_CXX_FLAGS:STRING={base_cflags}',
+            f'-DCMAKE_EXE_LINKER_FLAGS:STRING={base_ldflags}',
+            f'-DCMAKE_MODULE_LINKER_FLAGS:STRING={shared_ldflags}',
+            f'-DCMAKE_SHARED_LINKER_FLAGS:STRING={shared_ldflags}',
+            # CMAKE_C_STANDARD_LIBRARIES is appended to every C link command
+            # This ensures -L flags are present even if project overwrites LINKER_FLAGS
+            f'-DCMAKE_C_STANDARD_LIBRARIES:STRING={standard_libs}',
+            f'-DCMAKE_CXX_STANDARD_LIBRARIES:STRING={standard_libs}',
+            '-DCMAKE_PREFIX_PATH=/staging/usr',
+            '-DCMAKE_SKIP_RPATH=TRUE',
+            # Link directories - cmake 3.13+ uses LINK_DIRECTORIES with BEFORE
+            '-DCMAKE_LINK_DIRECTORIES_BEFORE=ON',
         ]
         # Add configure_args (general) and cmake_options (cmake-specific)
         cmake_args.extend(pkg.build.get('configure_args', []))
