@@ -464,35 +464,26 @@ class APKRootfs:
         # Install packages
         # --allow-untrusted needed for unsigned packages
         # --arch specifies target architecture (not host arch)
-        # --repository points directly to the packages.adb index file
-        # Use proot + fakeroot for chroot-like isolation without root:
-        # - proot: redirects filesystem paths so / points to rootfs
-        # - fakeroot: simulates root ownership for file operations
-        # This allows postinst scripts to run safely inside the target rootfs
+        # --repository points to directory containing packages.adb
+        # --no-scripts: skip postinst scripts during image build
+        #   (most OpenWrt scripts check IPKG_INSTROOT anyway)
+        # --usermode: create usermode database (no root required)
         arch = self.config.arch  # e.g., aarch64, arm, x86_64
         cmd = [
-            'proot',
-            '-0',  # Simulate root user
-            '-r', str(self.rootfs_dir),  # Set root filesystem
-            '-b', f'{self.apk_binary}:{self.apk_binary}',  # Bind apk binary
-        ]
-        # Bind repository directories so APK can read them
-        for index_file in repo_indexes:
-            repo_path = index_file.parent
-            cmd.extend(['-b', f'{repo_path}:{repo_path}'])
-        
-        cmd.extend([
             str(self.apk_binary),
-            '--root', '/',  # Root is now the proot root
+            '--root', str(self.rootfs_dir),
             '--arch', arch,
             '--initdb',
+            '--usermode',
+            '--no-scripts',
             '--allow-untrusted',
             '--no-network',
-        ])
+        ]
 
-        # Add each repository index directly
+        # Add repository directories (APK expects directory containing packages.adb)
         for index_file in repo_indexes:
-            cmd.extend(['--repository', str(index_file)])
+            repo_dir = index_file.parent
+            cmd.extend(['--repository', str(repo_dir)])
 
         cmd.append('add')
         cmd.extend(packages)

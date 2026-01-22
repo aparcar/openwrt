@@ -17,6 +17,22 @@ This is **OpenWrt-ng PoC** - a proof-of-concept modern build system for OpenWrt 
 
 After completing todos or significant features/fixes, **create a git commit** to checkpoint the work. This prevents losing progress and makes it easier to track what changed. Use the conventional commit style: `poc: <description>`.
 
+## Important: Test Before Committing
+
+Before creating a commit, always run:
+
+1. **pytest** - Run the test suite to catch regressions:
+   ```bash
+   cd owrt && pytest
+   ```
+
+2. **Build test** - Verify the build still works:
+   ```bash
+   ./build.sh firmware
+   ```
+
+Do not commit if tests fail or the build is broken.
+
 ## Important: Reference the Original Build System
 
 When facing complex problems, **always check how the original OpenWrt build system handles it**. The original system is located at `/home/aparcar/openwrt-ng/` (parent directory).
