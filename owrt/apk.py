@@ -94,10 +94,6 @@ class APKPackager:
             if not filepath.is_file() or filepath.is_symlink():
                 continue
 
-            # Skip kernel modules (handled separately in kmod.py)
-            if filepath.suffix == '.ko':
-                continue
-
             # Check if file is an ELF binary by reading magic bytes
             try:
                 with open(filepath, 'rb') as f:
