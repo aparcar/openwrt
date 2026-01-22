@@ -160,6 +160,14 @@ owrt/
 - [x] Docker volume mount for persistent cache (`build/.ccache`)
 - [x] Works with all build systems (autotools, cmake, meson, make)
 
+### 16. Docker CLI Integration (`docker_wrapper.py`)
+- [x] Automatic Docker container launching from CLI
+- [x] `--docker/--no-docker` flag for explicit control
+- [x] Auto-detection (launches Docker if available and not already inside)
+- [x] Supports `uv run owrt` on host, `python3 -m owrt` inside container
+- [x] Base image and toolchain image management
+- [x] Volume mounts for source, build, and ccache directories
+
 ---
 
 ## What's Missing (TODO List)
@@ -284,15 +292,16 @@ owrt/
 ./build.sh --ccache firmware  # Build with ccache enabled
 ```
 
-### CLI Commands
+### CLI Commands (with automatic Docker)
 ```bash
-python -m owrt info armsr-armv8
-python -m owrt toolchain build armsr-armv8
-python -m owrt kernel build armsr-armv8
-python -m owrt package armsr-armv8 busybox
-python -m owrt image mediatek-filogic --profile openwrt_one
-python -m owrt ninja generate armsr-armv8
-python -m owrt ninja run armsr-armv8
+uv run owrt info armsr-armv8              # Show target info (no Docker)
+uv run owrt build armsr-armv8             # Full build (auto-launches Docker)
+uv run owrt toolchain build armsr-armv8   # Build toolchain (auto-launches Docker)
+uv run owrt kernel build armsr-armv8      # Build kernel (auto-launches Docker)
+uv run owrt package armsr-armv8 busybox   # Build package (auto-launches Docker)
+uv run owrt image armsr-armv8             # Generate images (auto-launches Docker)
+uv run owrt ninja run armsr-armv8         # Ninja build (auto-launches Docker)
+uv run owrt --no-docker build armsr-armv8 # Force native build (no Docker)
 ```
 
 ### Output Locations

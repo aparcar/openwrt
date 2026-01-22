@@ -26,13 +26,16 @@ from owrt.tool import ToolBuilder, ToolConfig
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--jobs', '-j', default=None, type=int, help='Number of parallel jobs')
 @click.option('--ccache/--no-ccache', default=False, help='Use ccache for compilation')
+@click.option('--docker/--no-docker', default=None,
+              help='Run inside Docker container (auto-detected by default)')
 @click.pass_context
-def cli(ctx, verbose, jobs, ccache):
+def cli(ctx, verbose, jobs, ccache, docker):
     """OpenWrt Modern Build System - Proof of Concept"""
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     ctx.obj['jobs'] = jobs or os.cpu_count()
     ctx.obj['ccache'] = ccache
+    ctx.obj['docker'] = docker
 
 
 @cli.group()
@@ -138,6 +141,24 @@ def toolchain_info(ctx, target):
 @click.pass_context
 def toolchain_build(ctx, target, force, dry_run):
     """Build the cross-compilation toolchain for TARGET"""
+    from owrt.docker_wrapper import should_use_docker, run_in_docker
+
+    # Check if we should run in Docker (use base image, not toolchain image)
+    if should_use_docker(ctx.obj) and not dry_run:
+        args = ['toolchain', 'build', target]
+        if force:
+            args.append('-f')
+        if dry_run:
+            args.append('-n')
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=False,  # Use base image for building toolchain
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     config = Config.load_target(target)
     builder = ToolchainBuilder(config, verbose=ctx.obj['verbose'], jobs=ctx.obj['jobs'])
 
@@ -461,6 +482,24 @@ def kernel_modules(ctx, target):
 @click.pass_context
 def build(ctx, target, profile, packages, force):
     """Build complete firmware for TARGET"""
+    from owrt.docker_wrapper import should_use_docker, run_in_docker
+
+    # Check if we should run in Docker
+    if should_use_docker(ctx.obj):
+        args = ['build', target, '-p', profile]
+        for pkg in packages:
+            args.extend(['-P', pkg])
+        if force:
+            args.append('-f')
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=True,
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     click.echo(f"Building firmware for {target} (profile: {profile})...")
 
     config = Config.load_target(target)
@@ -654,6 +693,24 @@ def package(ctx, target, package_name, force, no_apk):
     Each package runs in an isolated filesystem with dependencies installed
     via APK. Packages cannot see or modify other packages' build artifacts.
     """
+    from owrt.docker_wrapper import should_use_docker, run_in_docker
+
+    # Check if we should run in Docker
+    if should_use_docker(ctx.obj):
+        args = ['package', target, package_name]
+        if force:
+            args.append('-f')
+        if no_apk:
+            args.append('--no-apk')
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=True,
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     click.echo(f"Building package {package_name} for {target}...")
 
     config = Config.load_target(target)
@@ -778,6 +835,20 @@ def download(ctx, target, package, jobs):
 @click.pass_context
 def image(ctx, target, profile):
     """Generate firmware images for TARGET"""
+    from owrt.docker_wrapper import should_use_docker, run_in_docker
+
+    # Check if we should run in Docker
+    if should_use_docker(ctx.obj):
+        args = ['image', target, '-p', profile]
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=True,
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     click.echo(f"Generating images for {target} (profile: {profile})...")
 
     config = Config.load_target(target)
@@ -863,6 +934,26 @@ def ninja_generate(ctx, target, profile, packages):
 @click.pass_context
 def ninja_run(ctx, target, profile, packages, targets, force):
     """Run Ninja build for TARGET"""
+    from owrt.docker_wrapper import should_use_docker, run_in_docker
+
+    # Check if we should run in Docker
+    if should_use_docker(ctx.obj):
+        args = ['ninja', 'run', target, '-p', profile]
+        for pkg in packages:
+            args.extend(['-P', pkg])
+        for t in targets:
+            args.extend(['-t', t])
+        if force:
+            args.append('-f')
+        sys.exit(run_in_docker(
+            args=args,
+            target=target,
+            use_toolchain=True,
+            verbose=ctx.obj['verbose'],
+            jobs=ctx.obj['jobs'],
+            ccache=ctx.obj['ccache'],
+        ))
+
     config = Config.load_target(target)
     verbose = ctx.obj['verbose']
     jobs = ctx.obj['jobs']
