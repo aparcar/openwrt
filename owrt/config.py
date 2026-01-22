@@ -579,8 +579,16 @@ class SubpackageConfig:
         self.description = data.get('description', '')
         self.section = data.get('section', 'base')
         self.dependencies = data.get('dependencies', {})
-        self.install = {'files': data.get('files', []), 'symlinks': data.get('symlinks', [])}
+        install_data = data.get('install', {})
+        self.install = {
+            'files': install_data.get('files', data.get('files', [])),
+            'symlinks': install_data.get('symlinks', data.get('symlinks', [])),
+            'toolchain_libs': install_data.get('toolchain_libs', []),
+        }
         self.metadata = {'description': self.description, 'section': self.section}
+        
+        # Store raw data for access to additional fields
+        self.raw_data = data
 
         # Virtual package support
         self.provides: List[str] = data.get('provides', [])

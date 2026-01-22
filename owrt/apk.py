@@ -723,13 +723,23 @@ class APKRootfs:
 
         # Create essential symlinks
         symlinks = [
-            ('lib/ld-musl-aarch64.so.1', 'libc.so'),
             ('bin/sh', 'busybox'),
             ('bin/ash', 'busybox'),
             ('sbin/init', '../bin/busybox'),
             # /init symlink for initramfs boot (kernel looks for /init first)
             ('init', '/sbin/init'),
         ]
+
+        # Check if ld-musl symlink already exists from libc package
+        # If not, create it by finding the libc.so and determining arch from toolchain
+        lib_dir = self.rootfs_dir / 'lib'
+        ld_musl_exists = any(lib_dir.glob('ld-musl-*.so.*')) if lib_dir.exists() else False
+        if not ld_musl_exists and (lib_dir / 'libc.so').exists():
+            # Find the ld-musl name from the toolchain
+            toolchain_lib = self.config.toolchain_dir / 'lib'
+            for ld_musl in toolchain_lib.glob('ld-musl-*.so.*'):
+                symlinks.append((f'lib/{ld_musl.name}', 'libc.so'))
+                break
 
         for link, target in symlinks:
             link_path = self.rootfs_dir / link

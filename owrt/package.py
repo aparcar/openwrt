@@ -170,10 +170,17 @@ class PackageBuilder:
         print(f"  Building {len(build_order)} packages: {', '.join(build_order)}")
 
         # Build each package
+        # Track APK count to know when to regenerate index
+        apk_count_before = len(self._apk_files)
         for pkg_name in build_order:
             self._build_package(pkg_name, force=force, create_apk=create_apk)
+            # Regenerate index after each package that creates APKs
+            # This ensures subsequent packages can find their dependencies
+            if create_apk and len(self._apk_files) > apk_count_before:
+                self._generate_apk_index()
+                apk_count_before = len(self._apk_files)
 
-        # Generate APK repository index
+        # Final index generation (in case any were missed)
         if create_apk and self._apk_files:
             print(f"  Creating APK repository with {len(self._apk_files)} packages...")
             self._generate_apk_index()
@@ -472,7 +479,7 @@ class PackageBuilder:
         # Get fakechroot isolation backend
         isolation = self._get_isolation()
 
-        if isolation and build_system != 'none':
+        if isolation and build_system not in ('none', 'toolchain'):
             # Build with fakechroot isolation
             self._build_with_isolation(
                 isolation, pkg, src_dir, build_dir, pkg_staging_dir, pkg_install_dir, env
@@ -491,6 +498,8 @@ class PackageBuilder:
                 self._build_kmod(pkg, src_dir, build_dir, env)
             elif build_system == 'custom':
                 self._build_custom(pkg, src_dir, build_dir, env, pkg_install_dir)
+            elif build_system == 'toolchain':
+                self._build_toolchain_package(pkg, pkg_install_dir)
             elif build_system == 'none':
                 pass  # No build needed (e.g., base-files)
             else:
@@ -1796,6 +1805,155 @@ endian = '{self.config.cpu.get("endian", "little")}'
         if install_script:
             run_command(['sh', '-c', install_script], cwd=src_dir, env=env, verbose=self.verbose)
 
+    def _build_toolchain_package(self, pkg: PackageConfig, pkg_install_dir: Path):
+        """Build a toolchain package by copying libraries from the toolchain.
+
+        This handles special packages like 'libc' and 'libgcc' that don't build
+        from source but instead copy runtime libraries from the cross-compilation
+        toolchain.
+
+        The package.yaml install.toolchain_libs field specifies glob patterns
+        for which files to copy from the toolchain's lib directory.
+        """
+        import fnmatch
+        import shutil
+
+        # Create install directories
+        lib_dir = pkg_install_dir / 'lib'
+        lib_dir.mkdir(parents=True, exist_ok=True)
+
+        toolchain_dir = self.config.toolchain_dir
+        toolchain_lib = toolchain_dir / 'lib'
+
+        # Get the list of patterns from the package config
+        # For subpackages, install is a dict with toolchain_libs key
+        # For regular packages, check raw_data
+        if hasattr(pkg, 'install') and isinstance(pkg.install, dict):
+            patterns = pkg.install.get('toolchain_libs', [])
+        else:
+            install_config = getattr(pkg, 'raw_data', {}).get('install', {})
+            patterns = install_config.get('toolchain_libs', [])
+
+        if not patterns:
+            # Fallback: if no patterns specified, skip
+            if self.verbose:
+                print(f"      No toolchain_libs patterns for {pkg.name}")
+            return
+
+        # Copy files matching each pattern
+        for pattern in patterns:
+            matched = False
+            for src_file in toolchain_lib.glob(pattern):
+                matched = True
+                if src_file.is_symlink():
+                    # Preserve symlinks
+                    dest = lib_dir / src_file.name
+                    if not dest.exists():
+                        dest.symlink_to(src_file.readlink())
+                        if self.verbose:
+                            print(f"      Created {src_file.name} -> {src_file.readlink()}")
+                elif src_file.is_file():
+                    dest = lib_dir / src_file.name
+                    shutil.copy2(src_file, dest)
+                    if self.verbose:
+                        print(f"      Copied {src_file.name}")
+
+            if not matched and self.verbose:
+                print(f"      Warning: no files matched pattern '{pattern}'")
+
+        if self.verbose:
+            print(f"      Toolchain package {pkg.name} assembled")
+
+    def _build_toolchain_subpackage(self, pkg: 'SubpackageConfig', patterns: List[str], create_apk: bool = True):
+        """Build a toolchain subpackage by copying libraries from the toolchain.
+
+        This handles subpackages like 'libc' and 'libgcc' that copy runtime
+        libraries from the cross-compilation toolchain using glob patterns.
+        """
+        import shutil
+
+        if not create_apk:
+            return
+
+        toolchain_dir = self.config.toolchain_dir
+        target_tuple = self.config.target_tuple
+
+        # Search multiple library directories in order of preference
+        # Different toolchains put libraries in different places
+        lib_search_paths = [
+            toolchain_dir / 'lib',
+            toolchain_dir / 'usr' / 'lib',
+            toolchain_dir / target_tuple / 'lib64',
+            toolchain_dir / target_tuple / 'lib',
+        ]
+
+        # Create a temporary directory for the subpackage files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_install = Path(tmpdir)
+            lib_dir = tmp_install / 'lib'
+            lib_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy files matching each pattern from toolchain
+            for pattern in patterns:
+                matched = False
+                for search_path in lib_search_paths:
+                    if not search_path.exists():
+                        continue
+                    for src_file in search_path.glob(pattern):
+                        matched = True
+                        if src_file.is_symlink():
+                            # Preserve symlinks
+                            dest = lib_dir / src_file.name
+                            if not dest.exists():
+                                dest.symlink_to(src_file.readlink())
+                                if self.verbose:
+                                    print(f"        Created {src_file.name} -> {src_file.readlink()}")
+                        elif src_file.is_file():
+                            dest = lib_dir / src_file.name
+                            shutil.copy2(src_file, dest)
+                            if self.verbose:
+                                print(f"        Copied {src_file.name}")
+
+                if not matched and self.verbose:
+                    print(f"        Warning: no files matched pattern '{pattern}'")
+
+            # Special handling for libc: create ld-musl-*.so.1 symlink if libc.so exists
+            libc_so = lib_dir / 'libc.so'
+            if libc_so.exists():
+                # Derive the ld-musl name from architecture
+                # musl uses specific arch names that may differ from our arch names
+                arch = self.config.arch
+                musl_arch_map = {
+                    'x86_64': 'x86_64',
+                    'i386': 'i386',
+                    'i686': 'i386',
+                    'aarch64': 'aarch64',
+                    'arm': 'armhf',
+                    'armeb': 'armhf',
+                    'mips': 'mips-sf',
+                    'mipsel': 'mipsel-sf',
+                    'mips64': 'mips64',
+                    'mips64el': 'mips64el',
+                    'powerpc': 'powerpc',
+                    'powerpc64': 'powerpc64',
+                    'riscv64': 'riscv64',
+                    'loongarch64': 'loongarch64',
+                }
+                musl_arch = musl_arch_map.get(arch, arch)
+                ld_musl_name = f'ld-musl-{musl_arch}.so.1'
+
+                ld_musl_link = lib_dir / ld_musl_name
+                if not ld_musl_link.exists():
+                    ld_musl_link.symlink_to('libc.so')
+                    if self.verbose:
+                        print(f"        Created {ld_musl_name} -> libc.so")
+
+            # Create APK from the temporary directory
+            self._create_apk_package(pkg, tmp_install)
+
+            if self.verbose:
+                print(f"      Toolchain subpackage {pkg.name} assembled")
+
     def _install_package(
         self,
         pkg: PackageConfig,
@@ -2046,9 +2204,19 @@ endian = '{self.config.cpu.get("endian", "little")}'
         1. Locates the parent package's ipkg-install directory
         2. Filters files according to the subpackage's 'files' specification
         3. Creates an APK containing only those files
+
+        For toolchain subpackages (libc, libgcc), files are copied from the
+        toolchain directory instead using the 'toolchain_libs' patterns.
         """
         source_name = pkg.source_name
         parent_install_dir = self.packages_dir / source_name / 'ipkg-install'
+
+        # Check if this is a toolchain subpackage
+        toolchain_libs = pkg.install.get('toolchain_libs', [])
+        if toolchain_libs:
+            # Handle toolchain subpackage - copy from toolchain instead
+            self._build_toolchain_subpackage(pkg, toolchain_libs, create_apk)
+            return
 
         if not parent_install_dir.exists():
             print(f"      Warning: Parent install dir not found: {parent_install_dir}")
