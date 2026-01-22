@@ -463,19 +463,32 @@ class APKRootfs:
 
         # Install packages
         # --allow-untrusted needed for unsigned packages
-        # --usermode needed when running as non-root (e.g., in Docker with user mapping)
         # --arch specifies target architecture (not host arch)
         # --repository points directly to the packages.adb index file
+        # Use proot + fakeroot for chroot-like isolation without root:
+        # - proot: redirects filesystem paths so / points to rootfs
+        # - fakeroot: simulates root ownership for file operations
+        # This allows postinst scripts to run safely inside the target rootfs
         arch = self.config.arch  # e.g., aarch64, arm, x86_64
         cmd = [
+            'proot',
+            '-0',  # Simulate root user
+            '-r', str(self.rootfs_dir),  # Set root filesystem
+            '-b', f'{self.apk_binary}:{self.apk_binary}',  # Bind apk binary
+        ]
+        # Bind repository directories so APK can read them
+        for index_file in repo_indexes:
+            repo_path = index_file.parent
+            cmd.extend(['-b', f'{repo_path}:{repo_path}'])
+        
+        cmd.extend([
             str(self.apk_binary),
-            '--root', str(self.rootfs_dir),
+            '--root', '/',  # Root is now the proot root
             '--arch', arch,
             '--initdb',
-            '--usermode',
             '--allow-untrusted',
             '--no-network',
-        ]
+        ])
 
         # Add each repository index directly
         for index_file in repo_indexes:

@@ -85,6 +85,7 @@ RUN apt-get update && apt-get install -y \
     # For package management and isolation
     fakeroot \
     fakechroot \
+    proot \
     # Build systems
     ninja-build \
     cmake \

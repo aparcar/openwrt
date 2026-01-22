@@ -566,8 +566,10 @@ OPENWRT_RELEASE="{distrib_id} {version} r{revision}"
 
         # Use mke2fs -d to create and populate ext4 in one step
         # This avoids needing to mount the image
+        # Wrap with fakeroot to handle file ownership in the image
         try:
             run_command([
+                'fakeroot', '--',
                 'mke2fs',
                 '-t', 'ext4',
                 '-d', str(self.rootfs_dir),  # Source directory
