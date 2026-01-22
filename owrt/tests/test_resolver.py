@@ -44,6 +44,7 @@ class TestProviderRegistry:
         config.toolchain_dir = Path('/tmp/build/toolchain/test')
         config.cross_compile = 'aarch64-openwrt-linux-musl-'
         config.toolchain = {'gcc_version': '14.3.0', 'libc': 'musl'}
+        config.features = []
         return config
 
     def test_register_providers_basic(self, mock_config, temp_packages_dir, package_with_provides):
@@ -155,6 +156,7 @@ class TestVirtualDependencyResolution:
         config.toolchain_dir = Path('/tmp/build/toolchain/test')
         config.cross_compile = 'aarch64-openwrt-linux-musl-'
         config.toolchain = {'gcc_version': '14.3.0', 'libc': 'musl'}
+        config.features = []
         return config
 
     def test_resolve_virtual_dependency(self, mock_config, temp_packages_dir, monkeypatch):

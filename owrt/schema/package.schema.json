@@ -50,7 +50,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["tarball", "git", "local", "kernel", "none"],
+          "enum": ["tarball", "git", "local", "kernel", "toolchain", "none"],
           "default": "tarball"
         },
         "url": {
@@ -157,7 +157,7 @@
       "properties": {
         "system": {
           "type": "string",
-          "enum": ["autotools", "cmake", "meson", "make", "kbuild", "kernel", "custom", "none"],
+          "enum": ["autotools", "cmake", "meson", "make", "kbuild", "kmod", "kernel", "toolchain", "uboot", "custom", "none"],
           "default": "autotools",
           "description": "Build system type"
         },
@@ -189,14 +189,18 @@
           "description": "Make install arguments"
         },
         "cflags": {
-          "type": "array",
-          "items": {"type": "string"},
-          "description": "Additional CFLAGS"
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ],
+          "description": "Additional CFLAGS (string or array)"
         },
         "ldflags": {
-          "type": "array",
-          "items": {"type": "string"},
-          "description": "Additional LDFLAGS"
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ],
+          "description": "Additional LDFLAGS (string or array)"
         },
         "env": {
           "type": "object",
@@ -244,8 +248,20 @@
         },
         "dirs": {
           "type": "array",
-          "items": {"type": "string"},
-          "description": "Directories to create"
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "properties": {
+                  "path": {"type": "string"},
+                  "mode": {"type": "string", "pattern": "^[0-7]{3,4}$"}
+                },
+                "required": ["path"]
+              }
+            ]
+          },
+          "description": "Directories to create (string paths or objects with path and mode)"
         },
         "symlinks": {
           "type": "array",
@@ -318,24 +334,122 @@
       }
     },
     "subpackages": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {"type": "string"},
-          "title": {"type": "string"},
-          "description": {"type": "string"},
-          "dependencies": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
             "type": "object",
             "properties": {
-              "runtime": {"type": "array", "items": {"type": "string"}}
-            }
-          },
-          "install": {"$ref": "#/properties/install"}
+              "name": {"type": "string"},
+              "title": {"type": "string"},
+              "description": {"type": "string"},
+              "dependencies": {
+                "type": "object",
+                "properties": {
+                  "runtime": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "install": {"$ref": "#/properties/install"}
+            },
+            "required": ["name"]
+          }
         },
-        "required": ["name"]
-      },
-      "description": "Sub-packages (e.g., -dev, -doc)"
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string"},
+                  "description": {"type": "string"},
+                  "section": {"type": "string"},
+                  "essential": {"type": "boolean"}
+                }
+              },
+              "description": {"type": "string"},
+              "section": {"type": "string"},
+              "license": {"type": "string"},
+              "provides": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "conflicts": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "replaces": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "dependencies": {
+                "type": "object",
+                "properties": {
+                  "runtime": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "conffiles": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "src": {"type": "string"},
+                    "dst": {"type": "string"},
+                    "mode": {"type": "string"}
+                  },
+                  "required": ["src", "dst"]
+                }
+              },
+              "install": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "src": {"type": "string"},
+                        "dst": {"type": "string"},
+                        "mode": {"type": "string"}
+                      }
+                    }
+                  },
+                  "symlinks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "src": {"type": "string"},
+                        "dst": {"type": "string"}
+                      }
+                    }
+                  },
+                  "toolchain_libs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Glob patterns for toolchain libraries to copy"
+                  }
+                }
+              },
+              "scripts": {
+                "type": "object",
+                "properties": {
+                  "pre-install": {"type": "string"},
+                  "post-install": {"type": "string"},
+                  "pre-remove": {"type": "string"},
+                  "post-remove": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Sub-packages (e.g., -dev, -doc). Can be an array or object with package names as keys."
     }
   }
 }
