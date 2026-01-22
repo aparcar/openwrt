@@ -814,6 +814,9 @@ slink /init /sbin/init 755 0 0
         # CONFIG_INITRAMFS_SOURCE takes a space-separated list:
         # - rootfs directory path
         # - initramfs-base-files.txt for device nodes
+        # Note: We use no compression (CONFIG_INITRAMFS_COMPRESSION_NONE) because
+        # the base kernel config doesn't enable CONFIG_RD_GZIP decompression.
+        # This results in a larger kernel but avoids needing to modify base configs.
         initramfs_config = f'''
 # Initramfs configuration (auto-generated)
 CONFIG_BLK_DEV_INITRD=y
@@ -822,20 +825,17 @@ CONFIG_INITRAMFS_SOURCE="{rootfs_dir} {initramfs_base_files}"
 # CONFIG_INITRAMFS_PRESERVE_MTIME is not set
 CONFIG_INITRAMFS_ROOT_UID={os.getuid()}
 CONFIG_INITRAMFS_ROOT_GID={os.getgid()}
-CONFIG_INITRAMFS_COMPRESSION_GZIP=y
-CONFIG_RD_GZIP=y
+CONFIG_INITRAMFS_COMPRESSION_NONE=y
 '''
         config_text += initramfs_config
         config_path.write_text(config_text)
 
-        # Run olddefconfig to process the changes
+        # Note: We intentionally skip 'olddefconfig' here because it validates
+        # that CONFIG_INITRAMFS_SOURCE paths exist and clears the setting if
+        # they don't. Since we already ran olddefconfig during the initial
+        # kernel build, the config is complete - we just need to add initramfs
+        # settings and rebuild. The kernel build system handles this fine.
         env = self._get_build_env()
-        run_command([
-            'make',
-            f'ARCH={self.kernel_arch}',
-            f'CROSS_COMPILE={self.config.cross_compile}',
-            'olddefconfig',
-        ], cwd=self.src_dir, env=env, verbose=self.verbose)
 
         # Determine kernel image name
         if self.kernel_arch == 'arm64':
@@ -847,12 +847,22 @@ CONFIG_RD_GZIP=y
         else:
             kernel_name = 'vmlinux'
 
+        # Force rebuild of initramfs by removing the intermediate cpio
+        # The kernel build system caches the initramfs cpio and won't rebuild
+        # it unless we either touch the source or remove the cached file
+        initramfs_cpio = self.src_dir / 'usr' / 'initramfs_data.cpio'
+        if initramfs_cpio.exists():
+            initramfs_cpio.unlink()
+
         # Rebuild kernel with embedded initramfs
+        # Pass CONFIG_INITRAMFS_SOURCE on command line to override any cached value
+        initramfs_source = f"{rootfs_dir} {initramfs_base_files}"
         run_command([
             'make',
             f'-j{self.jobs}',
             f'ARCH={self.kernel_arch}',
             f'CROSS_COMPILE={self.config.cross_compile}',
+            f'CONFIG_INITRAMFS_SOURCE={initramfs_source}',
             kernel_name,
         ], cwd=self.src_dir, env=env, verbose=self.verbose)
 
