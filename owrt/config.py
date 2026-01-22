@@ -567,10 +567,10 @@ class SubpackageConfig:
         self.parent = parent
         self._data = data
 
-        # Inherit from parent
+        # Inherit from parent, but allow subpackage overrides
         self.version = parent.version
         self.release = parent.release
-        self.license = parent.license
+        self.license = data.get('license', parent.license)
         self.pkg_dir = parent.pkg_dir
         self.source = parent.source
         self.build = parent.build
