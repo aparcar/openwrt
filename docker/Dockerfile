@@ -77,6 +77,8 @@ RUN apt-get update && apt-get install -y \
     # For mtd-utils build
     liblzma-dev \
     uuid-dev \
+    # For Lua build
+    libreadline-dev \
     # For U-Boot build
     xxd \
     e2fsprogs \
