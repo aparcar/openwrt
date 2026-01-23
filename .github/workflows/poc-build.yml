@@ -102,12 +102,122 @@ jobs:
       - name: Run unit tests
         run: python -m pytest owrt/tests/ -v --tb=short
 
-  # Build all container images (base, tools, toolchain)
+  # Build base container image
   # Uses content-based caching - only rebuilds when inputs change
-  build-containers:
-    name: Build Container Images
+  build-base:
+    name: Build Base Image
     runs-on: ubuntu-latest
     needs: unit-tests
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base-image: ${{ steps.build.outputs.base-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute base image tag
+        id: hash
+        run: |
+          BASE_HASH=$(python3 -m owrt container hash --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['base'])")
+          echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
+          echo "Base hash: $BASE_HASH"
+
+      - name: Build base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-base:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-base:latest
+          push: true
+
+      - name: Set output
+        id: build
+        run: |
+          echo "base-image=${{ env.IMAGE_PREFIX }}-base:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
+
+  # Build tools container image
+  build-tools:
+    name: Build Tools Image
+    runs-on: ubuntu-latest
+    needs: build-base
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tools-image: ${{ steps.build.outputs.tools-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tools image tag
+        id: hash
+        run: |
+          TOOLS_HASH=$(python3 -m owrt container hash --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['tools'])")
+          echo "hash=$TOOLS_HASH" >> $GITHUB_OUTPUT
+          echo "Tools hash: $TOOLS_HASH"
+
+      - name: Build tools image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.tools
+          build-args: |
+            BASE_IMAGE=${{ needs.build-base.outputs.base-image }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-tools:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-tools:latest
+          push: true
+
+      - name: Set output
+        id: build
+        run: |
+          echo "tools-image=${{ env.IMAGE_PREFIX }}-tools:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
+
+  # Build toolchain container image for target
+  build-toolchain:
+    name: Build Toolchain Image
+    runs-on: ubuntu-latest
+    needs: build-tools
     permissions:
       contents: read
       packages: write
@@ -134,27 +244,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push containers
+      - name: Compute toolchain image tag
+        id: hash
+        run: |
+          TOOLCHAIN_HASH=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['toolchain:${{ env.TARGET }}'])")
+          echo "hash=$TOOLCHAIN_HASH" >> $GITHUB_OUTPUT
+          echo "Toolchain hash: $TOOLCHAIN_HASH"
+
+      - name: Build toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.toolchain
+          build-args: |
+            TOOLS_IMAGE=${{ needs.build-tools.outputs.tools-image }}
+            TARGET=${{ env.TARGET }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:latest
+          push: true
+
+      - name: Set output
         id: build
         run: |
-          # Build toolchain (includes base and tools) with push
-          # Content-based caching: only rebuilds if inputs changed
-          python3 -m owrt -v container build \
-            --target ${{ env.TARGET }} \
-            --registry ${{ env.IMAGE_PREFIX }} \
-            --push
-          
-          # Get the toolchain image reference for downstream jobs
-          TOOLCHAIN_IMAGE=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json | \
-            python3 -c "import sys, json; d=json.load(sys.stdin); print(f'${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:' + d['toolchain:${{ env.TARGET }}'])")
-          echo "toolchain-image=$TOOLCHAIN_IMAGE" >> $GITHUB_OUTPUT
-          echo "Toolchain image: $TOOLCHAIN_IMAGE"
+          echo "toolchain-image=${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
 
   # Build firmware using the toolchain
   build-firmware:
     name: Build Firmware
     runs-on: ubuntu-latest
-    needs: build-containers
+    needs: build-toolchain
     permissions:
       contents: read
       packages: read
@@ -170,8 +290,8 @@ jobs:
 
       - name: Pull toolchain image
         run: |
-          echo "Using toolchain: ${{ needs.build-containers.outputs.toolchain-image }}"
-          docker pull ${{ needs.build-containers.outputs.toolchain-image }}
+          echo "Using toolchain: ${{ needs.build-toolchain.outputs.toolchain-image }}"
+          docker pull ${{ needs.build-toolchain.outputs.toolchain-image }}
 
       - name: Cache build downloads
         uses: actions/cache@v4
@@ -192,7 +312,7 @@ jobs:
             -w /openwrt \
             -e BUILD_DIR=/build \
             -e HOME=/tmp \
-            ${{ needs.build-containers.outputs.toolchain-image }} \
+            ${{ needs.build-toolchain.outputs.toolchain-image }} \
             python3 -m owrt -v build ${{ env.TARGET }} -p ${{ env.PROFILE }}
 
       - name: List outputs
