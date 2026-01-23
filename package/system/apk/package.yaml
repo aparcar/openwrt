@@ -1,0 +1,69 @@
+# apk - Alpine Package Keeper
+# Synced with OpenWrt package/system/apk/Makefile
+
+name: apk
+version: "3.0.2"
+release: 2
+license: GPL-2.0-only
+
+source:
+  type: git
+  url: "https://gitlab.alpinelinux.org/alpine/apk-tools.git"
+  version: "d093f7c198a64bff0cd58afeaf638909fda24ca8"
+  sha256: "596dffa2fa019be2755433ed210e30593a6a8708346cf31486d6ad8008e47556"
+
+metadata:
+  section: base
+  category: Base system
+  title: APK package manager
+  description: |
+    Alpine Package Keeper (apk) is the package manager used by Alpine Linux
+    and OpenWrt. It handles package installation, removal, and upgrades.
+  maintainer: Paul Spooren <mail@aparcar.org>
+
+dependencies:
+  runtime:
+    - zlib
+    - libmbedtls
+    - uclient-fetch
+  build:
+    - zlib
+    - libmbedtls-dev
+
+# Cannot be installed alongside OpenSSL variant
+conflicts:
+  - apk-openssl
+
+build:
+  system: meson
+  parallel: true
+  configure_args:
+    - "-Db_lto=true"
+    - "-Ddocs=disabled"
+    - "-Dhelp=disabled"
+    - "-Dlua=disabled"
+    - "-Durl_backend=wget"
+    - "-Dzstd=disabled"
+    - "-Dpython=disabled"
+    - "-Dtests=disabled"
+    - "-Dcrypto_backend=mbedtls"
+    - "-Dminimal=true"
+
+install:
+  copy_files: true
+
+subpackages:
+  apk:
+    description: "APK package manager"
+    section: base
+    dependencies:
+      runtime:
+        - zlib
+        - libmbedtls
+        - uclient-fetch
+    files:
+      - src: "usr/bin/apk"
+        dst: "/usr/bin/apk"
+        mode: "0755"
+    conffiles:
+      - /etc/apk/repositories.d/customfeeds.list

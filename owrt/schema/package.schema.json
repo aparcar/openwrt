@@ -1,0 +1,455 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openwrt.org/owrt/schema/package.json",
+  "title": "OpenWrt Package Definition",
+  "description": "Declarative package definition for OpenWrt modern build system. Supports variable interpolation using ${var} syntax throughout all string fields.",
+  "type": "object",
+  "required": ["name", "version"],
+  "$defs": {
+    "variables": {
+      "description": "Built-in variables available for interpolation",
+      "type": "object",
+      "properties": {
+        "name": {"description": "Package name"},
+        "version": {"description": "Package version"},
+        "release": {"description": "Package release number"},
+        "pkg_dir": {"description": "Package definition directory"},
+        "build_dir": {"description": "Build directory (set at build time)"},
+        "src_dir": {"description": "Source directory (set at build time)"},
+        "STAGING_DIR": {"description": "Staging directory for installed files"},
+        "CROSS_COMPILE": {"description": "Cross-compiler prefix"},
+        "OPENWRT_DIR": {"description": "OpenWrt source directory"},
+        "TARGET_CONFIG_DIR": {"description": "Target configuration directory"},
+        "KERNEL_ARCH": {"description": "Kernel architecture name"},
+        "JOBS": {"description": "Number of parallel jobs"}
+      }
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Package name (lowercase alphanumeric with hyphens). Available as ${name} in other fields."
+    },
+    "version": {
+      "type": "string",
+      "description": "Package version. Available as ${version} in other fields."
+    },
+    "release": {
+      "type": "integer",
+      "default": 1,
+      "description": "Package release number"
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier"
+    },
+    "source": {
+      "type": "object",
+      "description": "Source code location",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["tarball", "git", "local", "kernel", "toolchain", "none"],
+          "default": "tarball"
+        },
+        "url": {
+          "type": "string",
+          "description": "Download URL for tarball. Supports ${name} and ${version} interpolation, e.g., 'https://example.com/${name}-${version}.tar.gz'"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA256 checksum"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA256 checksum (alias for sha256)"
+        },
+        "file": {
+          "type": "string",
+          "description": "Local filename for downloaded source"
+        },
+        "git": {
+          "type": "string",
+          "description": "Git repository URL"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git reference (tag, branch, commit)"
+        },
+        "subdir": {
+          "type": "string",
+          "description": "Subdirectory within source"
+        },
+        "mirrors": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Mirror URLs for source download"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string",
+          "description": "Package section (net, utils, libs, etc.)"
+        },
+        "category": {
+          "type": "string",
+          "description": "Display category"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short description"
+        },
+        "description": {
+          "type": "string",
+          "description": "Long description"
+        },
+        "maintainer": {
+          "type": "string",
+          "description": "Package maintainer"
+        },
+        "url": {
+          "type": "string",
+          "description": "Project homepage URL"
+        },
+        "provides": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Virtual packages provided"
+        },
+        "virtual": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this is a virtual/stub package"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Runtime dependencies"
+        },
+        "build": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Build-time dependencies"
+        },
+        "host": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Host tool dependencies"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "system": {
+          "type": "string",
+          "enum": ["autotools", "cmake", "meson", "make", "kbuild", "kmod", "kernel", "toolchain", "uboot", "custom", "none"],
+          "default": "autotools",
+          "description": "Build system type"
+        },
+        "parallel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable parallel compilation"
+        },
+        "subdir": {
+          "type": "string",
+          "description": "Build subdirectory within source"
+        },
+        "configure_args": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Configure script arguments"
+        },
+        "make_args": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Make arguments"
+        },
+        "make_install_args": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Make install arguments"
+        },
+        "cflags": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ],
+          "description": "Additional CFLAGS (string or array)"
+        },
+        "ldflags": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ],
+          "description": "Additional LDFLAGS (string or array)"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "Additional environment variables"
+        },
+        "prepare_script": {
+          "type": "string",
+          "description": "Script to run before configure"
+        },
+        "configure_script": {
+          "type": "string",
+          "description": "Custom configure script"
+        },
+        "compile_script": {
+          "type": "string",
+          "description": "Custom compile script"
+        },
+        "install_script": {
+          "type": "string",
+          "description": "Custom install script"
+        },
+        "steps": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Build steps (for kernel build system)"
+        }
+      }
+    },
+    "install": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "src": {"type": "string"},
+              "dst": {"type": "string"},
+              "mode": {"type": "string", "pattern": "^[0-7]{3,4}$"}
+            },
+            "required": ["src", "dst"]
+          },
+          "description": "Files to install"
+        },
+        "dirs": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "properties": {
+                  "path": {"type": "string"},
+                  "mode": {"type": "string", "pattern": "^[0-7]{3,4}$"}
+                },
+                "required": ["path"]
+              }
+            ]
+          },
+          "description": "Directories to create (string paths or objects with path and mode)"
+        },
+        "symlinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "src": {"type": "string"},
+              "dst": {"type": "string"}
+            },
+            "required": ["src", "dst"]
+          },
+          "description": "Symlinks to create"
+        },
+        "script": {
+          "type": "string",
+          "description": "Custom install script"
+        }
+      }
+    },
+    "kernel": {
+      "type": "object",
+      "description": "Kernel-specific configuration (for linux package)",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Kernel version (e.g., 6.12)"
+        },
+        "full_version": {
+          "type": "string",
+          "description": "Full kernel version string (e.g., 6.12.65)"
+        },
+        "config_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Kernel config fragment files"
+        },
+        "patch_dirs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Directories containing kernel patches"
+        },
+        "generic_patch_dirs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Generic patch directories applied to all targets"
+        },
+        "generic_config": {
+          "type": "string",
+          "description": "Generic kernel config fragment path"
+        },
+        "generic_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Generic kernel files directories"
+        },
+        "dts_dir": {
+          "type": "string",
+          "description": "Device Tree Source directory"
+        },
+        "dts_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "DTS files to compile"
+        },
+        "modules": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Kernel modules to build"
+        }
+      }
+    },
+    "subpackages": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "title": {"type": "string"},
+              "description": {"type": "string"},
+              "dependencies": {
+                "type": "object",
+                "properties": {
+                  "runtime": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "install": {"$ref": "#/properties/install"}
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string"},
+                  "description": {"type": "string"},
+                  "section": {"type": "string"},
+                  "essential": {"type": "boolean"}
+                }
+              },
+              "description": {"type": "string"},
+              "section": {"type": "string"},
+              "license": {"type": "string"},
+              "provides": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "conflicts": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "replaces": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "dependencies": {
+                "type": "object",
+                "properties": {
+                  "runtime": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "conffiles": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "src": {"type": "string"},
+                    "dst": {"type": "string"},
+                    "mode": {"type": "string"}
+                  },
+                  "required": ["src", "dst"]
+                }
+              },
+              "install": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "src": {"type": "string"},
+                        "dst": {"type": "string"},
+                        "mode": {"type": "string"}
+                      }
+                    }
+                  },
+                  "symlinks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "src": {"type": "string"},
+                        "dst": {"type": "string"}
+                      }
+                    }
+                  },
+                  "toolchain_libs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Glob patterns for toolchain libraries to copy"
+                  }
+                }
+              },
+              "scripts": {
+                "type": "object",
+                "properties": {
+                  "pre-install": {"type": "string"},
+                  "post-install": {"type": "string"},
+                  "pre-remove": {"type": "string"},
+                  "post-remove": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Sub-packages (e.g., -dev, -doc). Can be an array or object with package names as keys."
+    }
+  }
+}

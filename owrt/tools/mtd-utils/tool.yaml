@@ -1,0 +1,31 @@
+# mtd-utils - MTD userspace tools
+# Provides ubinize, mkfs.jffs2, mkfs.ubifs with OpenWrt patches
+# Synced with OpenWrt tools/mtd-utils/Makefile
+#
+# OpenWrt patches add the -E (--eof-markers) option to ubinize which is
+# required for proper UBI image generation on some MediaTek devices.
+
+name: mtd-utils
+version: "2.3.0"
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://infraroot.at/pub/mtd/mtd-utils-2.3.0.tar.bz2"
+  sha256: "2db102908b232406ccb20719c0f43b61196aef4534493419fbf98a273c598c10"
+
+metadata:
+  description: "MTD userspace tools (ubinize, mkfs.jffs2, mkfs.ubifs)"
+
+build:
+  system: autotools
+  autoreconf: true  # Required because patches modify configure.ac
+  # Use patches from original OpenWrt tree (no duplication)
+  patch_dir: ../../../tools/mtd-utils/patches
+  configure_args:
+    - "--without-tests"
+    - "--without-crypto"
+    - "--without-xattr"
+    - "--without-zstd"
+    - "--without-lzo"
+    - "--with-lzma"

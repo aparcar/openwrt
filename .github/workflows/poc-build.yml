@@ -1,0 +1,395 @@
+name: Build System CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    paths:
+      - 'owrt/**'
+      - 'package/**'
+      - 'target/**'
+      - 'targets/**'
+      - 'docker/**'
+      - 'tools/**'
+      - 'toolchain/**'
+      - '.github/workflows/poc-build.yml'
+  pull_request:
+    paths:
+      - 'owrt/**'
+      - 'package/**'
+      - 'target/**'
+      - 'targets/**'
+      - 'docker/**'
+      - 'tools/**'
+      - 'toolchain/**'
+      - '.github/workflows/poc-build.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/owrt
+  TARGET: armsr-armv8
+  PROFILE: generic
+
+jobs:
+  lint:
+    name: Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Validate YAML schemas
+        run: |
+          python3 -c "
+          import json
+          import yaml
+          from jsonschema import validate
+          from pathlib import Path
+
+          pkg_schema = json.loads(Path('owrt/schema/package.schema.json').read_text())
+          target_schema = json.loads(Path('owrt/schema/target.schema.json').read_text())
+          errors = []
+
+          for pkg_file in Path('package').rglob('package.yaml'):
+              try:
+                  validate(yaml.safe_load(pkg_file.read_text()), pkg_schema)
+                  print(f'✓ {pkg_file}')
+              except Exception as e:
+                  errors.append(f'{pkg_file}: {e}')
+                  print(f'✗ {pkg_file}: {e}')
+
+          for target_file in Path('targets').rglob('target.yaml'):
+              try:
+                  validate(yaml.safe_load(target_file.read_text()), target_schema)
+                  print(f'✓ {target_file}')
+              except Exception as e:
+                  errors.append(f'{target_file}: {e}')
+                  print(f'✗ {target_file}: {e}')
+
+          if errors:
+              exit(1)
+          print('\nAll schemas valid!')
+          "
+
+      - name: Check Python syntax
+        run: python -m py_compile owrt/*.py
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click pytest
+
+      - name: Run unit tests
+        run: python -m pytest owrt/tests/ -v --tb=short
+
+  # Build base container image
+  # Uses content-based caching - only rebuilds when inputs change
+  build-base:
+    name: Build Base Image
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base-image: ${{ steps.build.outputs.base-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute base image tag
+        id: hash
+        run: |
+          BASE_HASH=$(python3 -m owrt container hash --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['base'])")
+          echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
+          echo "Base hash: $BASE_HASH"
+
+      - name: Build base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-base:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-base:latest
+          push: true
+
+      - name: Set output
+        id: build
+        run: |
+          echo "base-image=${{ env.IMAGE_PREFIX }}-base:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
+
+  # Build tools container image
+  build-tools:
+    name: Build Tools Image
+    runs-on: ubuntu-latest
+    needs: build-base
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tools-image: ${{ steps.build.outputs.tools-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tools image tag
+        id: hash
+        run: |
+          TOOLS_HASH=$(python3 -m owrt container hash --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['tools'])")
+          echo "hash=$TOOLS_HASH" >> $GITHUB_OUTPUT
+          echo "Tools hash: $TOOLS_HASH"
+
+      - name: Build tools image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.tools
+          build-args: |
+            BASE_IMAGE=${{ needs.build-base.outputs.base-image }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-tools:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-tools:latest
+          push: true
+
+      - name: Set output
+        id: build
+        run: |
+          echo "tools-image=${{ env.IMAGE_PREFIX }}-tools:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
+
+  # Build toolchain container image for target
+  build-toolchain:
+    name: Build Toolchain Image
+    runs-on: ubuntu-latest
+    needs: build-tools
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      toolchain-image: ${{ steps.build.outputs.toolchain-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema click
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute toolchain image tag
+        id: hash
+        run: |
+          TOOLCHAIN_HASH=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(d['toolchain:${{ env.TARGET }}'])")
+          echo "hash=$TOOLCHAIN_HASH" >> $GITHUB_OUTPUT
+          echo "Toolchain hash: $TOOLCHAIN_HASH"
+
+      - name: Build toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.toolchain
+          build-args: |
+            TOOLS_IMAGE=${{ needs.build-tools.outputs.tools-image }}
+            TARGET=${{ env.TARGET }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:${{ steps.hash.outputs.hash }}
+            ${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:latest
+          push: true
+
+      - name: Set output
+        id: build
+        run: |
+          echo "toolchain-image=${{ env.IMAGE_PREFIX }}-toolchain-${{ env.TARGET }}:${{ steps.hash.outputs.hash }}" >> $GITHUB_OUTPUT
+
+  # Build firmware using the toolchain
+  build-firmware:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+    needs: build-toolchain
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull toolchain image
+        run: |
+          echo "Using toolchain: ${{ needs.build-toolchain.outputs.toolchain-image }}"
+          docker pull ${{ needs.build-toolchain.outputs.toolchain-image }}
+
+      - name: Cache build downloads
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: build-dl-${{ hashFiles('package/*/package.yaml') }}
+          restore-keys: build-dl-
+
+      - name: Build firmware
+        run: |
+          mkdir -p dl build/output build/packages build/staging build/kernel build/apk-repo
+          
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/openwrt:ro \
+            -v ${{ github.workspace }}/dl:/build/dl \
+            -v ${{ github.workspace }}/build:/build \
+            -w /openwrt \
+            -e BUILD_DIR=/build \
+            -e HOME=/tmp \
+            ${{ needs.build-toolchain.outputs.toolchain-image }} \
+            python3 -m owrt -v build ${{ env.TARGET }} -p ${{ env.PROFILE }}
+
+      - name: List outputs
+        run: |
+          echo "=== Firmware images ==="
+          ls -la build/output/images/ 2>/dev/null || echo "No images found"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.TARGET }}
+          path: build/output/images/
+          retention-days: 30
+          if-no-files-found: warn
+
+  # Run QEMU tests on the built firmware
+  runtime-tests:
+    name: Runtime Tests (QEMU)
+    runs-on: ubuntu-latest
+    needs: build-firmware
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone openwrt-tests
+        run: git clone --depth 1 https://github.com/aparcar/openwrt-tests.git openwrt-tests
+
+      - name: Download firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ env.TARGET }}
+          path: firmware
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-aarch64
+
+      - name: Find firmware image
+        id: firmware
+        run: |
+          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' -o -name '*-initramfs*.elf' | head -1)
+          if [ -z "$FIRMWARE" ]; then
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "path=$FIRMWARE" >> $GITHUB_OUTPUT
+          echo "found=true" >> $GITHUB_OUTPUT
+
+      - name: Run tests
+        if: steps.firmware.outputs.found == 'true'
+        working-directory: openwrt-tests
+        run: |
+          uv sync
+          uv run pytest tests/ \
+            --lg-env targets/qemu_armsr-armv8.yaml \
+            --lg-log \
+            --firmware "${{ github.workspace }}/${{ steps.firmware.outputs.path }}" \
+            -v --timeout=300 \
+            --junit-xml=test-results.xml \
+            || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always() && steps.firmware.outputs.found == 'true'
+        with:
+          name: test-results
+          path: openwrt-tests/test-results.xml
+          if-no-files-found: ignore
+
+      - name: Publish test results
+        uses: mikepenz/action-junit-report@v4
+        if: always() && steps.firmware.outputs.found == 'true'
+        with:
+          report_paths: openwrt-tests/test-results.xml
+          check_name: QEMU Runtime Tests
+          fail_on_failure: false

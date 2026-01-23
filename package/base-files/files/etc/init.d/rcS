@@ -1,0 +1,22 @@
+#!/bin/sh
+# OpenWrt init script - used by busybox init via inittab
+# Arguments: $1 = S|K (start/kill), $2 = boot|shutdown
+
+[ -n "$PREINIT" ] && return
+
+export PATH=/usr/sbin:/sbin:/usr/bin:/bin
+
+case "$1" in
+S)
+	# Sysinit phase - run startup scripts
+	for i in /etc/rc.d/S*; do
+		[ -x "$i" ] && "$i" start
+	done
+	;;
+K)
+	# Shutdown phase - run stop scripts
+	for i in /etc/rc.d/K*; do
+		[ -x "$i" ] && "$i" stop
+	done
+	;;
+esac

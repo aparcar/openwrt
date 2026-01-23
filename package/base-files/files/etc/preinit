@@ -4,7 +4,7 @@
 
 [ -z "$PREINIT" ] && exec /sbin/init
 
-export PATH="%PATH%"
+export PATH="/usr/sbin:/sbin:/usr/bin:/bin"
 
 . /lib/functions.sh
 . /lib/functions/preinit.sh

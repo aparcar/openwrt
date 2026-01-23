@@ -1,0 +1,39 @@
+# zlib - Compression library
+# Required by many tools and packages
+# Synced with OpenWrt tools/zlib/Makefile
+
+name: zlib
+version: "1.3.1"
+license: Zlib
+
+source:
+  type: git
+  url: "https://github.com/madler/zlib"
+  commit: "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf"
+
+metadata:
+  title: zlib compression library
+  description: |
+    zlib is a general-purpose lossless data compression library.
+    Required by many host tools and packages including:
+    - squashfs4
+    - mtd-utils
+    - Many other tools
+
+dependencies:
+  - zstd
+
+build:
+  system: custom
+  parallel: true
+
+  configure_script: |
+    ./configure \
+      --prefix=${DESTDIR} \
+      --static
+
+  compile_script: |
+    make -j${JOBS} CC="${CC:-gcc}" CFLAGS="${CFLAGS:--O2} -fPIC"
+
+  install_script: |
+    make install prefix=${DESTDIR}

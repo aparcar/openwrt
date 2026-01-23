@@ -1,0 +1,126 @@
+# OpenSSL - SSL toolkit
+# Synced with OpenWrt package/libs/openssl/Makefile
+
+name: openssl
+version: "3.5.4"
+release: 1
+license: Apache-2.0
+
+source:
+  type: tarball
+  url: "https://www.openssl.org/source/${name}-${version}.tar.gz"
+  mirrors:
+    - "https://github.com/openssl/openssl/releases/download/${name}-${version}/"
+  sha256: "967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99"
+
+metadata:
+  section: libs
+  category: Libraries
+  submenu: SSL
+  title: Open source SSL toolkit
+  description: |
+    The OpenSSL Project is a collaborative effort to develop a robust,
+    commercial-grade, full-featured, and Open Source toolkit implementing the
+    Transport Layer Security (TLS) protocol as well as a full-strength
+    general-purpose cryptography library.
+  maintainer: Eneas U de Queiroz <cotequeiroz@gmail.com>
+  url: https://www.openssl.org/
+
+dependencies:
+  runtime:
+    - zlib
+  build: []
+
+build:
+  system: custom
+  parallel: true
+  configure_script: |
+    # Determine OpenSSL target based on architecture
+    case "${OWRT_ARCH}" in
+      x86_64) OPENSSL_TARGET="linux-x86_64-openwrt" ;;
+      aarch64) OPENSSL_TARGET="linux-aarch64-openwrt" ;;
+      arm*) OPENSSL_TARGET="linux-arm-openwrt" ;;
+      mips64*) OPENSSL_TARGET="linux-mips64-openwrt" ;;
+      mips*) OPENSSL_TARGET="linux-mips-openwrt" ;;
+      *) OPENSSL_TARGET="linux-generic64" ;;
+    esac
+    # OpenSSL uses its own Configure script (Perl-based)
+    # Use --cross-compile-prefix to set up toolchain, tools are in PATH via container
+    ./Configure \
+      ${OPENSSL_TARGET} \
+      --prefix=/usr \
+      --libdir=lib \
+      --openssldir=/etc/ssl \
+      --cross-compile-prefix="${CROSS_COMPILE}" \
+      shared \
+      no-tests \
+      no-docs \
+      no-ssl3 \
+      -DOPENSSL_SMALL_FOOTPRINT \
+      -DOPENSSL_NO_HEARTBEATS
+  compile_script: |
+    # Build OpenSSL - pass all tool variables to override prefix-based paths
+    make -j${JOBS} \
+      CC="${CC}" \
+      AR="${AR}" \
+      RANLIB="${RANLIB}" \
+      all
+  install_script: |
+    make DESTDIR=${DESTDIR} \
+      CC="${CC}" \
+      AR="${AR}" \
+      RANLIB="${RANLIB}" \
+      install_sw
+
+subpackages:
+  libopenssl:
+    metadata:
+      title: OpenSSL shared libraries
+      description: OpenSSL shared libraries (libssl, libcrypto)
+    provides:
+      - libssl
+    dependencies:
+      runtime:
+        - zlib
+    install:
+      files:
+        - src: "usr/lib/libssl.so*"
+          dst: "/usr/lib/"
+        - src: "usr/lib/libcrypto.so*"
+          dst: "/usr/lib/"
+
+  libopenssl-dev:
+    metadata:
+      title: OpenSSL development files
+      description: OpenSSL headers and static libraries
+    section: devel
+    dependencies:
+      runtime:
+        - libopenssl
+    install:
+      files:
+        - src: "usr/include/openssl/*.h"
+          dst: "/usr/include/openssl/"
+        - src: "usr/lib/libssl.a"
+          dst: "/usr/lib/"
+        - src: "usr/lib/libcrypto.a"
+          dst: "/usr/lib/"
+        - src: "usr/lib/pkgconfig/openssl.pc"
+          dst: "/usr/lib/pkgconfig/"
+        - src: "usr/lib/pkgconfig/libssl.pc"
+          dst: "/usr/lib/pkgconfig/"
+        - src: "usr/lib/pkgconfig/libcrypto.pc"
+          dst: "/usr/lib/pkgconfig/"
+
+  openssl-util:
+    metadata:
+      title: OpenSSL command line utility
+      description: The openssl program for certificate management and testing
+    dependencies:
+      runtime:
+        - libopenssl
+    install:
+      files:
+        - src: "usr/bin/openssl"
+          dst: "/usr/bin/openssl"
+          mode: "0755"

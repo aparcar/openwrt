@@ -1,0 +1,37 @@
+# libdeflate - Fast gzip/deflate compression
+# Core bootstrap tool - built first to provide fast decompression for archives
+# Synced with OpenWrt tools/libdeflate/Makefile
+
+name: libdeflate
+version: "1.25"
+license: MIT
+
+source:
+  type: tarball
+  url: "https://github.com/ebiggers/libdeflate/releases/download/v${version}/libdeflate-${version}.tar.gz"
+  sha256: "fed5cd22f00f30cc4c2e5329f94e2b8a901df9fa45ee255cb70e2b0b42344477"
+
+metadata:
+  title: Fast deflate/gzip compression library
+  description: |
+    libdeflate is a library for fast, whole-buffer DEFLATE-based compression
+    and decompression. It provides libdeflate-gzip as a faster replacement
+    for gzip when decompressing downloaded archives.
+  core_tool: true
+
+dependencies: []
+
+build:
+  system: custom
+  parallel: true
+
+  compile_script: |
+    ${CC:-gcc} ${CFLAGS:--O2} ${LDFLAGS} \
+      lib/*.c lib/*/*.c \
+      programs/gzip.c programs/prog_util.c programs/tgetopt.c \
+      -o libdeflate-gzip
+
+  install_script: |
+    install -d ${DESTDIR}/bin
+    install -m 0755 libdeflate-gzip ${DESTDIR}/bin/
+    ln -sf libdeflate-gzip ${DESTDIR}/bin/libdeflate-gunzip

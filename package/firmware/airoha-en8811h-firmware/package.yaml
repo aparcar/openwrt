@@ -1,0 +1,40 @@
+# Airoha EN8811H 2.5G Ethernet PHY firmware
+# Required for WAN port on OpenWrt One and similar devices
+
+name: airoha-en8811h-firmware
+version: "20251125"
+release: 1
+license: Airoha-firmware
+maintainer: OpenWrt Team
+
+source:
+  type: tarball
+  url: "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20251125.tar.xz"
+  sha256: "eb807a01c52882ac97ef5b678d4a246b209e6165ac1287d62a5f93a09ee93cd2"
+
+metadata:
+  section: firmware
+  category: Firmware
+  title: Airoha EN8811H PHY firmware
+  description: |
+    Firmware for Airoha EN8811H 2.5 Gigabit Ethernet PHY.
+    Required for WAN port operation on MediaTek MT7981/MT7986 devices
+    with Airoha EN8811H PHY (e.g., OpenWrt One).
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  dirs:
+    - /lib/firmware/airoha
+  files:
+    - src: "airoha/EthMD32.dm.bin"
+      dst: "/lib/firmware/airoha/EthMD32.dm.bin"
+      mode: "0644"
+    - src: "airoha/EthMD32.DSP.bin"
+      dst: "/lib/firmware/airoha/EthMD32.DSP.bin"
+      mode: "0644"

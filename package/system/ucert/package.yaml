@@ -1,0 +1,66 @@
+# ucert - OpenWrt certificate utility
+# Synced with OpenWrt package/system/ucert/Makefile
+
+name: ucert
+version: "2025.10.03"
+release: 1
+license: GPL-3.0-or-later
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/ucert.git"
+  version: "57270b247c91f003db6e3ba1a71d6d1fa5710fef"
+  sha256: "a926fefa957f42c40caa9f8592f4c63a0a56af9094a9995eb0dfc5d82c9591cf"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt certificate verification utility
+  description: |
+    ucert is the OpenWrt certificate verification and generation utility.
+    It is used for verifying signatures and certificates in the OpenWrt
+    package signing infrastructure.
+  maintainer: Daniel Golle <daniel@makrotopia.org>
+
+dependencies:
+  runtime:
+    - usign
+    - libubox
+  build:
+    - libubox-dev
+    - usign
+
+build:
+  system: cmake
+  parallel: true
+
+# Two variants: tiny (verification only) and full (generation + verification)
+variants:
+  tiny:
+    package_name: ucert
+    description: "OpenWrt certificate verification utility"
+    default: true
+    conflicts:
+      - ucert-full
+
+  full:
+    package_name: ucert-full
+    description: "OpenWrt certificate generation and verification utility"
+    provides:
+      - ucert
+    conflicts:
+      - ucert
+    dependencies:
+      runtime:
+        - libjson-c
+        - libblobmsg-json
+      build:
+        - libjson-c-dev
+    cmake_options:
+      - "-DUCERT_FULL=1"
+
+install:
+  files:
+    - src: "usr/bin/ucert"
+      dst: "/usr/bin/ucert"
+      mode: "0755"

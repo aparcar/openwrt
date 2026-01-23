@@ -1,0 +1,52 @@
+# Zstandard - Fast compression algorithm
+# Core bootstrap tool - built first for zstd-compressed archives
+# Synced with OpenWrt tools/zstd/Makefile
+
+name: zstd
+version: "1.5.7"
+license: BSD-3-Clause
+
+source:
+  type: tarball
+  url: "https://github.com/facebook/zstd/releases/download/v${version}/zstd-${version}.tar.gz"
+  sha256: "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+
+metadata:
+  title: Zstandard compression
+  description: |
+    Zstandard (zstd) is a fast lossless compression algorithm targeting
+    real-time compression scenarios. Many modern source archives use zstd
+    compression. This is a core bootstrap tool.
+  core_tool: true
+
+# libdeflate provides gzip for extracting this archive
+dependencies:
+  - libdeflate
+
+build:
+  system: custom
+  parallel: true
+
+  compile_script: |
+    make -j${JOBS} -C lib lib-mt \
+      CC="${CC:-gcc}" \
+      CFLAGS="${CFLAGS:--O2} -fPIC" \
+      BACKTRACE=0 \
+      HAVE_THREAD=1 \
+      HAVE_ZLIB=0 \
+      HAVE_LZMA=0 \
+      HAVE_LZ4=0
+    make -j${JOBS} -C programs zstd \
+      CC="${CC:-gcc}" \
+      CFLAGS="${CFLAGS:--O2}" \
+      BACKTRACE=0 \
+      HAVE_THREAD=1 \
+      HAVE_ZLIB=0 \
+      HAVE_LZMA=0 \
+      HAVE_LZ4=0
+
+  install_script: |
+    make -C lib install-static install-includes install-pc \
+      PREFIX=${DESTDIR} MT=1
+    make -C programs install \
+      PREFIX=${DESTDIR}

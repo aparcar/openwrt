@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openwrt.org/owrt/schema/target.json",
+  "title": "OpenWrt Target Definition",
+  "description": "Target/board configuration for OpenWrt modern build system. Supports variable interpolation using ${var} syntax.",
+  "type": "object",
+  "required": ["name", "arch", "toolchain", "kernel"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Target identifier (e.g., mediatek-filogic)"
+    },
+    "board": {
+      "type": "string",
+      "description": "Board name (e.g., mediatek)"
+    },
+    "subtarget": {
+      "type": "string",
+      "description": "Subtarget name (e.g., filogic)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description"
+    },
+    "arch": {
+      "type": "string",
+      "enum": ["aarch64", "arm", "mips", "mipsel", "mips64", "mips64el", "x86_64", "i386", "riscv64", "loongarch64"],
+      "description": "CPU architecture"
+    },
+    "cpu": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "CPU type (e.g., cortex-a53, 24kc)"
+        },
+        "endian": {
+          "type": "string",
+          "enum": ["little", "big"],
+          "default": "little"
+        },
+        "fpu": {
+          "type": "string",
+          "description": "FPU type"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "required": ["libc", "gcc_version", "binutils_version"],
+      "properties": {
+        "libc": {
+          "type": "string",
+          "enum": ["musl", "glibc"],
+          "description": "C library"
+        },
+        "gcc_version": {
+          "type": "string",
+          "description": "GCC version"
+        },
+        "binutils_version": {
+          "type": "string",
+          "description": "Binutils version"
+        },
+        "target_tuple": {
+          "type": "string",
+          "description": "GNU target tuple (e.g., aarch64-openwrt-linux-musl)"
+        },
+        "cflags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Target CFLAGS"
+        },
+        "ldflags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Target LDFLAGS"
+        }
+      }
+    },
+    "kernel": {
+      "type": "object",
+      "description": "Kernel configuration. Base version comes from packages/linux, target-specific overrides here.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Kernel version (e.g., 6.12)"
+        },
+        "full_version": {
+          "type": "string",
+          "description": "Full kernel version with patch level (e.g., 6.12.65)"
+        },
+        "source_hash": {
+          "type": "string",
+          "description": "SHA256 of kernel source tarball"
+        },
+        "config_dir": {
+          "type": "string",
+          "description": "Directory containing kernel config fragments (legacy)"
+        },
+        "config_fragments": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of kernel config fragment files (relative to target dir)"
+        },
+        "patch_dirs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Directories containing kernel patches (in order)"
+        },
+        "dts_dir": {
+          "type": ["string", "null"],
+          "description": "Device Tree Source directory (null for ACPI-only systems)"
+        },
+        "load_address": {
+          "type": "string",
+          "description": "Kernel load address"
+        },
+        "entry_address": {
+          "type": "string",
+          "description": "Kernel entry address"
+        },
+        "efi_stub": {
+          "type": "boolean",
+          "description": "Whether kernel has EFI stub support"
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Target features (e.g., fpu, pci, usb, nand, emmc)"
+    },
+    "default_packages": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Packages included by default for all profiles"
+    },
+    "profiles": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/profile"},
+      "description": "Device profiles/variants"
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "filesystems": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Supported filesystems (squashfs, ext4, initramfs, erofs, jffs2, ubifs)"
+        },
+        "kernel_name": {
+          "type": "string",
+          "description": "Kernel image name (e.g., Image, zImage, vmlinuz)"
+        },
+        "kernel_in_ubi": {
+          "type": "boolean",
+          "description": "Whether kernel is stored in UBI volume"
+        },
+        "ubootenv_in_ubi": {
+          "type": "boolean",
+          "description": "Whether U-Boot environment is stored in UBI"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["name"],
+      "description": "Device profile definition",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Profile identifier (e.g., openwrt_one)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable device name"
+        },
+        "vendor": {
+          "type": "string",
+          "description": "Device vendor/manufacturer"
+        },
+        "model": {
+          "type": "string",
+          "description": "Device model name"
+        },
+        "default": {
+          "type": "boolean",
+          "description": "Whether this is the default profile for the target"
+        },
+        "dts": {
+          "type": "string",
+          "description": "Device Tree Source file name (without .dts extension)"
+        },
+        "dts_dir": {
+          "type": "string",
+          "description": "Override DTS directory for this profile"
+        },
+        "dtc_flags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Additional DTC compiler flags"
+        },
+        "dts_load_address": {
+          "type": "string",
+          "description": "DTB load address for FIT images"
+        },
+        "packages": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Additional packages for this profile"
+        },
+        "hardware": {
+          "$ref": "#/$defs/hardware",
+          "description": "Hardware specifications"
+        },
+        "partitions": {
+          "type": "object",
+          "description": "Flash partition layouts",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/partition"}
+          }
+        },
+        "ubi": {
+          "$ref": "#/$defs/ubi_config",
+          "description": "UBI configuration"
+        },
+        "images": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/image_spec"},
+          "description": "Images to generate"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact"},
+          "description": "Boot artifacts (preloader, FIP, factory images)"
+        }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "description": "Hardware specifications for documentation and validation",
+      "properties": {
+        "soc": {"type": "string", "description": "SoC model"},
+        "ram": {"type": "string", "description": "RAM size and type"},
+        "flash": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "Flash storage (nand, nor, emmc, etc.)"
+        },
+        "wifi": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "band": {"type": "string"},
+              "standard": {"type": "string"},
+              "streams": {"type": "string"}
+            }
+          }
+        },
+        "ethernet": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "Ethernet ports (wan, lan, etc.)"
+        },
+        "usb": {"type": "string"},
+        "buttons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "gpio": {"type": "integer"}
+            }
+          }
+        },
+        "leds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "type": {"type": "string", "enum": ["gpio", "pwm"]},
+              "gpio": {"type": "integer"},
+              "function": {"type": "string"}
+            }
+          }
+        },
+        "expansion": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Expansion slots/sockets"
+        }
+      }
+    },
+    "partition": {
+      "type": "object",
+      "required": ["name", "offset", "size"],
+      "properties": {
+        "name": {"type": "string"},
+        "offset": {"type": "string", "description": "Hex offset (e.g., 0x100000)"},
+        "size": {"type": "string", "description": "Hex size (e.g., 0x80000)"},
+        "readonly": {"type": "boolean"},
+        "filesystem": {"type": "string", "description": "Filesystem type (ubi, jffs2, etc.)"}
+      }
+    },
+    "ubi_config": {
+      "type": "object",
+      "properties": {
+        "blocksize": {"type": "string", "description": "Erase block size (e.g., 128k)"},
+        "pagesize": {"type": "integer", "description": "Page size in bytes"},
+        "options": {"type": "string", "description": "ubinize options (e.g., -E 5)"},
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "image": {"type": "string"},
+              "type": {"type": "string", "enum": ["static", "dynamic"]},
+              "optional": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "image_spec": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "description": "Output filename"},
+        "type": {
+          "type": "string",
+          "enum": ["sysupgrade", "factory", "initramfs", "combined", "rootfs", "kernel"],
+          "description": "Image type"
+        },
+        "filesystem": {
+          "type": "string",
+          "enum": ["squashfs", "ext4", "initramfs", "erofs", "ubifs", "jffs2"]
+        },
+        "kernel": {
+          "type": "object",
+          "properties": {
+            "format": {"type": "string", "enum": ["fit", "uimage", "raw"]},
+            "compression": {"type": "string", "enum": ["none", "gzip", "lzma", "xz"]},
+            "load_address": {"type": "string"}
+          }
+        },
+        "rootfs": {
+          "type": "object",
+          "properties": {
+            "type": {"type": "string", "enum": ["internal", "external"]},
+            "pad": {"type": "boolean"}
+          }
+        },
+        "pad_to": {"type": "string", "description": "Pad image to size"},
+        "size": {"type": "string", "description": "Target image size (e.g., 256M, 512M)"},
+        "metadata": {"type": "boolean", "description": "Append sysupgrade metadata"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": {"type": "string", "description": "Artifact filename"},
+        "type": {
+          "type": "string",
+          "enum": ["bl2", "fip", "ubi", "combined", "image", "eeprom"],
+          "description": "Artifact type"
+        },
+        "variant": {"type": "string", "description": "Build variant (e.g., nor-ddr4)"},
+        "description": {"type": "string"},
+        "content": {"type": "string", "description": "Source image for UBI"},
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string"},
+              "variant": {"type": "string"},
+              "pad_to": {"type": "string"},
+              "name": {"type": "string"},
+              "source": {"type": "string"}
+            }
+          },
+          "description": "Parts for combined artifacts"
+        }
+      }
+    }
+  }
+}

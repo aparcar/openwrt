@@ -1,0 +1,52 @@
+# urngd - OpenWrt micro non-physical true random number generator
+# Synced with OpenWrt package/system/urngd/Makefile
+
+name: urngd
+version: "2025.10.03"
+release: 1
+license: GPL-2.0 BSD-3-Clause
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/urngd.git"
+  version: "f17e33d9942750edbd73124e6f03118a98abb402"
+  sha256: "7ca9e2e796b28df27b9b1ecd35987fe6e0ae2425e4ec92dff420386572dbbdc9"
+
+metadata:
+  section: utils
+  category: Base system
+  title: OpenWrt non-physical true random number generator
+  description: |
+    urngd is OpenWrt's micro non-physical true random number generator based on
+    timing jitter. Using the Jitter RNG core, it provides an entropy source that
+    feeds into the Linux /dev/random device if its entropy runs low.
+  maintainer: OpenWrt Developers
+
+dependencies:
+  runtime:
+    - libubox
+  build:
+    - libubox-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args: []
+
+install:
+  copy_files: true
+
+subpackages:
+  urngd:
+    description: "OpenWrt non-physical true random number generator"
+    section: utils
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/sbin/urngd"
+        dst: "/sbin/urngd"
+        mode: "0755"
+      - src: "${pkg_dir}/files/urngd.init"
+        dst: "/etc/init.d/urngd"
+        mode: "0755"

@@ -1,0 +1,49 @@
+# Toolchain runtime libraries (libc, libgcc, etc.)
+# These are special packages that copy libraries from the toolchain
+# rather than building from source.
+#
+# This file defines multiple subpackages. Each subpackage gets its own
+# APK with specific library files copied from the toolchain.
+
+name: toolchain
+version: "1.2.5"
+release: 3
+license: GPL-3.0-with-GCC-exception
+
+metadata:
+  section: libs
+  category: Base system
+  title: Toolchain runtime libraries
+  description: Meta-package for toolchain runtime libraries
+
+source:
+  type: toolchain
+
+build:
+  system: toolchain
+
+subpackages:
+  libgcc:
+    metadata:
+      title: GCC support library
+      description: GCC runtime support library (libgcc_s.so.1)
+      essential: true
+    install:
+      toolchain_libs:
+        - libgcc_s.so.*
+
+  libc:
+    metadata:
+      title: C library
+      description: |
+        The musl C library providing the standard C library interface
+        and the dynamic linker (ld-musl-*.so.1).
+      essential: true
+    license: MIT
+    dependencies:
+      runtime:
+        - libgcc
+    install:
+      # libc.so is copied, ld-musl-*.so.1 symlink is created automatically
+      toolchain_libs:
+        - libc.so

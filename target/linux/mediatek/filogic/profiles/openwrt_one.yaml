@@ -1,0 +1,216 @@
+# OpenWrt One - The official OpenWrt reference hardware
+# https://openwrt.org/toh/openwrt/one
+
+name: openwrt_one
+title: "OpenWrt One"
+vendor: OpenWrt
+model: One
+default: true
+
+# Device Tree
+dts: mt7981b-openwrt-one
+dts_dir: "${OPENWRT_DIR}/target/linux/mediatek/dts"
+dtc_flags:
+  - "--pad"
+  - "4096"
+dts_load_address: "0x43f00000"
+
+# Device-specific packages
+packages:
+  # WiFi (MT7981 integrated WMAC)
+  - kmod-mt7915e
+  - kmod-mt7981-firmware
+  - mt7981-wo-firmware
+  # RTC
+  - kmod-rtc-pcf8563
+  # USB 3.0
+  - kmod-usb3
+  # Ethernet PHY (2.5GbE WAN port)
+  - kmod-phy-airoha-en8811h
+  - airoha-en8811h-firmware
+
+# Hardware specifications
+hardware:
+  soc: MT7981B
+  ram: 1GB DDR4
+  flash:
+    nand: 256MB SPI-NAND
+    nor: 16MB SPI-NOR
+  wifi:
+    - band: 2.4GHz
+      standard: 802.11ax
+      streams: 2x2
+    - band: 5GHz
+      standard: 802.11ax
+      streams: 3x3
+  ethernet:
+    wan: 2.5GbE (Airoha EN8811H PHY)
+    lan: 1GbE (internal PHY)
+  usb: USB 2.0
+  buttons:
+    - name: user
+      gpio: 0
+    - name: reset
+      gpio: 1
+  leds:
+    - name: status_white
+      type: pwm
+      function: boot
+    - name: status_green
+      type: pwm
+      function: running
+    - name: status_red
+      type: gpio
+      gpio: 9
+      function: failsafe
+    - name: lan_amber
+      type: gpio
+      gpio: 34
+    - name: lan_green
+      type: gpio
+      gpio: 35
+  expansion:
+    - mikroBUS socket
+    - M.2 Key-B (PCIe + USB)
+
+# Flash layout
+partitions:
+  nand:
+    - name: bl2
+      offset: "0x0"
+      size: "0x100000"
+      readonly: true
+    - name: ubi
+      offset: "0x100000"
+      size: "0xFF00000"
+      filesystem: ubi
+  nor:
+    - name: bl2-nor
+      offset: "0x0"
+      size: "0x40000"
+    - name: factory
+      offset: "0x40000"
+      size: "0xc0000"
+      readonly: true
+    - name: fip-nor
+      offset: "0x100000"
+      size: "0x80000"
+    - name: recovery
+      offset: "0x180000"
+      size: "0xc80000"
+
+# UBI configuration
+ubi:
+  blocksize: 128k
+  pagesize: 2048
+  options: "-E 5"
+  volumes:
+    - name: fip
+      image: "${STAGING_DIR_IMAGE}/mt7981_openwrt_one-snand-u-boot.fip"
+    - name: recovery
+      image: "initramfs.itb"
+      optional: true
+    # fit volume is added automatically by content: sysupgrade.itb
+
+# UBIFS configuration (for NAND-based rootfs images)
+ubifs:
+  max_leb_cnt: 2048
+  compression: zlib
+
+# JFFS2 configuration (for NOR/NAND rootfs or overlay images)
+jffs2:
+  erase_block: 128k
+  page_size: 2048
+  no_cleanmarkers: true
+
+# Image generation
+images:
+  # Main sysupgrade image (UBI + FIT)
+  - name: sysupgrade.itb
+    type: sysupgrade
+    filesystem: squashfs
+    kernel:
+      format: fit
+      compression: gzip
+      load_address: "0x44000000"
+    rootfs:
+      type: external
+      pad: true
+    metadata: true
+
+  # Initramfs for recovery
+  - name: initramfs.itb
+    type: initramfs
+    kernel:
+      format: fit
+      compression: lzma
+      load_address: "0x44000000"
+    pad_to: 64k
+
+  # UBIFS rootfs image (for writable root on NAND)
+  - name: rootfs.ubifs
+    type: rootfs
+    filesystem: ubifs
+
+  # JFFS2 rootfs image (for NOR flash or overlay)
+  - name: rootfs.jffs2
+    type: rootfs
+    filesystem: jffs2
+
+# Boot artifacts (preloader, U-Boot, etc.)
+artifacts:
+  # NOR flash boot chain
+  - name: nor-preloader.bin
+    type: bl2
+    variant: nor-ddr4
+  - name: nor-bl31-uboot.fip
+    type: fip
+    variant: openwrt_one-nor
+
+  # NAND (SPI-NAND) boot chain
+  - name: snand-preloader.bin
+    type: bl2
+    variant: spim-nand-ubi-ddr4
+  - name: snand-bl31-uboot.fip
+    type: fip
+    variant: openwrt_one-snand
+
+  # Factory images
+  - name: factory.ubi
+    type: ubi
+    content: sysupgrade.itb
+
+  - name: snand-factory.bin
+    type: combined
+    description: "Complete SPI-NAND factory image with redundant BL2"
+    parts:
+      - type: bl2
+        variant: spim-nand-ubi-ddr4
+        pad_to: 256k
+      - type: bl2
+        variant: spim-nand-ubi-ddr4
+        pad_to: 256k
+      - type: bl2
+        variant: spim-nand-ubi-ddr4
+        pad_to: 256k
+      - type: bl2
+        variant: spim-nand-ubi-ddr4
+        pad_to: 256k
+      - type: ubi
+        content: sysupgrade.itb
+
+  - name: nor-factory.bin
+    type: combined
+    description: "Complete NOR factory image with recovery"
+    parts:
+      - type: bl2
+        variant: nor-ddr4
+        pad_to: 256k
+      - type: eeprom
+        name: openwrt-one-eeprom
+        pad_to: 768k
+      - type: fip
+        variant: openwrt_one-nor
+        pad_to: 512k
+      - type: image
+        source: initramfs.itb

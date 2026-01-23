@@ -1,0 +1,92 @@
+# mt76 - MediaTek MT76xx wireless driver
+# Supports MT7981/MT7986 (Filogic), MT7915, MT7921, and other MediaTek WiFi chips
+
+name: mt76
+version: "2025.01.06"
+release: 1
+license: BSD-3-Clause-Clear
+maintainer: Felix Fietkau <nbd@nbd.name>
+
+source:
+  type: git
+  url: "https://github.com/openwrt/mt76"
+  version: "eb567bc7f9b692bbf1ddfe31dd740861c58ec85b"
+  hash: "7cfe242a5494cdf5d8e8eea86633778a525717528bcce70aedef96eee5594383"
+
+metadata:
+  section: kernel
+  category: Kernel modules
+  title: MediaTek MT76xx wireless drivers
+  description: |
+    MediaTek MT76xx wireless driver package for:
+    - MT7981/MT7986 (Filogic) - integrated WMAC
+    - MT7915 - PCIe 802.11ax
+    - MT7921/MT7922 - PCIe/USB 802.11ax
+    - MT7603/MT7628 - PCIe 802.11n
+
+dependencies:
+  runtime: []
+  build:
+    - mac80211-backport-dev
+
+build:
+  system: custom
+  configure_script: "true"
+  compile_script: 'make -C $LINUX_DIR -j$NPROC ARCH=$KERNEL_ARCH CROSS_COMPILE=$CROSS_COMPILE M=$(pwd) KBUILD_EXTRA_SYMBOLS=$STAGING_DIR/usr/lib/mac80211-backport/Module.symvers NOSTDINC_FLAGS="-I$(pwd) -I$STAGING_DIR/usr/include/mac80211-backport/uapi -I$STAGING_DIR/usr/include/mac80211-backport -I$STAGING_DIR/usr/include/mac80211/uapi -I$STAGING_DIR/usr/include/mac80211 -include backport/autoconf.h -include backport/backport.h -DCONFIG_MAC80211_MESH -DCONFIG_MT798X_WMAC" CONFIG_MT76_CORE=m CONFIG_MT76_CONNAC_LIB=m CONFIG_MT7915E=m CONFIG_MT798X_WMAC=y modules'
+  install_script: 'mkdir -p $DESTDIR/lib/modules/$KERNEL_VERSION && find . -name "*.ko" -exec cp {} $DESTDIR/lib/modules/$KERNEL_VERSION/ \; && mkdir -p $DESTDIR/lib/firmware/mediatek && cp firmware/mt7981_wa.bin firmware/mt7981_wm.bin firmware/mt7981_rom_patch.bin $DESTDIR/lib/firmware/mediatek/ 2>/dev/null || true'
+
+install:
+  dirs:
+    - /lib/modules
+    - /lib/firmware/mediatek
+
+subpackages:
+  kmod-mt76-core:
+    metadata:
+      title: MediaTek MT76xx wireless driver core
+      description: Core module for MT76xx wireless drivers
+    dependencies:
+      runtime:
+        - kmod-mac80211
+    files:
+      - src: "lib/modules/*/mt76.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"
+
+  kmod-mt76-connac:
+    metadata:
+      title: MediaTek MT7615/MT79xx common code
+      description: Common code for MT7615 and MT79xx series
+    dependencies:
+      runtime:
+        - kmod-mt76-core
+    files:
+      - src: "lib/modules/*/mt76-connac-lib.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"
+
+  kmod-mt7915e:
+    metadata:
+      title: MediaTek MT7915e/MT7981/MT7986 wireless driver
+      description: |
+        Driver for MediaTek MT7915e PCIe and MT7981/MT7986
+        integrated WMAC (WiFi 6)
+    dependencies:
+      runtime:
+        - kmod-mt76-connac
+    files:
+      - src: "lib/modules/*/mt7915e.ko"
+        dst: "/lib/modules/${KERNEL_VERSION}/"
+
+  kmod-mt7981-firmware:
+    metadata:
+      title: MediaTek MT7981 firmware
+      description: Firmware files for MT7981 WiFi
+    dependencies:
+      runtime:
+        - kmod-mt7915e
+    files:
+      - src: "lib/firmware/mediatek/mt7981_wa.bin"
+        dst: "/lib/firmware/mediatek/"
+      - src: "lib/firmware/mediatek/mt7981_wm.bin"
+        dst: "/lib/firmware/mediatek/"
+      - src: "lib/firmware/mediatek/mt7981_rom_patch.bin"
+        dst: "/lib/firmware/mediatek/"

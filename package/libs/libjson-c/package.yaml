@@ -1,0 +1,49 @@
+# libjson-c - JSON parsing library
+# Synced with OpenWrt package/libs/libjson-c/Makefile
+
+name: libjson-c
+version: "0.18"
+release: 1
+license: MIT
+
+source:
+  type: tarball
+  url: "https://s3.amazonaws.com/json-c_releases/releases/json-c-${version}-nodoc.tar.gz"
+  sha256: "602cdefc1d2aab8318fc0814b7ce7d59e72514d4276ca3eff92f35f86cf1c160"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: JavaScript Object Notation library
+  description: |
+    This package contains a library for javascript object notation backends.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DDISABLE_EXTRA_LIBS=TRUE"
+
+subpackages:
+  libjson-c:
+    description: "JSON-C library"
+    section: libs
+    files:
+      - src: "usr/lib/libjson-c.so*"
+        dst: "/usr/lib/"
+
+  libjson-c-dev:
+    description: "JSON-C development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libjson-c
+    files:
+      - src: "usr/include/json-c/*.h"
+        dst: "/usr/include/json-c/"
+      - src: "usr/lib/pkgconfig/json-c.pc"
+        dst: "/usr/lib/pkgconfig/"

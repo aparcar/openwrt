@@ -1,0 +1,223 @@
+# iproute2 - Network configuration utilities
+# Synced with OpenWrt package/network/utils/iproute2/Makefile
+
+name: iproute2
+version: "6.18.0"
+release: 1
+license: GPL-2.0
+
+source:
+  type: tarball
+  url: "https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-6.18.0.tar.xz"
+  sha256: "6ba520e1975e4c50dc931eeae91ea37c198b8a173744885f8895b84325f9d456"
+
+metadata:
+  section: net
+  category: Network
+  submenu: Routing and Redirection
+  title: Network configuration utilities
+  description: |
+    iproute2 is a collection of utilities for controlling TCP/IP networking
+    and traffic control in Linux.
+  maintainer: Russell Senior <russell@personaltelco.net>
+  url: https://wiki.linuxfoundation.org/networking/iproute2
+
+dependencies:
+  runtime: []
+  build:
+    - iptables
+    - libnl-tiny
+
+build:
+  system: make
+  parallel: true
+  cflags: "-I${STAGING_DIR}/usr/include/libnl-tiny"
+  configure_args:
+    - "--color=auto"
+
+# ip utility has two variants
+variants:
+  iptiny:
+    package_name: ip-tiny
+    description: "Routing control utility (minimal)"
+    default: true
+    provides:
+      - ip
+    dependencies:
+      runtime:
+        - libnl-tiny
+      build:
+        - libnl-tiny
+    alternatives:
+      - "200:/sbin/ip:/usr/libexec/ip-tiny"
+    conflicts:
+      - ip-full
+    make_vars:
+      IP_CONFIG_TINY: "y"
+      LIBBPF_FORCE: "off"
+
+  ipfull:
+    package_name: ip-full
+    description: "Routing control utility (full)"
+    provides:
+      - ip
+    dependencies:
+      runtime:
+        - libnl-tiny
+        - libbpf
+      build:
+        - libnl-tiny
+        - libbpf
+    alternatives:
+      - "300:/sbin/ip:/usr/libexec/ip-full"
+    conflicts:
+      - ip-tiny
+    make_vars:
+      HAVE_ELF: "y"
+      LIBBPF_FORCE: "on"
+
+subpackages:
+  iproute2-dev:
+    description: "iproute2 development files"
+    section: devel
+    files:
+      - src: "include/bpf_elf.h"
+        dst: "/usr/include/iproute2/"
+      - src: "include/libgenl.h"
+        dst: "/usr/include/"
+      - src: "include/libnetlink.h"
+        dst: "/usr/include/"
+      - src: "lib/libnetlink.a"
+        dst: "/usr/lib/"
+
+  tc-tiny:
+    description: "Traffic control utility (minimal)"
+    section: net
+    provides:
+      - tc
+    dependencies:
+      runtime:
+        - kmod-sched-core
+    alternatives:
+      - "200:/sbin/tc:/usr/libexec/tc-tiny"
+    conflicts:
+      - tc-bpf
+      - tc-full
+    files:
+      - src: "tc/tc"
+        dst: "/usr/libexec/tc-tiny"
+        mode: "0755"
+
+  tc-bpf:
+    description: "Traffic control utility (bpf)"
+    section: net
+    provides:
+      - tc
+    dependencies:
+      runtime:
+        - kmod-sched-core
+        - libbpf
+    alternatives:
+      - "300:/sbin/tc:/usr/libexec/tc-bpf"
+    conflicts:
+      - tc-tiny
+      - tc-full
+    files:
+      - src: "tc/tc"
+        dst: "/usr/libexec/tc-bpf"
+        mode: "0755"
+
+  tc-full:
+    description: "Traffic control utility (full)"
+    section: net
+    provides:
+      - tc
+    dependencies:
+      runtime:
+        - kmod-sched-core
+        - libbpf
+        - libxtables
+    alternatives:
+      - "400:/sbin/tc:/usr/libexec/tc-full"
+    conflicts:
+      - tc-tiny
+      - tc-bpf
+    files:
+      - src: "tc/tc"
+        dst: "/usr/libexec/tc-full"
+        mode: "0755"
+
+  genl:
+    description: "General netlink utility frontend"
+    section: net
+    dependencies:
+      runtime:
+        - libnl-tiny
+    files:
+      - src: "genl/genl"
+        dst: "/usr/sbin/genl"
+        mode: "0755"
+
+  ip-bridge:
+    description: "Bridge configuration utility from iproute2"
+    section: net
+    dependencies:
+      runtime:
+        - libnl-tiny
+    files:
+      - src: "bridge/bridge"
+        dst: "/usr/sbin/bridge"
+        mode: "0755"
+
+  ss:
+    description: "Socket statistics utility"
+    section: net
+    dependencies:
+      runtime:
+        - libnl-tiny
+        - libbpf
+        - kmod-netlink-diag
+    files:
+      - src: "misc/ss"
+        dst: "/usr/sbin/ss"
+        mode: "0755"
+
+  nstat:
+    description: "Network statistics utility"
+    section: net
+    dependencies:
+      runtime:
+        - libnl-tiny
+    files:
+      - src: "misc/nstat"
+        dst: "/usr/sbin/nstat"
+        mode: "0755"
+
+  devlink:
+    description: "Network devlink utility"
+    section: net
+    dependencies:
+      runtime:
+        - libmnl
+    files:
+      - src: "devlink/devlink"
+        dst: "/usr/sbin/devlink"
+        mode: "0755"
+
+  rdma:
+    description: "Network rdma utility"
+    section: net
+    dependencies:
+      runtime:
+        - libmnl
+    files:
+      - src: "rdma/rdma"
+        dst: "/usr/sbin/rdma"
+        mode: "0755"
+
+# Default install is for ip-tiny variant
+install:
+  files:
+    - src: "ip/ip"
+      dst: "/usr/libexec/ip-tiny"
+      mode: "0755"

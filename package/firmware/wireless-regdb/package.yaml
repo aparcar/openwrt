@@ -1,0 +1,31 @@
+# wireless-regdb - Wireless Regulatory Database
+# Synced with OpenWrt package/firmware/wireless-regdb/Makefile
+
+name: wireless-regdb
+version: "2025.10.07"
+release: 1
+license: ISC
+
+source:
+  type: tarball
+  url: "https://mirrors.edge.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-2025.10.07.tar.xz"
+  sha256: "d4c872a44154604c869f5851f7d21d818d492835d370af7f58de8847973801c3"
+
+metadata:
+  section: firmware
+  category: Firmware
+  title: Wireless Regulatory Database
+  description: |
+    The wireless regulatory database contains the regulatory rules for
+    wireless spectrum usage in various countries.
+  arch: all
+
+build:
+  system: custom
+  # Build regulatory.db from db.txt using db2fw.py
+  build_script: |
+    python3 db2fw.py regulatory.db db.txt
+
+files:
+  - src: "regulatory.db"
+    dst: "/lib/firmware/"

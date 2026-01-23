@@ -1,0 +1,34 @@
+# GNU tar - Archive utility
+# Core bootstrap tool - built first to ensure consistent archive extraction
+# Synced with OpenWrt tools/tar/Makefile
+
+name: tar
+version: "1.35"
+license: GPL-3.0-or-later
+
+source:
+  type: tarball
+  url: "https://ftp.gnu.org/gnu/tar/tar-${version}.tar.gz"
+  sha256: "14d55e32063ea9526e057fbf35fcabd53378e769787eff7919c3755b02d2b57e"
+  mirrors:
+    - "https://ftpmirror.gnu.org/tar/tar-${version}.tar.gz"
+
+metadata:
+  title: GNU tar
+  description: |
+    GNU tar is used to create and extract archive files. This is a core
+    bootstrap tool that must be built early to ensure consistent archive
+    handling across all host systems.
+  core_tool: true
+
+dependencies: []
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--without-posix-acls"
+    - "--without-selinux"
+    - "--without-xattrs"
+    - "--disable-acl"
+    - "--disable-nls"

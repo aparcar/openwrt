@@ -1,0 +1,46 @@
+# MediaTek MT7981 WiFi firmware
+# Required for WiFi operation on MT7981-based devices (e.g., OpenWrt One)
+
+name: mt7981-firmware
+version: "2025.11.06"
+release: 1
+license: MediaTek-firmware
+maintainer: Felix Fietkau <nbd@nbd.name>
+
+source:
+  type: git
+  url: "https://github.com/openwrt/mt76.git"
+  version: "eb567bc7f9b692bbf1ddfe31dd740861c58ec85b"
+
+metadata:
+  section: firmware
+  category: Firmware
+  title: MediaTek MT7981 WiFi firmware
+  description: |
+    Firmware files for MediaTek MT7981 WiFi radio.
+    Includes WA (WiFi Application), WM (WiFi MCU), and ROM patch files.
+    Required for WiFi operation on MT7981-based devices like OpenWrt One.
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  dirs:
+    - /lib/firmware/mediatek
+  files:
+    - src: "firmware/mt7981_wa.bin"
+      dst: "/lib/firmware/mediatek/mt7981_wa.bin"
+      mode: "0644"
+    - src: "firmware/mt7981_wm.bin"
+      dst: "/lib/firmware/mediatek/mt7981_wm.bin"
+      mode: "0644"
+    - src: "firmware/mt7981_rom_patch.bin"
+      dst: "/lib/firmware/mediatek/mt7981_rom_patch.bin"
+      mode: "0644"
+    - src: "firmware/mt7981_eeprom_mt7976_dbdc.bin"
+      dst: "/lib/firmware/mediatek/mt7981_eeprom_mt7976_dbdc.bin"
+      mode: "0644"

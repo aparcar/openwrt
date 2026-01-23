@@ -1,0 +1,135 @@
+# ucode - Tiny scripting and templating language
+# Source produces: libucode, ucode, libucode-dev
+# Synced with OpenWrt package/utils/ucode/Makefile
+
+name: ucode
+version: "2025.12.01"
+release: 1
+license: ISC
+
+source:
+  type: git
+  url: "https://github.com/jow-/ucode.git"
+  version: "f7c2b97a82e8b505bf4b2c0d8883b5116e1960f9"
+  sha256: "7de6a6d5b3c7392624bccefdc03e2dc61f097b414989eeced29ecc3e020bbd0b"
+
+metadata:
+  section: lang
+  category: Languages
+  title: Tiny scripting and templating language
+  description: |
+    ucode is a tiny script interpreter featuring an ECMAScript oriented
+    script language and Jinja-inspired templating.
+
+dependencies:
+  build:
+    - libjson-c-dev
+    - libubox-dev
+    - libubus-dev
+    - libuci-dev
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DSOVERSION=20230711"
+    # Enable modules needed by netifd and other system components
+    - "-DFS_SUPPORT=ON"
+    - "-DMATH_SUPPORT=OFF"
+    - "-DNL80211_SUPPORT=OFF"
+    - "-DRESOLV_SUPPORT=OFF"
+    - "-DRTNL_SUPPORT=OFF"
+    - "-DSTRUCT_SUPPORT=OFF"
+    - "-DUBUS_SUPPORT=ON"
+    - "-DUCI_SUPPORT=ON"
+    - "-DULOOP_SUPPORT=ON"
+    - "-DDEBUG_SUPPORT=OFF"
+    - "-DLOG_SUPPORT=ON"
+    - "-DDIGEST_SUPPORT=OFF"
+    - "-DIO_SUPPORT=OFF"
+    - "-DSOCKET_SUPPORT=OFF"
+
+subpackages:
+  libucode:
+    description: "ucode shared runtime library"
+    section: libs
+    dependencies:
+      runtime:
+        - libjson-c
+    files:
+      - src: "usr/lib/libucode.so*"
+        dst: "/usr/lib/"
+
+  ucode:
+    description: "ucode interpreter"
+    section: lang
+    dependencies:
+      runtime:
+        - libucode
+    files:
+      - src: "usr/bin/ucode"
+        dst: "/usr/bin/"
+
+  ucode-mod-fs:
+    description: "ucode filesystem module"
+    section: lang
+    dependencies:
+      runtime:
+        - ucode
+    files:
+      - src: "usr/lib/ucode/fs.so"
+        dst: "/usr/lib/ucode/"
+
+  ucode-mod-ubus:
+    description: "ucode ubus module"
+    section: lang
+    dependencies:
+      runtime:
+        - ucode
+        - libubus
+    files:
+      - src: "usr/lib/ucode/ubus.so"
+        dst: "/usr/lib/ucode/"
+
+  ucode-mod-uci:
+    description: "ucode UCI module"
+    section: lang
+    dependencies:
+      runtime:
+        - ucode
+        - libuci
+    files:
+      - src: "usr/lib/ucode/uci.so"
+        dst: "/usr/lib/ucode/"
+
+  ucode-mod-uloop:
+    description: "ucode uloop module"
+    section: lang
+    dependencies:
+      runtime:
+        - ucode
+        - libubox
+    files:
+      - src: "usr/lib/ucode/uloop.so"
+        dst: "/usr/lib/ucode/"
+
+  ucode-mod-log:
+    description: "ucode logging module"
+    section: lang
+    dependencies:
+      runtime:
+        - ucode
+    files:
+      - src: "usr/lib/ucode/log.so"
+        dst: "/usr/lib/ucode/"
+
+  libucode-dev:
+    description: "ucode development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libucode
+        - libjson-c-dev
+    files:
+      - src: "usr/include/ucode/*.h"
+        dst: "/usr/include/ucode/"

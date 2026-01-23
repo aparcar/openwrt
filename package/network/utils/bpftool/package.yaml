@@ -1,0 +1,80 @@
+# bpftool - eBPF subsystem utility
+# Synced with OpenWrt package/network/utils/bpftool/Makefile
+
+name: bpftool
+version: "7.6.0"
+release: 1
+license: GPL-2.0-only OR BSD-2-Clause
+
+source:
+  type: git
+  url: "https://github.com/libbpf/bpftool"
+  version: "v7.6.0"
+  sha256: "7406a424375642fda35cae6eccaa8e27c21e4f132123c0207a83f763ef6fe899"
+
+metadata:
+  section: net
+  category: Network
+  title: bpftool - eBPF subsystem utility
+  description: |
+    A tool for inspection and simple manipulation of eBPF programs and maps.
+  maintainer: Tony Ambardar <itugrok@yahoo.com>
+  url: https://www.kernel.org
+
+dependencies:
+  runtime:
+    - libelf
+  build:
+    - libelf
+
+build:
+  system: make
+  parallel: true
+  make_path: src
+  make_args:
+    - "check_feat=0"
+    - "feature-clang-bpf-co-re=0"
+    - "feature-llvm=0"
+    - "feature-libcap=0"
+    - "feature-disassembler-four-args=1"
+    - "feature-disassembler-init-styled=1"
+
+# Two variants: minimal (default) and full (with disassembly support)
+variants:
+  minimal:
+    package_name: bpftool-minimal
+    description: "bpftool - eBPF subsystem utility (Minimal)"
+    default: true
+    provides:
+      - bpftool
+    alternatives:
+      - "200:/usr/sbin/bpftool:/usr/libexec/bpftool-minimal"
+    conflicts:
+      - bpftool-full
+    make_args:
+      - "feature-libbfd=0"
+
+  full:
+    package_name: bpftool-full
+    description: "bpftool - eBPF subsystem utility (Full)"
+    provides:
+      - bpftool
+    dependencies:
+      runtime:
+        - libbfd
+        - libopcodes
+      build:
+        - libbfd
+        - libopcodes
+    alternatives:
+      - "300:/usr/sbin/bpftool:/usr/libexec/bpftool-full"
+    conflicts:
+      - bpftool-minimal
+    make_args:
+      - "feature-libbfd=1"
+
+install:
+  files:
+    - src: "usr/sbin/bpftool"
+      dst: "/usr/libexec/bpftool-minimal"
+      mode: "0755"

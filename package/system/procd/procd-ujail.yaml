@@ -1,0 +1,25 @@
+# procd-ujail - stub package
+name: procd-ujail
+version: "1.0"
+release: 1
+license: GPL-2.0
+
+source:
+  type: none
+
+metadata:
+  section: base
+  category: Base system
+  title: procd-ujail
+  description: procd-ujail stub package
+  virtual: true
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  files: []

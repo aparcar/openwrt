@@ -1,0 +1,53 @@
+# Linux Kernel Package Definition
+# Base version shared across all targets
+# Target-specific patches/configs are added via target.yaml
+
+name: linux
+version: "6.12"
+release: 65
+license: GPL-2.0-only
+
+metadata:
+  section: kernel
+  category: Base system
+  title: Linux Kernel
+  description: The Linux kernel with OpenWrt patches
+  maintainer: OpenWrt Developers <openwrt-devel@lists.openwrt.org>
+  url: https://www.kernel.org
+
+source:
+  url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.${release}.tar.xz"
+  hash: "54e852667af35c0ed06cfc81311e65fa7f5f798a3bfcf78a559d3b4785a139c1"
+  file: "linux-${version}.${release}.tar.xz"
+
+# Base configuration applicable to all targets
+kernel:
+  # Full version string (version.release)
+  full_version: "${version}.${release}"
+
+  # Generic patches applied to all targets (order matters)
+  generic_patch_dirs:
+    - "target/linux/generic/backport-${version}"
+    - "target/linux/generic/pending-${version}"
+    - "target/linux/generic/hack-${version}"
+
+  # Generic config fragments
+  generic_config: "target/linux/generic/config-${version}"
+
+  # Generic kernel files (custom drivers, etc.)
+  generic_files:
+    - "target/linux/generic/files-${version}"
+    - "target/linux/generic/files"
+
+build:
+  system: kernel
+  steps:
+    - download
+    - extract
+    - patch
+    - configure
+    - compile
+    - install
+
+# Kernel modules are generated as subpackages
+# This is handled dynamically based on .config

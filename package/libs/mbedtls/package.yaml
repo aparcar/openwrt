@@ -1,0 +1,92 @@
+# mbedtls - Embedded SSL/TLS library
+# Synced with OpenWrt package/libs/mbedtls/Makefile
+
+name: mbedtls
+version: "3.6.5"
+release: 1
+license: GPL-2.0-or-later
+
+source:
+  type: tarball
+  url: "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.5/mbedtls-3.6.5.tar.bz2"
+  sha256: "4a11f1777bb95bf4ad96721cac945a26e04bf19f57d905f241fe77ebeddf46d8"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Embedded SSL library
+  description: |
+    The aim of the mbedtls project is to provide a quality, open-source
+    cryptographic library written in C and targeted at embedded systems.
+  maintainer: OpenWrt Developers
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: cmake
+  parallel: true
+  # Disable warnings-as-errors for array bounds (GCC 14+ false positives)
+  extra_cflags: "-Wno-error=array-bounds"
+  configure_args:
+    - "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+    - "-DUSE_SHARED_MBEDTLS_LIBRARY=ON"
+    - "-DENABLE_TESTING=OFF"
+    - "-DENABLE_PROGRAMS=ON"
+    - "-DMBEDTLS_FATAL_WARNINGS=OFF"
+
+subpackages:
+  libmbedtls:
+    description: "mbedtls cryptographic library"
+    section: libs
+    provides:
+      - libssl
+    default_variant: true
+    files:
+      - src: "usr/lib/libmbedcrypto.so*"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedtls.so*"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedx509.so*"
+        dst: "/usr/lib/"
+
+  mbedtls-util:
+    description: "mbedtls utilities"
+    section: utils
+    dependencies:
+      runtime:
+        - libmbedtls
+    files:
+      - src: "usr/bin/gen_key"
+        dst: "/usr/bin/"
+        mode: "0755"
+      - src: "usr/bin/cert_req"
+        dst: "/usr/bin/"
+        mode: "0755"
+
+  libmbedtls-dev:
+    description: "mbedtls development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libmbedtls
+    files:
+      - src: "usr/include/mbedtls/*.h"
+        dst: "/usr/include/mbedtls/"
+      - src: "usr/include/everest/**/*.h"
+        dst: "/usr/include/everest/"
+      - src: "usr/include/psa/*.h"
+        dst: "/usr/include/psa/"
+      - src: "usr/lib/libmbedcrypto.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedtls.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libmbedx509.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/pkgconfig/mbedtls.pc"
+        dst: "/usr/lib/pkgconfig/"
+      - src: "usr/lib/pkgconfig/mbedx509.pc"
+        dst: "/usr/lib/pkgconfig/"
+      - src: "usr/lib/pkgconfig/mbedcrypto.pc"
+        dst: "/usr/lib/pkgconfig/"

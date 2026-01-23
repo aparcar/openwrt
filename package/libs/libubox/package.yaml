@@ -1,0 +1,94 @@
+# libubox - OpenWrt base utility library
+# Source produces: libubox, libblobmsg-json, libjson-script, jshn
+# Synced with OpenWrt package/libs/libubox/Makefile
+
+name: libubox
+version: "2025.12.08"
+release: 1
+license: ISC
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/libubox.git"
+  version: "7928f1711703767b0ac5ce916c7231d0e1af1ca2"
+  sha256: "59cebd566db9013497e2094011f37eef9dcf5b3399b81be3e7c5217d646b82ee"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: OpenWrt base utility library
+  description: |
+    libubox is the OpenWrt base utility library.
+
+# Build dependencies for the source
+dependencies:
+  build:
+    - libjson-c
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DBUILD_LUA=OFF"
+    - "-DBUILD_EXAMPLES=OFF"
+
+# Multiple output packages from this source
+subpackages:
+  libubox:
+    description: "Basic utility library"
+    section: libs
+    dependencies:
+      runtime: []
+    files:
+      - src: "usr/lib/libubox.so*"
+        dst: "/usr/lib/"
+
+  libblobmsg-json:
+    description: "blobmsg <-> json conversion library"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+        - libjson-c
+    files:
+      - src: "usr/lib/libblobmsg_json.so*"
+        dst: "/usr/lib/"
+
+  libjson-script:
+    description: "Minimalistic JSON based scripting engine"
+    section: libs
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/lib/libjson_script.so*"
+        dst: "/usr/lib/"
+
+  jshn:
+    description: "JSON SHell Notation"
+    section: utils
+    dependencies:
+      runtime:
+        - libubox
+        - libblobmsg-json
+        - libjson-c
+    files:
+      - src: "usr/bin/jshn"
+        dst: "/usr/bin/jshn"
+        mode: "0755"
+      - src: "usr/share/libubox/jshn.sh"
+        dst: "/usr/share/libubox/jshn.sh"
+
+  libubox-dev:
+    description: "libubox development files"
+    section: devel
+    dependencies:
+      runtime:
+        - libubox
+    files:
+      - src: "usr/include/libubox/*.h"
+        dst: "/usr/include/libubox/"
+      - src: "usr/lib/libubox.a"
+        dst: "/usr/lib/"
+      - src: "usr/lib/libblobmsg_json.a"
+        dst: "/usr/lib/"

@@ -1,0 +1,101 @@
+# ubox - OpenWrt system helper toolbox
+# Source produces: ubox, logd, getrandom
+# Synced with OpenWrt package/system/ubox/Makefile
+
+name: ubox
+version: "2025.10.30"
+release: 1
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/ubox.git"
+  version: "6f78fa496bf36c55864a41e353df7d13f04b1077"
+  sha256: "41c28d9152cdf2998a4d867827655548f823de9de522a113a45ed1efef97d3ae"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt system helper toolbox
+  description: |
+    ubox provides system helper utilities for OpenWrt.
+
+# Build dependencies for the source
+dependencies:
+  build:
+    - libubox-dev
+    - libubus-dev
+    - libuci-dev
+    - libudebug
+    - libblobmsg-json
+    - libjson-c-dev
+
+build:
+  system: cmake
+  parallel: true
+
+# Multiple output packages from this source
+subpackages:
+  ubox:
+    description: "OpenWrt system helper toolbox"
+    section: base
+    dependencies:
+      runtime:
+        - libubox
+        - libubus
+        - libuci
+    files:
+      - src: "usr/sbin/kmodloader"
+        dst: "/sbin/kmodloader"
+        mode: "0755"
+      - src: "usr/sbin/validate_data"
+        dst: "/sbin/validate_data"
+        mode: "0755"
+      - src: "usr/lib/libvalidate.so"
+        dst: "/lib/libvalidate.so"
+    # Alternatives for module commands - busybox provides these at priority 50
+    # ubox provides them at priority 100, so ubox wins when both installed
+    alternatives:
+      - "100:/sbin/rmmod:/sbin/kmodloader"
+      - "100:/sbin/insmod:/sbin/kmodloader"
+      - "100:/sbin/lsmod:/sbin/kmodloader"
+      - "100:/sbin/modinfo:/sbin/kmodloader"
+      - "100:/sbin/modprobe:/sbin/kmodloader"
+    scripts:
+      postinst: |
+        #!/bin/sh
+        [ -s /lib/functions.sh ] || exit 0
+        . /lib/functions.sh
+        default_postinst ubox
+
+  logd:
+    description: "OpenWrt system log implementation"
+    section: base
+    userid:
+      - "logd=514:logd=514"
+    dependencies:
+      runtime:
+        - libubox
+        - libubus
+        - libblobmsg-json
+        - libudebug
+    files:
+      - src: "usr/sbin/logd"
+        dst: "/sbin/logd"
+        mode: "0755"
+      - src: "usr/sbin/logread"
+        dst: "/usr/sbin/logread"
+        mode: "0755"
+      - src: "${pkg_dir}/files/log.init"
+        dst: "/etc/init.d/log"
+        mode: "0755"
+
+  getrandom:
+    description: "OpenWrt getrandom system helper"
+    section: base
+    dependencies:
+      runtime: []
+    files:
+      - src: "usr/bin/getrandom"
+        dst: "/usr/bin/getrandom"
+        mode: "0755"

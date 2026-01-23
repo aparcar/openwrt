@@ -1,0 +1,43 @@
+# Linux firmware collection
+# Contains firmware blobs for various hardware devices
+# This package produces multiple subpackages for different firmware types
+
+name: linux-firmware
+version: "20251125"
+release: 1
+license: Redistributable
+
+source:
+  type: tarball
+  url: "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20251125.tar.xz"
+  sha256: "eb807a01c52882ac97ef5b678d4a246b209e6165ac1287d62a5f93a09ee93cd2"
+
+metadata:
+  section: firmware
+  category: Firmware
+  title: Linux firmware collection
+  description: |
+    This package contains firmware blobs for various hardware devices.
+    Individual firmware packages are provided as subpackages.
+  url: https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+
+dependencies:
+  build: []
+  runtime: []
+
+build:
+  system: none
+  # No compilation needed - firmware is just binary blobs
+
+subpackages:
+  # Inside Secure EIP197 crypto engine firmware
+  # Required for kmod-crypto-hw-safexcel on Marvell/MediaTek SoCs
+  eip197-mini-firmware:
+    description: "Inside Secure EIP197 mini firmware for crypto accelerator"
+    section: firmware
+    license: Redistributable
+    files:
+      - src: "inside-secure/eip197_minifw/ifpp.bin"
+        dst: "/lib/firmware/inside-secure/eip197_minifw/"
+      - src: "inside-secure/eip197_minifw/ipue.bin"
+        dst: "/lib/firmware/inside-secure/eip197_minifw/"

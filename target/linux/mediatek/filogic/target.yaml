@@ -1,0 +1,81 @@
+# OpenWrt Target Definition: mediatek-filogic
+# MediaTek Filogic 8x0 (MT798x) - ARM64 Cortex-A53
+
+name: mediatek-filogic
+board: mediatek
+subtarget: filogic
+description: "MediaTek Filogic 8x0 (MT798x) ARM based boards"
+
+arch: aarch64
+
+cpu:
+  type: cortex-a53
+  endian: little
+
+toolchain:
+  libc: musl
+  gcc_version: "14.3.0"
+  binutils_version: "2.44"
+  target_tuple: aarch64-openwrt-linux-musl
+  cflags:
+    - "-Os"
+    - "-pipe"
+    - "-mcpu=cortex-a53"
+  ldflags: []
+
+# Kernel configuration (base version from packages/linux)
+kernel:
+  # Use original OpenWrt config (kmod options added dynamically)
+  config_fragments:
+    - config-6.12
+  # Target-specific patches (from parent target dir)
+  patch_dirs:
+    - ../patches-6.12
+  # DTS files location (still from OpenWrt source for now)
+  dts_dir: ${OPENWRT_DIR}/target/linux/mediatek/dts
+  # Load addresses for this SoC
+  load_address: "0x44000000"
+  entry_address: "0x44000000"
+
+features:
+  - dt-overlay
+  - emmc
+  - fpu
+  - gpio
+  - nand
+  - pci
+  - pcie
+  - rootfs-part
+  - separate_ramdisk
+  - squashfs
+  - usb
+
+# Default packages for the target (from mediatek/Makefile + filogic/target.mk)
+default_packages:
+  - base-files
+  - busybox
+  - dropbear
+  - fitblk
+  - kmod-leds-gpio
+  - kmod-gpio-button-hotplug
+  - kmod-crypto-hw-safexcel
+  - eip197-mini-firmware
+  - wpad-basic-mbedtls
+  - uboot-envtools
+  # Network services
+  - dnsmasq
+  - odhcpd
+  - firewall4
+
+# Device profiles are loaded from profiles/*.yaml
+# See profiles/openwrt_one.yaml, profiles/abt_asr3000.yaml
+
+image:
+  filesystems:
+    - squashfs
+    - ubifs
+    - jffs2
+    - initramfs
+  kernel_name: Image
+  kernel_in_ubi: true
+  ubootenv_in_ubi: true

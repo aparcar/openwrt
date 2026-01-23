@@ -1,0 +1,84 @@
+# ABT ASR3000 - Budget MT7981B router
+# Used for testing alternative device support
+
+name: abt_asr3000
+title: "ABT ASR3000"
+vendor: ABT
+model: ASR3000
+
+# Device Tree
+dts: mt7981b-abt-asr3000
+dts_dir: "${OPENWRT_DIR}/target/linux/mediatek/dts"
+dts_load_address: "0x43f00000"
+
+# Device-specific packages
+packages:
+  - kmod-mt7915e
+  - kmod-mt7981-firmware
+  - mt7981-wo-firmware
+
+# Hardware specifications
+hardware:
+  soc: MT7981B
+  ram: 512MB DDR3
+  flash:
+    nand: 128MB SPI-NAND
+  wifi:
+    - band: 2.4GHz
+      standard: 802.11ax
+      streams: 2x2
+    - band: 5GHz
+      standard: 802.11ax
+      streams: 2x2
+  ethernet:
+    wan: 1GbE
+    lan: 3x 1GbE
+
+# UBI configuration
+ubi:
+  blocksize: 128k
+  pagesize: 2048
+  options: "-E 5"
+  volumes:
+    - name: fip
+      image: "${STAGING_DIR_IMAGE}/mt7981_abt_asr3000-u-boot.fip"
+    - name: recovery
+      image: "initramfs.itb"
+      optional: true
+
+# UBIFS configuration
+ubifs:
+  max_leb_cnt: 1024
+  compression: zlib
+
+# Image generation
+images:
+  - name: sysupgrade.itb
+    type: sysupgrade
+    filesystem: squashfs
+    kernel:
+      format: fit
+      compression: gzip
+      load_address: "0x44000000"
+    rootfs:
+      type: external
+      pad: true
+    metadata: true
+
+  - name: initramfs.itb
+    type: initramfs
+    kernel:
+      format: fit
+      compression: lzma
+      load_address: "0x44000000"
+    pad_to: 64k
+
+# Boot artifacts
+artifacts:
+  - name: snand-preloader.bin
+    type: bl2
+    variant: spim-nand-ddr3
+
+  - name: snand-bl31-uboot.fip
+    type: fip
+    variant: abt_asr3000

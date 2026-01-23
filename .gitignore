@@ -35,3 +35,53 @@ git-src
 .cproject
 .ccache
 .vscode*
+# Build outputs
+/build/
+/output/
+
+# Kernel module build artifacts
+*.ko
+*.mod
+*.mod.c
+Module.symvers
+modules.order
+.*.cmd
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker volumes (if mounted locally)
+.docker-data/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Test coverage
+.coverage
+htmlcov/
+# Build artifacts (legacy poc location)
+poc/build/
+poc/output/
+poc/dl/
+
+# Build artifacts (new location)
+build/
+output/

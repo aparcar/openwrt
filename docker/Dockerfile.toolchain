@@ -1,0 +1,98 @@
+# OpenWrt Build System - Toolchain Image
+#
+# This image extends owrt-tools with a cross-compilation toolchain for a
+# specific target architecture. One image is built per target.
+#
+# Build (example for mediatek/filogic):
+#   docker build -f docker/Dockerfile.toolchain \
+#     --build-arg TARGET=mediatek/filogic \
+#     --build-arg TOOLS_IMAGE=owrt-tools \
+#     -t owrt-toolchain-mediatek-filogic .
+#
+# The toolchain is built from OpenWrt sources because OpenWrt applies
+# custom patches to GCC, binutils, and musl that are required for
+# correct package compilation.
+#
+# Contents:
+# - All host tools from owrt-tools
+# - Cross-compiler (gcc, g++, as, ld, etc.)
+# - Target libc (musl with OpenWrt patches)
+# - Linux kernel headers for target
+# - pkg-config wrapper for cross-compilation
+
+ARG TOOLS_IMAGE=owrt-tools
+FROM ${TOOLS_IMAGE} AS builder
+
+# Target to build toolchain for (e.g., mediatek/filogic, x86/64)
+ARG TARGET
+ARG OPENWRT_REF=main
+
+# Require TARGET argument
+RUN test -n "${TARGET}" || (echo "ERROR: TARGET argument required" && exit 1)
+
+USER root
+
+# Clone OpenWrt source (needed for toolchain build)
+RUN mkdir -p /openwrt /toolchain && \
+    chown builder:builder /openwrt /toolchain
+
+USER builder
+
+# Clone OpenWrt and checkout specified ref
+RUN git clone --depth=1 --branch=${OPENWRT_REF} \
+    https://github.com/openwrt/openwrt.git /openwrt/openwrt || \
+    git clone --depth=1 https://github.com/openwrt/openwrt.git /openwrt/openwrt
+
+WORKDIR /openwrt
+
+# Copy owrt build system and target definitions
+COPY --chown=builder:builder owrt /openwrt/owrt
+COPY --chown=builder:builder toolchain /openwrt/toolchain
+COPY --chown=builder:builder target /openwrt/target
+
+# Build the cross-toolchain for the specified target
+# This compiles: binutils, gcc (bootstrap), linux headers, musl, gcc (final)
+# OWRT_IN_CONTAINER tells the build system not to try launching Docker
+RUN OWRT_IN_CONTAINER=1 python3 -m owrt -v toolchain build ${TARGET} \
+    --output /toolchain
+
+# Verify toolchain was built
+RUN ls -la /toolchain/bin/ | head -20
+
+# ============================================================================
+# Final toolchain image
+# ============================================================================
+FROM ${TOOLS_IMAGE}
+
+ARG TARGET
+
+LABEL maintainer="OpenWrt Developers"
+LABEL description="OpenWrt Toolchain for ${TARGET}"
+LABEL org.opencontainers.image.target="${TARGET}"
+
+# Copy built toolchain
+COPY --from=builder --chown=builder:builder /toolchain /opt/toolchain
+
+# Extract target tuple from toolchain (e.g., aarch64-openwrt-linux-musl)
+USER root
+RUN TUPLE=$(ls /opt/toolchain/bin/*-gcc 2>/dev/null | head -1 | xargs basename | sed 's/-gcc$//') && \
+    echo "TOOLCHAIN_TUPLE=${TUPLE}" >> /etc/environment && \
+    echo "export TOOLCHAIN_TUPLE=${TUPLE}" >> /home/builder/.bashrc
+
+# Environment for cross-compilation
+ENV TOOLCHAIN_DIR=/opt/toolchain
+ENV PATH="/opt/toolchain/bin:${PATH}"
+
+# Target identification
+ENV OWRT_TARGET=${TARGET}
+
+USER builder
+WORKDIR /build
+
+# Verify toolchain works
+RUN . /etc/environment 2>/dev/null || true && \
+    TUPLE=$(ls /opt/toolchain/bin/*-gcc 2>/dev/null | head -1 | xargs basename | sed 's/-gcc$//') && \
+    echo "Toolchain tuple: ${TUPLE}" && \
+    /opt/toolchain/bin/${TUPLE}-gcc --version | head -1
+
+CMD ["/bin/bash"]

@@ -1,0 +1,98 @@
+# procd - OpenWrt init/process manager
+# Source produces: procd, procd-ujail, procd-seccomp
+# Synced with OpenWrt package/system/procd/Makefile
+
+name: procd
+version: "2025.10.04"
+release: 1
+license: GPL-2.0
+
+source:
+  type: git
+  url: "https://git.openwrt.org/project/procd.git"
+  version: "3b3501abb63d9aa59ccc20acf5f2c2be48190b25"
+  sha256: "1c418d1cba203385b3e5889a83d54ed818cd5817b87f1fb41f7238894a41c908"
+
+metadata:
+  section: base
+  category: Base system
+  title: OpenWrt system process manager
+  description: |
+    procd is the OpenWrt init system and process manager.
+
+# Build dependencies for the source
+dependencies:
+  build:
+    - libjson-c-dev
+    - libubox-dev
+    - libubus-dev
+    - libuci-dev
+    - libudebug
+    - libblobmsg-json
+    - libjson-script
+
+# Cannot be installed alongside SELinux variant
+conflicts:
+  - procd-selinux
+
+build:
+  system: cmake
+  parallel: true
+  configure_args:
+    - "-DJAIL_SUPPORT=0"
+    - "-DSECCOMP_SUPPORT=0"
+    - "-DUTRACE_SUPPORT=0"
+
+# Multiple output packages from this source
+subpackages:
+  procd:
+    description: "OpenWrt system process manager"
+    section: base
+    userid:
+      - ":dialout=20"
+      - ":audio=29"
+    dependencies:
+      runtime:
+        - libjson-c
+        - libubox
+        - libubus
+        - libuci
+        - libudebug
+        - libblobmsg-json
+        - libjson-script
+        - ubusd
+        - ubox
+        - jshn
+    files:
+      # procd binaries
+      - src: "usr/sbin/init"
+        dst: "/sbin/init"
+        mode: "0755"
+      - src: "usr/sbin/procd"
+        dst: "/sbin/procd"
+        mode: "0755"
+      - src: "usr/sbin/askfirst"
+        dst: "/sbin/askfirst"
+        mode: "0755"
+      - src: "usr/sbin/udevtrigger"
+        dst: "/sbin/udevtrigger"
+        mode: "0755"
+      - src: "usr/sbin/upgraded"
+        dst: "/sbin/upgraded"
+        mode: "0755"
+      # Library
+      - src: "usr/lib/libsetlbf.so"
+        dst: "/lib/libsetlbf.so"
+      # Config files (from package files/)
+      - src: "${pkg_dir}/files/reload_config"
+        dst: "/sbin/reload_config"
+        mode: "0755"
+      - src: "${pkg_dir}/files/service"
+        dst: "/sbin/service"
+        mode: "0755"
+      - src: "${pkg_dir}/files/hotplug.json"
+        dst: "/etc/hotplug.json"
+      - src: "${pkg_dir}/files/hotplug-preinit.json"
+        dst: "/etc/hotplug-preinit.json"
+      - src: "${pkg_dir}/files/procd.sh"
+        dst: "/lib/functions/procd.sh"

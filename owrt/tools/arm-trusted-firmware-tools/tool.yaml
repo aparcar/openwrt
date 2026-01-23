@@ -1,0 +1,40 @@
+# ARM Trusted Firmware Tools (fiptool)
+# Synced with OpenWrt package/boot/arm-trusted-firmware-tools/Makefile
+# Provides fiptool for creating FIP (Firmware Image Package) files
+
+name: arm-trusted-firmware-tools
+version: "2.12"
+license: BSD-3-Clause
+
+source:
+  type: tarball
+  url: "https://codeload.github.com/TrustedFirmware-A/trusted-firmware-a/tar.gz/v${version}?"
+  file: "trusted-firmware-a-v${version}.tar.gz"
+  sha256: "b4c047493cac1152203e1ba121ae57267e4899b7bf56eb365e22a933342d31c9"
+  # Archive extracts to trusted-firmware-a-${version}/
+  strip_components: 1
+
+metadata:
+  title: ARM Trusted Firmware Tools
+  description: |
+    Host tools from ARM Trusted Firmware-A project.
+    Provides fiptool for creating FIP (Firmware Image Package) files
+    that combine BL31 (runtime services) with U-Boot for ARM64 boot.
+
+dependencies: []
+
+build:
+  system: custom
+  parallel: true
+
+  # Build only the fiptool, not the entire TF-A
+  compile_script: |
+    make -C tools/fiptool \
+      CPPFLAGS="${CFLAGS}" \
+      LDFLAGS="${LDFLAGS}" \
+      OPENSSL_DIR="${STAGING_DIR}"
+
+  install_script: |
+    install -d ${DESTDIR}/bin
+    install -m 0755 tools/fiptool/fiptool ${DESTDIR}/bin/
+    install -m 0755 tools/sptool/sptool.py ${DESTDIR}/bin/

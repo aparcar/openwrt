@@ -1,0 +1,244 @@
+# ARM Trusted Firmware-A for MediaTek SoCs
+# Synced with OpenWrt package/boot/arm-trusted-firmware-mediatek/Makefile
+
+name: arm-trusted-firmware-mediatek
+version: "2025.07.11"
+release: 1
+license: BSD-3-Clause
+
+source:
+  type: git
+  url: "https://github.com/mtk-openwrt/arm-trusted-firmware.git"
+  commit: "78a0dfd927bb00ce973a1f8eb4079df0f755887a"
+  sha256: "72a5f3f00f9e368226bb779dc098aac6195a312b48cc22172987d494ccd135d1"
+
+metadata:
+  section: boot
+  category: Boot Loaders
+  title: ARM Trusted Firmware-A for MediaTek
+  description: |
+    ARM Trusted Firmware-A (TF-A) provides a reference implementation of
+    secure world software for ARMv8-A platforms. This package builds
+    BL2 (bootloader stage 2) and BL31 (runtime services) for MediaTek SoCs.
+  maintainer: Daniel Golle <daniel@makrotopia.org>
+
+dependencies:
+  runtime: []
+  build:
+    - mkimage  # U-Boot mkimage for image creation
+
+build:
+  system: custom
+  parallel: true
+
+  # Build produces bl2.img and bl31.bin
+  outputs:
+    - bl2.img
+    - bl31.bin
+
+# Variant definitions for different SoC/boot device combinations
+# Each variant produces a separate set of bl2.img and bl31.bin
+variants:
+  # =========================================================================
+  # MT7981 variants (used by OpenWrt One and other Filogic devices)
+  # =========================================================================
+  mt7981-nor-ddr4:
+    description: "MediaTek MT7981 (SPI-NOR, DDR4)"
+    plat: mt7981
+    boot_device: nor
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=nor"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7981-spim-nand-ubi-ddr4:
+    description: "MediaTek MT7981 (SPI-NAND via SPIM with UBI, DDR4)"
+    plat: mt7981
+    boot_device: spim-nand
+    ddr_type: ddr4
+    use_ubi: true
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=spim-nand"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "UBI=1"
+      - "OVERRIDE_UBI_START_ADDR=0x100000"
+      - "all"
+
+  mt7981-spim-nand-ddr4:
+    description: "MediaTek MT7981 (SPI-NAND via SPIM, DDR4)"
+    plat: mt7981
+    boot_device: spim-nand
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=spim-nand"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7981-emmc-ddr4:
+    description: "MediaTek MT7981 (eMMC, DDR4)"
+    plat: mt7981
+    boot_device: emmc
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=emmc"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7981-sdmmc-ddr4:
+    description: "MediaTek MT7981 (SD card, DDR4)"
+    plat: mt7981
+    boot_device: sdmmc
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=sdmmc"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  # DDR3 variants
+  mt7981-nor-ddr3:
+    description: "MediaTek MT7981 (SPI-NOR, DDR3)"
+    plat: mt7981
+    boot_device: nor
+    ddr_type: ddr3
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=nor"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7981-spim-nand-ddr3:
+    description: "MediaTek MT7981 (SPI-NAND via SPIM, DDR3)"
+    plat: mt7981
+    boot_device: spim-nand
+    ddr_type: ddr3
+    make_flags:
+      - "PLAT=mt7981"
+      - "BOOT_DEVICE=spim-nand"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  # =========================================================================
+  # MT7986 variants (Filogic 880)
+  # =========================================================================
+  mt7986-spim-nand-ubi-ddr4:
+    description: "MediaTek MT7986 (SPI-NAND via SPIM with UBI, DDR4)"
+    plat: mt7986
+    boot_device: spim-nand
+    ddr_type: ddr4
+    use_ubi: true
+    make_flags:
+      - "PLAT=mt7986"
+      - "BOOT_DEVICE=spim-nand"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "NAND_TYPE=spim:2k+64"
+      - "UBI=1"
+      - "OVERRIDE_UBI_START_ADDR=0x200000"
+      - "all"
+
+  mt7986-emmc-ddr4:
+    description: "MediaTek MT7986 (eMMC, DDR4)"
+    plat: mt7986
+    boot_device: emmc
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7986"
+      - "BOOT_DEVICE=emmc"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7986-sdmmc-ddr4:
+    description: "MediaTek MT7986 (SD card, DDR4)"
+    plat: mt7986
+    boot_device: sdmmc
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7986"
+      - "BOOT_DEVICE=sdmmc"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7986-nor-ddr4:
+    description: "MediaTek MT7986 (SPI-NOR, DDR4)"
+    plat: mt7986
+    boot_device: nor
+    ddr_type: ddr4
+    make_flags:
+      - "PLAT=mt7986"
+      - "BOOT_DEVICE=nor"
+      - "DRAM_USE_DDR4=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  # =========================================================================
+  # MT7988 variants (Filogic 880)
+  # =========================================================================
+  mt7988-emmc-comb:
+    description: "MediaTek MT7988 (eMMC)"
+    plat: mt7988
+    boot_device: emmc
+    make_flags:
+      - "PLAT=mt7988"
+      - "BOOT_DEVICE=emmc"
+      - "DRAM_USE_COMB=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7988-sdmmc-comb:
+    description: "MediaTek MT7988 (SD card)"
+    plat: mt7988
+    boot_device: sdmmc
+    make_flags:
+      - "PLAT=mt7988"
+      - "BOOT_DEVICE=sdmmc"
+      - "DRAM_USE_COMB=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "all"
+
+  mt7988-spim-nand-ubi-comb:
+    description: "MediaTek MT7988 (SPI-NAND via SPIM with UBI)"
+    plat: mt7988
+    boot_device: spim-nand
+    use_ubi: true
+    make_flags:
+      - "PLAT=mt7988"
+      - "BOOT_DEVICE=spim-nand"
+      - "DRAM_USE_COMB=1"
+      - "HAVE_DRAM_OBJ_FILE=yes"
+      - "BOARD_BGA=1"
+      - "UBI=1"
+      - "all"
+
+# Installation: outputs go to staging directory for U-Boot to consume
+install:
+  staging:
+    - src: "build/${plat}/release/bl2.img"
+      dst: "${variant}-bl2.img"
+    - src: "build/${plat}/release/bl31.bin"
+      dst: "${variant}-bl31.bin"

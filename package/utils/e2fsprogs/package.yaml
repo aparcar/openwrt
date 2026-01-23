@@ -1,0 +1,25 @@
+# e2fsprogs - stub package
+name: e2fsprogs
+version: "1.0"
+release: 1
+license: GPL-2.0
+
+source:
+  type: none
+
+metadata:
+  section: base
+  category: Base system
+  title: e2fsprogs
+  description: e2fsprogs stub package
+  virtual: true
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: none
+
+install:
+  files: []
