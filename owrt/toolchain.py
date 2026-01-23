@@ -60,6 +60,38 @@ class ToolchainBuilder:
         self.gcc_version = tc.get('gcc_version', self.GCC_VERSION)
         self.binutils_version = tc.get('binutils_version', self.BINUTILS_VERSION)
 
+        # Create a clean host environment for building toolchain components
+        # This prevents the cross-compiler from being picked up by configure
+        self._host_env = self._create_host_env()
+
+    def _create_host_env(self) -> dict:
+        """Create a clean environment for host compilation.
+        
+        When building the toolchain, we need to use the host compiler (gcc),
+        not any cross-compiler that might be in PATH. This is especially
+        important when running in a container that already has toolchain
+        environment variables set.
+        """
+        env = os.environ.copy()
+        
+        # Force host compiler
+        env['CC'] = 'gcc'
+        env['CXX'] = 'g++'
+        env['AR'] = 'ar'
+        env['AS'] = 'as'
+        env['LD'] = 'ld'
+        env['RANLIB'] = 'ranlib'
+        env['STRIP'] = 'strip'
+        env['NM'] = 'nm'
+        env['OBJCOPY'] = 'objcopy'
+        env['OBJDUMP'] = 'objdump'
+        
+        # Remove cross-compiler variables that might interfere
+        for var in ['CROSS_COMPILE', 'TARGET_CC', 'TARGET_CXX']:
+            env.pop(var, None)
+        
+        return env
+
     def is_built(self) -> bool:
         """Check if toolchain is already built."""
         stamp = self.stamp_dir / 'gcc_final_installed'
@@ -155,13 +187,13 @@ class ToolchainBuilder:
             '--with-system-zlib',
         ]
 
-        run_command(configure_args, cwd=build_dir, verbose=self.verbose)
+        run_command(configure_args, cwd=build_dir, env=self._host_env, verbose=self.verbose)
 
         # Build
-        run_command(['make', f'-j{self.jobs}'], cwd=build_dir, verbose=self.verbose)
+        run_command(['make', f'-j{self.jobs}'], cwd=build_dir, env=self._host_env, verbose=self.verbose)
 
         # Install
-        run_command(['make', 'install'], cwd=build_dir, verbose=self.verbose)
+        run_command(['make', 'install'], cwd=build_dir, env=self._host_env, verbose=self.verbose)
 
         stamp.touch()
 
@@ -214,21 +246,22 @@ class ToolchainBuilder:
             f'--with-mpc=/usr',
         ]
 
-        env = os.environ.copy()
+        # Use host environment with optimization flags
+        env = self._host_env.copy()
         env['CFLAGS'] = '-O2 -pipe'
         env['CXXFLAGS'] = '-O2 -pipe'
 
         run_command(configure_args, cwd=build_dir, env=env, verbose=self.verbose)
 
         # Build compiler
-        run_command(['make', f'-j{self.jobs}', 'all-gcc'], cwd=build_dir, verbose=self.verbose)
+        run_command(['make', f'-j{self.jobs}', 'all-gcc'], cwd=build_dir, env=env, verbose=self.verbose)
 
         # Build libgcc (needed by musl for floating-point helpers like __trunctfdf2)
-        run_command(['make', f'-j{self.jobs}', 'all-target-libgcc'], cwd=build_dir, verbose=self.verbose)
+        run_command(['make', f'-j{self.jobs}', 'all-target-libgcc'], cwd=build_dir, env=env, verbose=self.verbose)
 
         # Install compiler and libgcc
-        run_command(['make', 'install-gcc'], cwd=build_dir, verbose=self.verbose)
-        run_command(['make', 'install-target-libgcc'], cwd=build_dir, verbose=self.verbose)
+        run_command(['make', 'install-gcc'], cwd=build_dir, env=env, verbose=self.verbose)
+        run_command(['make', 'install-target-libgcc'], cwd=build_dir, env=env, verbose=self.verbose)
 
         stamp.touch()
 
@@ -268,7 +301,7 @@ class ToolchainBuilder:
             f'ARCH={kernel_arch}',
             f'INSTALL_HDR_PATH={usr_dir}',
             'headers_install',
-        ], cwd=src_dir, verbose=self.verbose)
+        ], cwd=src_dir, env=self._host_env, verbose=self.verbose)
 
         stamp.touch()
 
@@ -363,7 +396,9 @@ class ToolchainBuilder:
             f'--with-mpc=/usr',
         ]
 
-        env = os.environ.copy()
+        # Use host environment with optimization flags
+        # PATH needs to include the new toolchain for target compilation
+        env = self._host_env.copy()
         env['CFLAGS'] = '-O2 -pipe'
         env['CXXFLAGS'] = '-O2 -pipe'
         env['CFLAGS_FOR_TARGET'] = '-Os -pipe'
