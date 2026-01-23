@@ -111,7 +111,10 @@ owrt/
   - [x] GPT partition table
   - [x] FAT32 ESP with kernel
   - [x] Combined disk images
-- [x] Post-install scripts (via APK `--script` and `IPKG_INSTROOT` env)
+- [x] **Post-install scripts:**
+  - [x] Extracted from APK scripts.tar.gz
+  - [x] Run with IPKG_INSTROOT pointing to target rootfs
+  - [x] Creates rc.d symlinks via default_postinst
 
 ### 9. Bootloader Building (`bootloader.py`)
 - [x] ARM Trusted Firmware (TF-A) building
@@ -214,7 +217,7 @@ owrt/
 - [x] **Filesystem images** - Complete (squashfs, ext4, ubifs, jffs2)
 - [x] **Bootloader integration** - Complete (TF-A, U-Boot, FIP)
 - [x] **Image types** - Working for armsr, x86, mediatek
-- [ ] **Post-install scripts** - Not running during rootfs assembly
+- [x] **Post-install scripts** - Running via host bash with IPKG_INSTROOT
 
 #### 1.4 Target Definitions
 - [x] `armsr-armv8` (ARM SystemReady EFI)
@@ -277,7 +280,6 @@ owrt/
 - ~~UBI images~~: Working with ubinize
 - ~~Sysupgrade format~~: Working with fwtool metadata
 - ~~DTB overlays~~: Implemented via profile `dts_overlay` field
-- ~~Post-install scripts~~: Enabled via APK `--script` and `IPKG_INSTROOT` env
 - ~~Conditional dependencies~~: `+CONDITION:dep`, `+!COND:dep`, `+PACKAGE_*:dep` supported
 
 ## Quick Reference
