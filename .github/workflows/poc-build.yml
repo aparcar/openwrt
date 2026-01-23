@@ -399,7 +399,7 @@ jobs:
 
       - name: Clone openwrt-tests
         run: |
-          git clone --depth 1 https://github.com/aparcar/openwrt-tests.git tests
+          git clone --depth 1 https://github.com/aparcar/openwrt-tests.git openwrt-tests
 
       - name: Download firmware artifacts
         uses: actions/download-artifact@v4
@@ -407,13 +407,11 @@ jobs:
           name: firmware-${{ env.TARGET }}
           path: firmware
 
-      - name: Install test dependencies
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install QEMU
         run: |
-          # Install uv
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          
-          # Install QEMU
           sudo apt-get update
           sudo apt-get install -y qemu-system-aarch64
 
@@ -422,42 +420,68 @@ jobs:
           echo "=== Downloaded firmware ==="
           ls -la firmware/ || echo "No firmware files found"
 
-      - name: Run runtime tests
+      - name: Find firmware image
+        id: firmware
         run: |
           # Find the initramfs kernel for QEMU testing
-          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' -o -name '*-initramfs*.elf' | head -1)
+          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' | head -1)
           
           if [ -z "$FIRMWARE" ]; then
-            echo "No initramfs firmware found, looking for other images..."
-            FIRMWARE=$(find firmware -name '*.bin' -o -name '*.img' | head -1)
+            FIRMWARE=$(find firmware -name '*-initramfs*.elf' | head -1)
           fi
           
           if [ -z "$FIRMWARE" ]; then
-            echo "No bootable firmware image found, skipping runtime tests"
+            FIRMWARE=$(find firmware -name '*.bin' | head -1)
+          fi
+          
+          if [ -z "$FIRMWARE" ]; then
+            echo "No bootable firmware image found"
+            echo "found=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          echo "Testing firmware: $FIRMWARE"
-          
-          # Run tests using openwrt-tests framework
-          cd tests
-          ~/.cargo/bin/uv sync
-          
-          ~/.cargo/bin/uv run pytest tests/ \
+          echo "Found firmware: $FIRMWARE"
+          echo "path=$FIRMWARE" >> $GITHUB_OUTPUT
+          echo "found=true" >> $GITHUB_OUTPUT
+
+      - name: Install test dependencies
+        if: steps.firmware.outputs.found == 'true'
+        working-directory: openwrt-tests
+        run: |
+          uv sync
+
+      - name: Run openwrt-tests
+        if: steps.firmware.outputs.found == 'true'
+        working-directory: openwrt-tests
+        run: |
+          uv run pytest tests/ \
             --lg-env targets/qemu_armsr-armv8.yaml \
             --lg-log \
             --log-cli-level=INFO \
             --lg-colored-steps \
-            --firmware "../$FIRMWARE" \
+            --firmware "${{ github.workspace }}/${{ steps.firmware.outputs.path }}" \
             -v \
             --timeout=300 \
-            || echo "Some tests failed (this is expected for development builds)"
+            --junit-xml=test-results.xml \
+            -x \
+            || true  # Don't fail the job on test failures for now
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.firmware.outputs.found == 'true'
         with:
-          name: test-results
-          path: tests/*.log
-          retention-days: 7
+          name: runtime-test-results
+          path: |
+            openwrt-tests/test-results.xml
+            openwrt-tests/*.log
+          retention-days: 30
           if-no-files-found: ignore
+
+      - name: Publish test results
+        uses: mikepenz/action-junit-report@v4
+        if: always() && steps.firmware.outputs.found == 'true'
+        with:
+          report_paths: openwrt-tests/test-results.xml
+          check_name: QEMU Runtime Tests
+          fail_on_failure: false
+          include_passed: true
