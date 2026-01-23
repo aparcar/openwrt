@@ -91,10 +91,29 @@ class DockerImageBuilder:
             check=check,
         )
 
-    def _image_exists(self, image_ref: str) -> bool:
-        """Check if a Docker image exists locally."""
-        result = self._run_docker(['image', 'inspect', image_ref], check=False)
-        return result.returncode == 0
+    def _image_exists(self, image_ref: str, check_remote: bool = False) -> bool:
+        """Check if a Docker image exists.
+        
+        Args:
+            image_ref: Image reference (name:tag)
+            check_remote: If True, check remote registry via manifest inspect
+        """
+        if check_remote and self.registry:
+            # Check remote registry
+            result = self._run_docker(['manifest', 'inspect', image_ref], check=False)
+            return result.returncode == 0
+        else:
+            # Check locally
+            result = self._run_docker(['image', 'inspect', image_ref], check=False)
+            return result.returncode == 0
+
+    def _push_image(self, image_ref: str):
+        """Push an image to the registry."""
+        if not self.registry:
+            self._log(f"  No registry configured, skipping push for {image_ref}")
+            return
+        print(f"  Pushing {image_ref}...")
+        self._run_docker(['push', image_ref])
 
     def _hash_file(self, path: Path) -> str:
         """Compute SHA256 hash of a file."""
@@ -141,8 +160,12 @@ class DockerImageBuilder:
         self._hash_cache[cache_key] = result
         return result
 
-    def get_base_image_info(self) -> ImageInfo:
-        """Get information about the base image."""
+    def get_base_image_info(self, check_remote: bool = False) -> ImageInfo:
+        """Get information about the base image.
+        
+        Args:
+            check_remote: Check remote registry instead of local
+        """
         content_hash = self.compute_base_hash()
         name = self._image_name('owrt-base')
         tag = content_hash
@@ -152,18 +175,22 @@ class DockerImageBuilder:
             name=name,
             tag=tag,
             content_hash=content_hash,
-            exists=self._image_exists(full_tag),
+            exists=self._image_exists(full_tag, check_remote=check_remote),
             full_tag=full_tag,
         )
 
-    def build_base(self, force: bool = False) -> ImageInfo:
+    def build_base(self, force: bool = False, push: bool = False) -> ImageInfo:
         """
         Build the base image if needed.
+
+        Args:
+            force: Force rebuild even if image exists
+            push: Push to registry after building
 
         Returns:
             ImageInfo for the base image
         """
-        info = self.get_base_image_info()
+        info = self.get_base_image_info(check_remote=push)
 
         if info.exists and not force:
             print(f"  Base image up-to-date: {info.image_ref}")
@@ -181,6 +208,11 @@ class DockerImageBuilder:
         ])
 
         info.exists = True
+
+        if push:
+            self._push_image(info.image_ref)
+            self._push_image(f"{info.name}:latest")
+
         return info
 
     # =========================================================================
@@ -242,8 +274,12 @@ class DockerImageBuilder:
         self._hash_cache[cache_key] = result
         return result
 
-    def get_tools_image_info(self) -> ImageInfo:
-        """Get information about the tools image."""
+    def get_tools_image_info(self, check_remote: bool = False) -> ImageInfo:
+        """Get information about the tools image.
+        
+        Args:
+            check_remote: Check remote registry instead of local
+        """
         content_hash = self.compute_tools_hash()
         name = self._image_name('owrt-tools')
         tag = content_hash
@@ -253,23 +289,27 @@ class DockerImageBuilder:
             name=name,
             tag=tag,
             content_hash=content_hash,
-            exists=self._image_exists(full_tag),
+            exists=self._image_exists(full_tag, check_remote=check_remote),
             full_tag=full_tag,
         )
 
-    def build_tools(self, force: bool = False) -> ImageInfo:
+    def build_tools(self, force: bool = False, push: bool = False) -> ImageInfo:
         """
         Build the tools image if needed.
 
         Automatically builds base image first if needed.
 
+        Args:
+            force: Force rebuild even if image exists
+            push: Push to registry after building
+
         Returns:
             ImageInfo for the tools image
         """
         # Ensure base is built first
-        base_info = self.build_base(force=force)
+        base_info = self.build_base(force=force, push=push)
 
-        info = self.get_tools_image_info()
+        info = self.get_tools_image_info(check_remote=push)
 
         if info.exists and not force:
             print(f"  Tools image up-to-date: {info.image_ref}")
@@ -287,6 +327,11 @@ class DockerImageBuilder:
         ])
 
         info.exists = True
+
+        if push:
+            self._push_image(info.image_ref)
+            self._push_image(f"{info.name}:latest")
+
         return info
 
     # =========================================================================
@@ -353,8 +398,13 @@ class DockerImageBuilder:
         self._hash_cache[cache_key] = result
         return result
 
-    def get_toolchain_image_info(self, target: str) -> ImageInfo:
-        """Get information about a toolchain image."""
+    def get_toolchain_image_info(self, target: str, check_remote: bool = False) -> ImageInfo:
+        """Get information about a toolchain image.
+        
+        Args:
+            target: Target name
+            check_remote: Check remote registry instead of local
+        """
         content_hash = self.compute_toolchain_hash(target)
         # Convert target to valid Docker tag (x86/64 -> x86-64)
         tag_target = target.replace('/', '-')
@@ -366,11 +416,11 @@ class DockerImageBuilder:
             name=name,
             tag=tag,
             content_hash=content_hash,
-            exists=self._image_exists(full_tag),
+            exists=self._image_exists(full_tag, check_remote=check_remote),
             full_tag=full_tag,
         )
 
-    def build_toolchain(self, target: str, force: bool = False) -> ImageInfo:
+    def build_toolchain(self, target: str, force: bool = False, push: bool = False) -> ImageInfo:
         """
         Build a toolchain image for a specific target.
 
@@ -379,14 +429,15 @@ class DockerImageBuilder:
         Args:
             target: Target name (e.g., 'mediatek/filogic', 'x86/64')
             force: Force rebuild even if image exists
+            push: Push to registry after building
 
         Returns:
             ImageInfo for the toolchain image
         """
         # Ensure tools is built first
-        tools_info = self.build_tools(force=force)
+        tools_info = self.build_tools(force=force, push=push)
 
-        info = self.get_toolchain_image_info(target)
+        info = self.get_toolchain_image_info(target, check_remote=push)
 
         if info.exists and not force:
             print(f"  Toolchain image up-to-date: {info.image_ref}")
@@ -406,6 +457,11 @@ class DockerImageBuilder:
         ])
 
         info.exists = True
+
+        if push:
+            self._push_image(info.image_ref)
+            self._push_image(f"{info.name}:latest")
+
         return info
 
     # =========================================================================

@@ -53,21 +53,27 @@ def container():
 @container.command('build')
 @click.option('--target', '-t', help='Build toolchain for specific target (e.g., mediatek/filogic)')
 @click.option('--force', '-f', is_flag=True, help='Force rebuild even if up-to-date')
+@click.option('--push', '-p', is_flag=True, help='Push images to registry after building')
 @click.option('--base-only', is_flag=True, help='Only build base image')
 @click.option('--tools-only', is_flag=True, help='Only build base + tools images')
 @click.option('--registry', '-r', help='Docker registry prefix (e.g., ghcr.io/openwrt)')
 @click.pass_context
-def container_build(ctx, target, force, base_only, tools_only, registry):
+def container_build(ctx, target, force, push, base_only, tools_only, registry):
     """Build container images with content-based caching.
 
     Images are tagged with content hashes so unchanged inputs don't trigger rebuilds.
+    When --push is used with --registry, images are checked in the remote registry
+    before building and pushed after building.
 
     Examples:
-        # Build base + tools images
+        # Build base + tools images locally
         owrt container build
 
         # Build toolchain for a specific target
         owrt container build --target mediatek/filogic
+
+        # Build and push to registry (for CI)
+        owrt container build --target armsr-armv8 --registry ghcr.io/openwrt --push
 
         # Force rebuild everything
         owrt container build --target x86/64 --force
@@ -84,14 +90,14 @@ def container_build(ctx, target, force, base_only, tools_only, registry):
     print("Building container images...")
 
     if base_only:
-        builder.build_base(force=force)
+        builder.build_base(force=force, push=push)
     elif tools_only:
-        builder.build_tools(force=force)
+        builder.build_tools(force=force, push=push)
     elif target:
-        builder.build_toolchain(target, force=force)
+        builder.build_toolchain(target, force=force, push=push)
     else:
         # Default: build base + tools
-        builder.build_tools(force=force)
+        builder.build_tools(force=force, push=push)
 
     print("\nDone!")
 

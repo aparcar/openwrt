@@ -102,15 +102,17 @@ jobs:
       - name: Run unit tests
         run: python -m pytest owrt/tests/ -v --tb=short
 
-  # Compute content hashes for all container images
-  compute-hashes:
-    name: Compute Image Hashes
+  # Build all container images (base, tools, toolchain)
+  # Uses content-based caching - only rebuilds when inputs change
+  build-containers:
+    name: Build Container Images
     runs-on: ubuntu-latest
-    needs: lint
+    needs: unit-tests
+    permissions:
+      contents: read
+      packages: write
     outputs:
-      base-hash: ${{ steps.hashes.outputs.base }}
-      tools-hash: ${{ steps.hashes.outputs.tools }}
-      toolchain-hash: ${{ steps.hashes.outputs.toolchain }}
+      toolchain-image: ${{ steps.build.outputs.toolchain-image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,198 +124,37 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml jsonschema click
 
-      - name: Compute content hashes
-        id: hashes
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push containers
+        id: build
         run: |
-          HASHES=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json)
-          echo "Computed hashes:"
-          echo "$HASHES" | jq .
+          # Build toolchain (includes base and tools) with push
+          # Content-based caching: only rebuilds if inputs changed
+          python3 -m owrt -v container build \
+            --target ${{ env.TARGET }} \
+            --registry ${{ env.IMAGE_PREFIX }} \
+            --push
           
-          BASE=$(echo "$HASHES" | jq -r '.base')
-          TOOLS=$(echo "$HASHES" | jq -r '.tools')
-          TOOLCHAIN=$(echo "$HASHES" | jq -r '."toolchain:${{ env.TARGET }}"')
-          
-          echo "base=$BASE" >> $GITHUB_OUTPUT
-          echo "tools=$TOOLS" >> $GITHUB_OUTPUT
-          echo "toolchain=$TOOLCHAIN" >> $GITHUB_OUTPUT
-
-  # Build base image (Ubuntu + system packages)
-  build-base:
-    name: Build Base Image
-    runs-on: ubuntu-latest
-    needs: compute-hashes
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.result.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check if image exists
-        id: check
-        run: |
-          IMAGE="${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}"
-          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Base image already exists: $IMAGE"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Base image not found, will build"
-          fi
-
-      - name: Build and push
-        if: steps.check.outputs.exists == 'false'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.base
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}
-            ${{ env.IMAGE_PREFIX }}-base:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image reference
-        id: result
-        run: |
-          echo "image=${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}" >> $GITHUB_OUTPUT
-
-  # Build tools image (host tools: apk, mkimage, squashfs4, etc.)
-  build-tools:
-    name: Build Tools Image
-    runs-on: ubuntu-latest
-    needs: [compute-hashes, build-base]
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.result.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check if image exists
-        id: check
-        run: |
-          IMAGE="${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}"
-          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tools image already exists: $IMAGE"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Tools image not found, will build"
-          fi
-
-      - name: Build and push
-        if: steps.check.outputs.exists == 'false'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.tools
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}
-            ${{ env.IMAGE_PREFIX }}-tools:latest
-          build-args: |
-            BASE_IMAGE=${{ needs.build-base.outputs.image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image reference
-        id: result
-        run: |
-          echo "image=${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}" >> $GITHUB_OUTPUT
-
-  # Build toolchain image (cross-compiler for target)
-  build-toolchain:
-    name: Build Toolchain Image
-    runs-on: ubuntu-latest
-    needs: [compute-hashes, build-tools]
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.result.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check if image exists
-        id: check
-        run: |
-          IMAGE="${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}"
-          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Toolchain image already exists: $IMAGE"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Toolchain image not found, will build"
-          fi
-
-      - name: Cache toolchain downloads
-        if: steps.check.outputs.exists == 'false'
-        uses: actions/cache@v4
-        with:
-          path: dl
-          key: toolchain-dl-${{ needs.compute-hashes.outputs.toolchain-hash }}
-          restore-keys: toolchain-dl-
-
-      - name: Build and push
-        if: steps.check.outputs.exists == 'false'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.toolchain
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}
-            ${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:latest
-          build-args: |
-            TOOLS_IMAGE=${{ needs.build-tools.outputs.image }}
-            TARGET=${{ env.TARGET }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image reference
-        id: result
-        run: |
-          echo "image=${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}" >> $GITHUB_OUTPUT
+          # Get the toolchain image reference for downstream jobs
+          TOOLCHAIN_IMAGE=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json | \
+            python3 -c "import sys, json; d=json.load(sys.stdin); print(f'${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:' + d['toolchain:${{ env.TARGET }}'])")
+          echo "toolchain-image=$TOOLCHAIN_IMAGE" >> $GITHUB_OUTPUT
+          echo "Toolchain image: $TOOLCHAIN_IMAGE"
 
   # Build firmware using the toolchain
   build-firmware:
     name: Build Firmware
     runs-on: ubuntu-latest
-    needs: [build-toolchain]
+    needs: build-containers
     permissions:
       contents: read
       packages: read
@@ -329,8 +170,8 @@ jobs:
 
       - name: Pull toolchain image
         run: |
-          echo "Using toolchain: ${{ needs.build-toolchain.outputs.image }}"
-          docker pull ${{ needs.build-toolchain.outputs.image }}
+          echo "Using toolchain: ${{ needs.build-containers.outputs.toolchain-image }}"
+          docker pull ${{ needs.build-containers.outputs.toolchain-image }}
 
       - name: Cache build downloads
         uses: actions/cache@v4
@@ -351,7 +192,7 @@ jobs:
             -w /openwrt \
             -e BUILD_DIR=/build \
             -e HOME=/tmp \
-            ${{ needs.build-toolchain.outputs.image }} \
+            ${{ needs.build-containers.outputs.toolchain-image }} \
             python3 -m owrt -v build ${{ env.TARGET }} -p ${{ env.PROFILE }}
 
       - name: List outputs
