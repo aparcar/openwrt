@@ -494,20 +494,25 @@ def kernel_modules(ctx, target):
 
 @cli.command('build')
 @click.argument('target')
-@click.option('--profile', '-p', default='generic', help='Device profile')
+@click.option('--profile', '-p', default=None, help='Device profile (default: first available)')
+@click.option('--all-profiles', '-A', is_flag=True, help='Build all profiles for this target')
 @click.option('--packages', '-P', multiple=True, help='Additional packages')
 @click.option('--all-packages', '-a', is_flag=True, help='Build all available packages (buildbot mode)')
 @click.option('--continue-on-error', '-c', is_flag=True, help='Continue building other packages on failure (buildbot mode)')
 @click.option('--force', '-f', is_flag=True, help='Force rebuild')
 @click.pass_context
-def build(ctx, target, profile, packages, force, all_packages, continue_on_error):
+def build(ctx, target, profile, all_profiles, packages, force, all_packages, continue_on_error):
     """Build complete firmware for TARGET"""
     from owrt.docker_wrapper import run_in_docker
     from owrt.container import is_inside_docker
 
     # All builds must run in containers - launch Docker if not already inside
     if not is_inside_docker():
-        args = ['build', target, '-p', profile]
+        args = ['build', target]
+        if profile:
+            args.extend(['-p', profile])
+        if all_profiles:
+            args.append('-A')
         for pkg in packages:
             args.extend(['-P', pkg])
         if all_packages:
@@ -525,11 +530,20 @@ def build(ctx, target, profile, packages, force, all_packages, continue_on_error
             ccache=ctx.obj['ccache'],
         ))
 
-    click.echo(f"Building firmware for {target} (profile: {profile})...")
-
     config = Config.load_target(target)
     jobs = ctx.obj['jobs']
     verbose = ctx.obj['verbose']
+
+    # Determine which profiles to build
+    if all_profiles:
+        profiles_to_build = [p['name'] for p in config.profiles]
+        click.echo(f"Building firmware for {target} (all {len(profiles_to_build)} profiles: {', '.join(profiles_to_build)})...")
+    else:
+        # Use specified profile or default
+        if profile is None:
+            profile = config.get_default_profile_name()
+        profiles_to_build = [profile]
+        click.echo(f"Building firmware for {target} (profile: {profile})...")
 
     # Step 1: Toolchain
     click.echo("\n[1/4] Building toolchain...")
@@ -594,16 +608,41 @@ def build(ctx, target, profile, packages, force, all_packages, continue_on_error
             if len(skipped_variants) > 5:
                 click.echo(f"    ... and {len(skipped_variants) - 5} more")
     else:
-        package_list = list(config.default_packages) + list(packages)
+        # Collect packages from all profiles being built
+        package_set = set(config.default_packages)
+        for prof_name in profiles_to_build:
+            try:
+                prof_data = config.get_profile(prof_name)
+                prof_packages = prof_data.get('packages') or []
+                package_set.update(prof_packages)
+            except ValueError:
+                pass
+        package_set.update(packages)
+        package_list = list(package_set)
     
     pkg_builder.build_packages(package_list, force=force, continue_on_error=continue_on_error)
 
-    # Step 4: Image
+    # Step 4: Images - build for each profile
     click.echo("\n[4/4] Generating images...")
     img_builder = ImageBuilder(config, verbose=verbose)
-    img_builder.build(profile)
+    
+    failed_profiles = []
+    for prof_name in profiles_to_build:
+        try:
+            if len(profiles_to_build) > 1:
+                click.echo(f"\n  Building images for profile: {prof_name}")
+            img_builder.build(prof_name)
+        except Exception as e:
+            if continue_on_error:
+                click.echo(f"  Profile {prof_name}: FAILED - {e}")
+                failed_profiles.append(prof_name)
+            else:
+                raise
 
-    click.echo(f"\nBuild complete! Images in: {config.output_dir}/images/")
+    if failed_profiles:
+        click.echo(f"\nBuild completed with {len(failed_profiles)} profile failures: {', '.join(failed_profiles)}")
+    else:
+        click.echo(f"\nBuild complete! Images in: {config.output_dir}/images/")
 
 
 @cli.group()
