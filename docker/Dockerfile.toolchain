@@ -74,6 +74,7 @@ LABEL org.opencontainers.image.target="${TARGET}"
 COPY --from=builder --chown=builder:builder /toolchain /opt/toolchain
 
 # Extract target tuple from toolchain (e.g., aarch64-openwrt-linux-musl)
+USER root
 RUN TUPLE=$(ls /opt/toolchain/bin/*-gcc 2>/dev/null | head -1 | xargs basename | sed 's/-gcc$//') && \
     echo "TOOLCHAIN_TUPLE=${TUPLE}" >> /etc/environment && \
     echo "export TOOLCHAIN_TUPLE=${TUPLE}" >> /home/builder/.bashrc
