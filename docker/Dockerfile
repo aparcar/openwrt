@@ -11,8 +11,11 @@
 #
 # The toolchain is built from OpenWrt sources (not pre-built) because
 # OpenWrt applies custom patches to GCC, binutils, and musl.
+#
+# Host tools (apk, mkimage, fwtool, squashfs4, mtd-utils, etc.) are built
+# during image creation using the owrt tool system.
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04 AS base
 
 LABEL maintainer="OpenWrt Developers"
 LABEL description="OpenWrt PoC Build Environment"
@@ -100,7 +103,7 @@ RUN apt-get update && apt-get install -y \
 
 # Create non-root user for builds
 RUN useradd -m -s /bin/bash builder && \
-    mkdir -p /build /output /openwrt /toolchain && \
+    mkdir -p /build /build/dl /build/host-staging /output /openwrt /toolchain && \
     chown -R builder:builder /build /output /openwrt /toolchain
 
 # Set up Python virtual environment
@@ -114,9 +117,46 @@ ENV LC_ALL=C
 ENV LANG=C
 ENV OPENWRT_DIR=/openwrt
 ENV TOOLCHAIN_DIR=/toolchain
+ENV BUILD_DIR=/build
+
+# ============================================================================
+# Build host tools stage
+# ============================================================================
+FROM base AS host-tools-builder
+
+# Copy only what's needed for building host tools
+COPY --chown=builder:builder owrt /openwrt/owrt
+COPY --chown=builder:builder toolchain /openwrt/toolchain
+
+WORKDIR /openwrt
+USER builder
+
+# Build all host tools using the owrt tool system
+# These tools are architecture-independent and used for:
+# - apk: APK package manager (v3 format)
+# - mkimage: U-Boot image creation
+# - fwtool: Firmware metadata
+# - squashfs4: SquashFS filesystem creation
+# - mtd-utils: Flash utilities with OpenWrt patches
+# - lua: Scripting for build system
+RUN python3 -m owrt -v tool build-all
+
+# ============================================================================
+# Final image with host tools included
+# ============================================================================
+FROM base
+
+# Copy built host tools from builder stage
+COPY --from=host-tools-builder --chown=builder:builder /build/host-staging /build/host-staging
+
+# Add host tools to PATH
+ENV PATH="/build/host-staging/bin:${PATH}"
 
 WORKDIR /build
 USER builder
+
+# Verify host tools are available
+RUN apk --version && echo "Host tools installed successfully"
 
 # Default command
 CMD ["/bin/bash"]

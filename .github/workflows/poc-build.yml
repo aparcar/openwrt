@@ -10,12 +10,14 @@ on:
       - 'owrt/**'
       - 'package/**'
       - 'target/**'
+      - 'docker/**'
       - '.github/workflows/poc-build.yml'
   pull_request:
     paths:
       - 'owrt/**'
       - 'package/**'
       - 'target/**'
+      - 'docker/**'
       - '.github/workflows/poc-build.yml'
   workflow_dispatch:
 
@@ -166,16 +168,36 @@ jobs:
             type=sha,format=long,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Cache host tools downloads
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: host-tools-dl-${{ hashFiles('owrt/tools/*/tool.yaml') }}
+          restore-keys: |
+            host-tools-dl-
+
+      # The Dockerfile uses a multi-stage build:
+      # 1. Base stage: Ubuntu + build dependencies
+      # 2. Host tools builder: Builds apk, mkimage, fwtool, etc. using owrt
+      # 3. Final image: Base + host tools
       - name: Build and push base image
         uses: docker/build-push-action@v5
         with:
-          context: ./docker
+          context: .
           file: ./docker/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.BASE_IMAGE }}:${{ github.sha }}
+            ${{ env.BASE_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Verify base image
+        run: |
+          docker pull ${{ env.BASE_IMAGE }}:${{ github.sha }}
+          echo "=== Verify host tools ==="
+          docker run --rm ${{ env.BASE_IMAGE }}:${{ github.sha }} apk --version
+          docker run --rm ${{ env.BASE_IMAGE }}:${{ github.sha }} ls -la /build/host-staging/bin/
 
   build-toolchain:
     name: Build Toolchain (aarch64)
@@ -262,7 +284,8 @@ jobs:
       - name: Build toolchain
         if: steps.check.outputs.exists == 'false'
         run: |
-          mkdir -p dl build/toolchain build/host-staging
+          mkdir -p dl build/toolchain
+          # Host tools are already in the base image at /build/host-staging
           docker run --rm \
             --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}:/openwrt \
@@ -275,30 +298,12 @@ jobs:
             openwrt-build-base:latest \
             python3 -m owrt -v toolchain build ${{ env.TARGET }}
 
-      - name: Build host tools
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            -v ${{ github.workspace }}:/openwrt \
-            -v ${{ github.workspace }}/dl:/build/dl \
-            -v ${{ github.workspace }}/build/host-staging:/build/host-staging \
-            -w /openwrt \
-            -e BUILD_DIR=/build \
-            -e DL_DIR=/build/dl \
-            -e HOME=/tmp \
-            openwrt-build-base:latest \
-            python3 -m owrt -v tool build-all
-
       - name: Verify toolchain
         if: steps.check.outputs.exists == 'false'
         run: |
           echo "=== Toolchain contents ==="
           ls -la build/toolchain/
           ls -la build/toolchain/${{ env.TARGET }}/bin/ || true
-          echo ""
-          echo "=== Host tools ==="
-          ls -la build/host-staging/bin/ || true
           echo ""
           echo "=== Test cross-compiler ==="
           docker run --rm \
@@ -311,15 +316,15 @@ jobs:
         run: |
           TAG="${{ steps.check.outputs.tag }}"
 
+          # The base image already has host tools, so we just add the toolchain
           cat > Dockerfile.toolchain-built <<EOF
           ARG BASE_IMAGE
           FROM \${BASE_IMAGE}
 
-          # Copy toolchain and host tools
+          # Copy toolchain (host tools already in base image)
           COPY --chown=builder:builder build/toolchain/${{ env.TARGET }} /build/toolchain/${{ env.TARGET }}
-          COPY --chown=builder:builder build/host-staging /build/host-staging
 
-          ENV PATH="/build/toolchain/${{ env.TARGET }}/bin:/build/host-staging/bin:\${PATH}"
+          ENV PATH="/build/toolchain/${{ env.TARGET }}/bin:\${PATH}"
           ENV CROSS_COMPILE="aarch64-openwrt-linux-musl-"
           ENV CC="aarch64-openwrt-linux-musl-gcc"
           ENV CXX="aarch64-openwrt-linux-musl-g++"
@@ -380,9 +385,8 @@ jobs:
       - name: Build firmware
         run: |
           TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
-          mkdir -p dl build/output build/packages build/staging build/kernel build/rootfs
-          # Note: We mount specific subdirs instead of /build to preserve the
-          # toolchain and host tools baked into the image at /build/toolchain/ and /build/host-staging/
+          mkdir -p dl build/output build/packages build/staging build/kernel build/rootfs build/apk-repo
+          # Mount specific subdirs to preserve toolchain and host tools in the image
           docker run --rm \
             --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}:/openwrt \
@@ -392,6 +396,7 @@ jobs:
             -v ${{ github.workspace }}/build/staging:/build/staging \
             -v ${{ github.workspace }}/build/kernel:/build/kernel \
             -v ${{ github.workspace }}/build/rootfs:/build/rootfs \
+            -v ${{ github.workspace }}/build/apk-repo:/build/apk-repo \
             -w /openwrt \
             -e BUILD_DIR=/build \
             -e DL_DIR=/build/dl \
