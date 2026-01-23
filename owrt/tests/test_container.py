@@ -195,22 +195,33 @@ class TestContainerRuntime:
 class TestIsInsideDocker:
     """Tests for is_inside_docker function."""
 
-    def test_dockerenv_exists(self):
-        """Test detection via .dockerenv file."""
-        with patch.object(Path, 'exists', return_value=True):
+    def test_owrt_in_container_env(self):
+        """Test detection via OWRT_IN_CONTAINER env var."""
+        with patch.dict('os.environ', {'OWRT_IN_CONTAINER': '1'}):
             assert is_inside_docker() is True
 
-    def test_cgroup_detection(self):
-        """Test detection via cgroup."""
-        with patch.object(Path, 'exists', return_value=False):
-            with patch('builtins.open', create=True) as mock_open:
-                mock_open.return_value.__enter__.return_value.read.return_value = 'docker'
+    def test_dockerenv_exists(self):
+        """Test detection via .dockerenv file."""
+        with patch.dict('os.environ', {}, clear=True):
+            with patch.object(Path, 'exists', return_value=True):
+                assert is_inside_docker() is True
+
+    def test_container_env_var(self):
+        """Test detection via 'container' env var (Podman, systemd-nspawn)."""
+        with patch.dict('os.environ', {'container': 'podman'}, clear=True):
+            with patch.object(Path, 'exists', return_value=False):
+                assert is_inside_docker() is True
+
+    def test_owrt_tools_dir_env(self):
+        """Test detection via OWRT_TOOLS_DIR env var."""
+        with patch.dict('os.environ', {'OWRT_TOOLS_DIR': '/opt/owrt-tools'}, clear=True):
+            with patch.object(Path, 'exists', return_value=False):
                 assert is_inside_docker() is True
 
     def test_not_in_docker(self):
         """Test when not inside Docker."""
-        with patch.object(Path, 'exists', return_value=False):
-            with patch('builtins.open', side_effect=FileNotFoundError):
+        with patch.dict('os.environ', {}, clear=True):
+            with patch.object(Path, 'exists', return_value=False):
                 assert is_inside_docker() is False
 
 

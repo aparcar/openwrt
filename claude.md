@@ -4,6 +4,7 @@ Guidelines for working on this codebase.
 
 ## Workflow
 
+- **Always run tests before committing** - Run unit tests (`python3 -m pytest owrt/tests/ -v`) before every commit. Do not commit if tests fail.
 - **Always commit after successful testing** - When tests pass or a feature works correctly, commit immediately before moving on to the next task.
 
 ## Container Build System

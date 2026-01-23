@@ -33,7 +33,8 @@ RUN test -n "${TARGET}" || (echo "ERROR: TARGET argument required" && exit 1)
 USER root
 
 # Clone OpenWrt source (needed for toolchain build)
-RUN mkdir -p /openwrt && chown builder:builder /openwrt
+RUN mkdir -p /openwrt /toolchain && \
+    chown builder:builder /openwrt /toolchain
 
 USER builder
 
@@ -44,13 +45,15 @@ RUN git clone --depth=1 --branch=${OPENWRT_REF} \
 
 WORKDIR /openwrt
 
-# Copy owrt build system
+# Copy owrt build system and target definitions
 COPY --chown=builder:builder owrt /openwrt/owrt
 COPY --chown=builder:builder toolchain /openwrt/toolchain
+COPY --chown=builder:builder target /openwrt/target
 
 # Build the cross-toolchain for the specified target
 # This compiles: binutils, gcc (bootstrap), linux headers, musl, gcc (final)
-RUN python3 -m owrt -v toolchain build ${TARGET} \
+# OWRT_IN_CONTAINER tells the build system not to try launching Docker
+RUN OWRT_IN_CONTAINER=1 python3 -m owrt -v toolchain build ${TARGET} \
     --output /toolchain
 
 # Verify toolchain was built

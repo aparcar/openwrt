@@ -97,16 +97,30 @@ class ContainerRuntime:
 
 
 def is_inside_docker() -> bool:
-    """Check if we're running inside a Docker container."""
-    # Check for .dockerenv file
+    """Check if we're running inside a Docker container.
+    
+    Detection methods (in order of reliability):
+    1. OWRT_IN_CONTAINER env var - explicitly set in our Dockerfiles
+    2. /.dockerenv file - created by Docker
+    3. 'container' env var - set by Podman, systemd-nspawn
+    4. OWRT_TOOLS_DIR/OWRT_TARGET - set in our container images
+    """
+    # Check for explicit OWRT marker (most reliable for buildkit)
+    if os.environ.get('OWRT_IN_CONTAINER'):
+        return True
+    
+    # Check for .dockerenv file (created by Docker runtime)
     if Path('/.dockerenv').exists():
         return True
-    # Check cgroup
-    try:
-        with open('/proc/1/cgroup', 'r') as f:
-            return 'docker' in f.read()
-    except (FileNotFoundError, PermissionError):
-        pass
+    
+    # Check for container environment variable (Podman, systemd-nspawn)
+    if os.environ.get('container'):
+        return True
+    
+    # Check for OWRT environment variables set in our container images
+    if os.environ.get('OWRT_TOOLS_DIR') or os.environ.get('OWRT_TARGET'):
+        return True
+    
     return False
 
 
