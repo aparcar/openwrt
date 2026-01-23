@@ -1122,7 +1122,9 @@ endian = '{endian}'
 
         Provides environment variables for custom build scripts:
         - CC, CXX, AR, RANLIB: Cross-compiler tools
-        - TARGET_ARCH: Target architecture (e.g., x86_64, aarch64)
+        - OWRT_ARCH: Target architecture (e.g., x86_64, aarch64)
+          Note: We use OWRT_ARCH instead of TARGET_ARCH because TARGET_ARCH
+          is a GNU Make built-in variable that gets appended to compile commands
         - LINUX_DIR: Path to kernel source/build directory
         - KERNEL_VERSION: Full kernel version (e.g., 6.12.65)
         - KERNEL_ARCH: Kernel architecture (e.g., arm64)
@@ -1149,7 +1151,7 @@ endian = '{endian}'
             f'export CXX=/toolchain/bin/{target}-g++ && '
             f'export AR=/toolchain/bin/{target}-gcc-ar && '
             f'export RANLIB=/toolchain/bin/{target}-gcc-ranlib && '
-            f'export TARGET_ARCH={self.config.arch} && '
+            f'export OWRT_ARCH={self.config.arch} && '
             f'export JOBS={self.jobs} && '
             f'export LINUX_DIR=/kernel/linux-{kernel_version} && '
             f'export KERNEL_VERSION={kernel_version} && '

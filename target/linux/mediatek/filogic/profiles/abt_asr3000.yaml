@@ -13,10 +13,9 @@ dts_load_address: "0x43f00000"
 
 # Device-specific packages
 packages:
-  # WiFi (uncomment when kernel modules are ready)
-  # - kmod-mt7915e
-  # - kmod-mt7981-firmware
-  # - mt7981-wo-firmware
+  - kmod-mt7915e
+  - kmod-mt7981-firmware
+  - mt7981-wo-firmware
 
 # Hardware specifications
 hardware:

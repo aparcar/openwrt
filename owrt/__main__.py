@@ -546,7 +546,7 @@ def build(ctx, target, profile, all_profiles, packages, force, all_packages, con
         click.echo(f"Building firmware for {target} (profile: {profile})...")
 
     # Step 1: Toolchain
-    click.echo("\n[1/4] Building toolchain...")
+    click.echo("\n[1/5] Building toolchain...")
     tc_builder = ToolchainBuilder(config, verbose=verbose, jobs=jobs)
     if force or not tc_builder.is_built():
         tc_builder.build()
@@ -554,7 +554,7 @@ def build(ctx, target, profile, all_profiles, packages, force, all_packages, con
         click.echo("  Toolchain already built, skipping.")
 
     # Step 2: Kernel
-    click.echo("\n[2/4] Building kernel...")
+    click.echo("\n[2/5] Building kernel...")
     use_ccache = ctx.obj['ccache']
     k_builder = KernelBuilder(config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     if force or not k_builder.is_built():
@@ -562,8 +562,15 @@ def build(ctx, target, profile, all_profiles, packages, force, all_packages, con
     else:
         click.echo("  Kernel already built, skipping.")
 
-    # Step 3: Packages
-    click.echo("\n[3/4] Building packages...")
+    # Step 3: Package kernel modules
+    click.echo("\n[3/5] Packaging kernel modules...")
+    from .kmod import KernelModulePackager
+    kmod_packager = KernelModulePackager(config, verbose=verbose)
+    kmod_packages = kmod_packager.build_module_packages()
+    click.echo(f"  Created {len(kmod_packages)} kernel module packages")
+
+    # Step 4: Packages
+    click.echo("\n[4/5] Building packages...")
     pkg_builder = PackageBuilder(config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     
     if all_packages:
@@ -623,15 +630,47 @@ def build(ctx, target, profile, all_profiles, packages, force, all_packages, con
     pkg_builder.build_packages(package_list, force=force, continue_on_error=continue_on_error)
 
     # Step 4: Images - build for each profile
-    click.echo("\n[4/4] Generating images...")
+    click.echo("\n[5/5] Generating images...")
     img_builder = ImageBuilder(config, verbose=verbose)
     
     failed_profiles = []
-    for prof_name in profiles_to_build:
+    successful_profiles = []
+    
+    if len(profiles_to_build) > 1:
+        # Build profiles in parallel
+        import concurrent.futures
+        max_workers = min(len(profiles_to_build), jobs, 8)  # Cap at 8 parallel builds
+        click.echo(f"  Building {len(profiles_to_build)} profiles in parallel (max {max_workers} workers)...")
+        
+        def build_profile(prof_name):
+            """Build a single profile, returns (name, success, error_msg)"""
+            try:
+                img_builder.build(prof_name)
+                return (prof_name, True, None)
+            except Exception as e:
+                return (prof_name, False, str(e))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(build_profile, p): p for p in profiles_to_build}
+            for future in concurrent.futures.as_completed(futures):
+                prof_name, success, error_msg = future.result()
+                if success:
+                    click.echo(f"    {prof_name}: OK")
+                    successful_profiles.append(prof_name)
+                else:
+                    if continue_on_error:
+                        click.echo(f"    {prof_name}: FAILED - {error_msg}")
+                        failed_profiles.append(prof_name)
+                    else:
+                        # Cancel remaining futures and raise
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        raise RuntimeError(f"Profile {prof_name} failed: {error_msg}")
+    else:
+        # Single profile - build directly
+        prof_name = profiles_to_build[0]
         try:
-            if len(profiles_to_build) > 1:
-                click.echo(f"\n  Building images for profile: {prof_name}")
             img_builder.build(prof_name)
+            successful_profiles.append(prof_name)
         except Exception as e:
             if continue_on_error:
                 click.echo(f"  Profile {prof_name}: FAILED - {e}")
@@ -642,7 +681,7 @@ def build(ctx, target, profile, all_profiles, packages, force, all_packages, con
     if failed_profiles:
         click.echo(f"\nBuild completed with {len(failed_profiles)} profile failures: {', '.join(failed_profiles)}")
     else:
-        click.echo(f"\nBuild complete! Images in: {config.output_dir}/images/")
+        click.echo(f"\nBuild complete! {len(successful_profiles)} profile(s) built. Images in: {config.output_dir}/images/")
 
 
 @cli.group()
@@ -751,7 +790,7 @@ def firmware(ctx, config_file, force):
     verbose = ctx.obj['verbose'] or build_config.build.verbose
 
     # Step 1: Toolchain
-    click.echo("\n[1/4] Building toolchain...")
+    click.echo("\n[1/5] Building toolchain...")
     tc_builder = ToolchainBuilder(target_config, verbose=verbose, jobs=jobs)
     if force or not tc_builder.is_built():
         tc_builder.build()
@@ -759,7 +798,7 @@ def firmware(ctx, config_file, force):
         click.echo("  Toolchain already built, skipping.")
 
     # Step 2: Kernel (with config overrides)
-    click.echo("\n[2/4] Building kernel...")
+    click.echo("\n[2/5] Building kernel...")
     use_ccache = ctx.obj['ccache']
     k_builder = KernelBuilder(target_config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     if force or not k_builder.is_built():
@@ -773,15 +812,22 @@ def firmware(ctx, config_file, force):
     else:
         click.echo("  Kernel already built, skipping.")
 
-    # Step 3: Packages
-    click.echo("\n[3/4] Building packages...")
+    # Step 3: Package kernel modules
+    click.echo("\n[3/5] Packaging kernel modules...")
+    from .kmod import KernelModulePackager
+    kmod_packager = KernelModulePackager(target_config, verbose=verbose)
+    kmod_packages = kmod_packager.build_module_packages()
+    click.echo(f"  Created {len(kmod_packages)} kernel module packages")
+
+    # Step 4: Packages
+    click.echo("\n[4/5] Building packages...")
     pkg_builder = PackageBuilder(target_config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
     package_list = build_config.get_all_packages()
     click.echo(f"  Building {len(package_list)} packages...")
     pkg_builder.build_packages(package_list, force=force)
 
     # Step 4: Image
-    click.echo("\n[4/4] Generating images...")
+    click.echo("\n[5/5] Generating images...")
     img_builder = ImageBuilder(target_config, verbose=verbose)
     img_builder.build(build_config.profile_name)
 

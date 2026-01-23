@@ -42,7 +42,7 @@ build:
         done
       fi
     done
-    # Build kconf tools with native host compiler
+    # Build kconf tools with native host compiler (gcc, not cross-compiler)
     make -C kconf CC=gcc HOSTCC=gcc clean conf
     # Write initial config with desired options
     printf "CPTCFG_CFG80211=m\nCPTCFG_MAC80211=m\nCPTCFG_MAC80211_RC_MINSTREL=y\nCPTCFG_MAC80211_RC_DEFAULT_MINSTREL=y\nCPTCFG_MAC80211_MESH=y\nCPTCFG_MAC80211_LEDS=y\nCPTCFG_CFG80211_WEXT=y\nCPTCFG_CFG80211_DEFAULT_PS=y\nCPTCFG_WLAN=y\nCPTCFG_WLAN_VENDOR_MEDIATEK=y\n" > .config

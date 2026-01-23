@@ -36,7 +36,7 @@ build:
   parallel: true
   configure_script: |
     # Determine OpenSSL target based on architecture
-    case "${TARGET_ARCH}" in
+    case "${OWRT_ARCH}" in
       x86_64) OPENSSL_TARGET="linux-x86_64-openwrt" ;;
       aarch64) OPENSSL_TARGET="linux-aarch64-openwrt" ;;
       arm*) OPENSSL_TARGET="linux-arm-openwrt" ;;

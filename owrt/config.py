@@ -55,7 +55,7 @@ class Config:
         self.cpu = data.get('cpu', {})
         self.toolchain = data['toolchain']
         self.features = data.get('features', [])
-        self.default_packages = data.get('default_packages', ['base-files', 'busybox'])
+        self.default_packages = data.get('default_packages') or ['base-files', 'busybox']
         self.profiles = self._load_profiles(data.get('profiles', []))
         self.image = data.get('image', {})
 
@@ -399,7 +399,9 @@ class Config:
         # Add profile packages
         try:
             profile = self.get_profile(profile_name)
-            for pkg in profile.get('packages', []):
+            # Handle None (YAML key exists but has only comments/no items)
+            profile_packages = profile.get('packages') or []
+            for pkg in profile_packages:
                 if pkg.startswith('-'):
                     packages.discard(pkg[1:])
                 else:
