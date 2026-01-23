@@ -10,22 +10,26 @@ on:
       - 'owrt/**'
       - 'package/**'
       - 'target/**'
+      - 'targets/**'
       - 'docker/**'
+      - 'tools/**'
+      - 'toolchain/**'
       - '.github/workflows/poc-build.yml'
   pull_request:
     paths:
       - 'owrt/**'
       - 'package/**'
       - 'target/**'
+      - 'targets/**'
       - 'docker/**'
+      - 'tools/**'
+      - 'toolchain/**'
       - '.github/workflows/poc-build.yml'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/openwrt-build-base
-  TOOLCHAIN_IMAGE: ghcr.io/${{ github.repository_owner }}/openwrt-toolchain
-  # Default target - armsr-armv8 can be tested with QEMU
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/owrt
   TARGET: armsr-armv8
   PROFILE: generic
 
@@ -42,52 +46,43 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          pip install pyyaml jsonschema click
+        run: pip install pyyaml jsonschema click
 
       - name: Validate YAML schemas
         run: |
           python3 -c "
           import json
           import yaml
-          from jsonschema import validate, ValidationError
+          from jsonschema import validate
           from pathlib import Path
 
-          # Load schemas
           pkg_schema = json.loads(Path('owrt/schema/package.schema.json').read_text())
           target_schema = json.loads(Path('owrt/schema/target.schema.json').read_text())
-
           errors = []
 
-          # Validate packages
           for pkg_file in Path('package').rglob('package.yaml'):
               try:
-                  data = yaml.safe_load(pkg_file.read_text())
-                  validate(data, pkg_schema)
+                  validate(yaml.safe_load(pkg_file.read_text()), pkg_schema)
                   print(f'✓ {pkg_file}')
               except Exception as e:
                   errors.append(f'{pkg_file}: {e}')
                   print(f'✗ {pkg_file}: {e}')
 
-          # Validate targets
-          for target_file in Path('target').rglob('target.yaml'):
+          for target_file in Path('targets').rglob('target.yaml'):
               try:
-                  data = yaml.safe_load(target_file.read_text())
-                  validate(data, target_schema)
+                  validate(yaml.safe_load(target_file.read_text()), target_schema)
                   print(f'✓ {target_file}')
               except Exception as e:
                   errors.append(f'{target_file}: {e}')
                   print(f'✗ {target_file}: {e}')
 
           if errors:
-              print(f'\n{len(errors)} validation error(s)')
               exit(1)
           print('\nAll schemas valid!')
           "
 
       - name: Check Python syntax
-        run: |
-          python -m py_compile owrt/*.py
+        run: python -m py_compile owrt/*.py
 
   unit-tests:
     name: Unit Tests
@@ -102,17 +97,20 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          pip install pyyaml jsonschema click pytest
+        run: pip install pyyaml jsonschema click pytest
 
       - name: Run unit tests
-        run: |
-          python -m pytest owrt/tests/ -v --tb=short
+        run: python -m pytest owrt/tests/ -v --tb=short
 
-  test-cli:
-    name: Test CLI
+  # Compute content hashes for all container images
+  compute-hashes:
+    name: Compute Image Hashes
     runs-on: ubuntu-latest
     needs: lint
+    outputs:
+      base-hash: ${{ steps.hashes.outputs.base }}
+      tools-hash: ${{ steps.hashes.outputs.tools }}
+      toolchain-hash: ${{ steps.hashes.outputs.toolchain }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,245 +120,207 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          pip install pyyaml jsonschema click
+        run: pip install pyyaml jsonschema click
 
-      - name: Test CLI help
+      - name: Compute content hashes
+        id: hashes
         run: |
-          python -m owrt --help
-          python -m owrt toolchain --help
-          python -m owrt kernel --help
-          python -m owrt build --help
+          HASHES=$(python3 -m owrt container hash --target ${{ env.TARGET }} --json)
+          echo "Computed hashes:"
+          echo "$HASHES" | jq .
+          
+          BASE=$(echo "$HASHES" | jq -r '.base')
+          TOOLS=$(echo "$HASHES" | jq -r '.tools')
+          TOOLCHAIN=$(echo "$HASHES" | jq -r '."toolchain:${{ env.TARGET }}"')
+          
+          echo "base=$BASE" >> $GITHUB_OUTPUT
+          echo "tools=$TOOLS" >> $GITHUB_OUTPUT
+          echo "toolchain=$TOOLCHAIN" >> $GITHUB_OUTPUT
 
-      - name: Test target info
-        run: |
-          python -m owrt info armsr-armv8
-          python -m owrt info mediatek-filogic
-
-  build-base-image:
+  # Build base image (Ubuntu + system packages)
+  build-base:
     name: Build Base Image
     runs-on: ubuntu-latest
-    needs: lint
+    needs: compute-hashes
     permissions:
       contents: read
       packages: write
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image: ${{ steps.result.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.BASE_IMAGE }}
-          tags: |
-            type=sha,format=long,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Check if image exists
+        id: check
+        run: |
+          IMAGE="${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Base image already exists: $IMAGE"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Base image not found, will build"
+          fi
 
-      - name: Cache host tools downloads
-        uses: actions/cache@v4
-        with:
-          path: dl
-          key: host-tools-dl-${{ hashFiles('owrt/tools/*/tool.yaml') }}
-          restore-keys: |
-            host-tools-dl-
-
-      # The Dockerfile uses a multi-stage build:
-      # 1. Base stage: Ubuntu + build dependencies
-      # 2. Host tools builder: Builds apk, mkimage, fwtool, etc. using owrt
-      # 3. Final image: Base + host tools
-      - name: Build and push base image
+      - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile
+          file: ./docker/Dockerfile.base
           push: true
           tags: |
-            ${{ env.BASE_IMAGE }}:${{ github.sha }}
-            ${{ env.BASE_IMAGE }}:latest
+            ${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}
+            ${{ env.IMAGE_PREFIX }}-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Verify base image
+      - name: Output image reference
+        id: result
         run: |
-          docker pull ${{ env.BASE_IMAGE }}:${{ github.sha }}
-          echo "=== Verify host tools ==="
-          docker run --rm ${{ env.BASE_IMAGE }}:${{ github.sha }} apk --version
-          docker run --rm ${{ env.BASE_IMAGE }}:${{ github.sha }} ls -la /build/host-staging/bin/
+          echo "image=${{ env.IMAGE_PREFIX }}-base:${{ needs.compute-hashes.outputs.base-hash }}" >> $GITHUB_OUTPUT
 
-  build-toolchain:
-    name: Build Toolchain (aarch64)
+  # Build tools image (host tools: apk, mkimage, squashfs4, etc.)
+  build-tools:
+    name: Build Tools Image
     runs-on: ubuntu-latest
-    needs: build-base-image
+    needs: [compute-hashes, build-base]
     permissions:
       contents: read
       packages: write
     outputs:
-      toolchain-tag: ${{ steps.check.outputs.tag }}
+      image: ${{ steps.result.outputs.image }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          pip install pyyaml jsonschema click
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute toolchain hash
-        id: hash
-        run: |
-          # Compute a hash based on toolchain config
-          HASH=$(python3 -c "
-          import yaml
-          import hashlib
-          from pathlib import Path
-          
-          target_file = Path('target/linux/armsr/armv8/target.yaml')
-          data = yaml.safe_load(target_file.read_text())
-          tc = data.get('toolchain', {})
-          h = hashlib.sha256()
-          h.update(f\"{tc.get('gcc_version', '')}-{tc.get('libc', '')}-{tc.get('binutils_version', '')}\".encode())
-          print(h.hexdigest()[:12])
-          ")
-          echo "Toolchain hash: $HASH"
-          echo "hash=$HASH" >> $GITHUB_OUTPUT
-          echo "tag=armsr-armv8-$HASH" >> $GITHUB_OUTPUT
-
-      - name: Check if toolchain image exists
+      - name: Check if image exists
         id: check
         run: |
-          TAG="${{ steps.hash.outputs.tag }}"
-          IMAGE="${{ env.TOOLCHAIN_IMAGE }}:${TAG}"
-          echo "Checking for image: $IMAGE"
-
+          IMAGE="${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}"
           if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
-            echo "Toolchain image already exists, skipping build"
             echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tools image already exists: $IMAGE"
           else
-            echo "Toolchain image not found, will build"
             echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tools image not found, will build"
           fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Pull base image
+      - name: Build and push
         if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.tools
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}
+            ${{ env.IMAGE_PREFIX }}-tools:latest
+          build-args: |
+            BASE_IMAGE=${{ needs.build-base.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image reference
+        id: result
         run: |
-          docker pull ${{ env.BASE_IMAGE }}:${{ github.sha }}
-          docker tag ${{ env.BASE_IMAGE }}:${{ github.sha }} openwrt-build-base:latest
+          echo "image=${{ env.IMAGE_PREFIX }}-tools:${{ needs.compute-hashes.outputs.tools-hash }}" >> $GITHUB_OUTPUT
+
+  # Build toolchain image (cross-compiler for target)
+  build-toolchain:
+    name: Build Toolchain Image
+    runs-on: ubuntu-latest
+    needs: [compute-hashes, build-tools]
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.result.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if image exists
+        id: check
+        run: |
+          IMAGE="${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Toolchain image already exists: $IMAGE"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Toolchain image not found, will build"
+          fi
 
       - name: Cache toolchain downloads
         if: steps.check.outputs.exists == 'false'
         uses: actions/cache@v4
         with:
           path: dl
-          key: toolchain-dl-${{ steps.hash.outputs.hash }}
-          restore-keys: |
-            toolchain-dl-
+          key: toolchain-dl-${{ needs.compute-hashes.outputs.toolchain-hash }}
+          restore-keys: toolchain-dl-
 
-      - name: Build toolchain
+      - name: Build and push
         if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.toolchain
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}
+            ${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:latest
+          build-args: |
+            TOOLS_IMAGE=${{ needs.build-tools.outputs.image }}
+            TARGET=${{ env.TARGET }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image reference
+        id: result
         run: |
-          mkdir -p dl build/toolchain
-          # Host tools are already in the base image at /build/host-staging
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            -v ${{ github.workspace }}:/openwrt \
-            -v ${{ github.workspace }}/dl:/build/dl \
-            -v ${{ github.workspace }}/build/toolchain:/build/toolchain \
-            -w /openwrt \
-            -e BUILD_DIR=/build \
-            -e DL_DIR=/build/dl \
-            -e HOME=/tmp \
-            openwrt-build-base:latest \
-            python3 -m owrt -v toolchain build ${{ env.TARGET }}
+          echo "image=${{ env.IMAGE_PREFIX }}-toolchain-armsr-armv8:${{ needs.compute-hashes.outputs.toolchain-hash }}" >> $GITHUB_OUTPUT
 
-      - name: Verify toolchain
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          echo "=== Toolchain contents ==="
-          ls -la build/toolchain/
-          ls -la build/toolchain/${{ env.TARGET }}/bin/ || true
-          echo ""
-          echo "=== Test cross-compiler ==="
-          docker run --rm \
-            -v ${{ github.workspace }}/build/toolchain:/build/toolchain \
-            openwrt-build-base:latest \
-            /build/toolchain/${{ env.TARGET }}/bin/aarch64-openwrt-linux-musl-gcc --version
-
-      - name: Build and push toolchain Docker image
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          TAG="${{ steps.check.outputs.tag }}"
-
-          # The base image already has host tools, so we just add the toolchain
-          cat > Dockerfile.toolchain-built <<EOF
-          ARG BASE_IMAGE
-          FROM \${BASE_IMAGE}
-
-          # Copy toolchain (host tools already in base image)
-          COPY --chown=builder:builder build/toolchain/${{ env.TARGET }} /build/toolchain/${{ env.TARGET }}
-
-          ENV PATH="/build/toolchain/${{ env.TARGET }}/bin:\${PATH}"
-          ENV CROSS_COMPILE="aarch64-openwrt-linux-musl-"
-          ENV CC="aarch64-openwrt-linux-musl-gcc"
-          ENV CXX="aarch64-openwrt-linux-musl-g++"
-
-          RUN aarch64-openwrt-linux-musl-gcc --version && apk --version
-          EOF
-
-          docker build \
-            --build-arg BASE_IMAGE=${{ env.BASE_IMAGE }}:${{ github.sha }} \
-            -f Dockerfile.toolchain-built \
-            -t ${{ env.TOOLCHAIN_IMAGE }}:${TAG} \
-            -t ${{ env.TOOLCHAIN_IMAGE }}:${{ env.TARGET }}-latest \
-            .
-
-          docker push ${{ env.TOOLCHAIN_IMAGE }}:${TAG}
-          docker push ${{ env.TOOLCHAIN_IMAGE }}:${{ env.TARGET }}-latest
-
-      - name: Report toolchain status
-        run: |
-          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
-            echo "✓ Using cached toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${{ steps.check.outputs.tag }}"
-          else
-            echo "✓ Built and pushed new toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${{ steps.check.outputs.tag }}"
-          fi
-
+  # Build firmware using the toolchain
   build-firmware:
-    name: Build Firmware (ARMSR)
+    name: Build Firmware
     runs-on: ubuntu-latest
-    needs: build-toolchain
+    needs: [build-toolchain]
     permissions:
       contents: read
       packages: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to Container Registry
+      - name: Log in to Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -369,50 +329,37 @@ jobs:
 
       - name: Pull toolchain image
         run: |
-          TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
-          echo "Using toolchain image: ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG}"
-          docker pull ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG}
+          echo "Using toolchain: ${{ needs.build-toolchain.outputs.image }}"
+          docker pull ${{ needs.build-toolchain.outputs.image }}
 
       - name: Cache build downloads
         uses: actions/cache@v4
         with:
           path: dl
           key: build-dl-${{ hashFiles('package/*/package.yaml') }}
-          restore-keys: |
-            build-dl-
-            toolchain-dl-
+          restore-keys: build-dl-
 
       - name: Build firmware
         run: |
-          TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
-          mkdir -p dl build/output build/packages build/staging build/kernel build/rootfs build/apk-repo
-          # Mount specific subdirs to preserve toolchain and host tools in the image
+          mkdir -p dl build/output build/packages build/staging build/kernel build/apk-repo
+          
           docker run --rm \
             --user $(id -u):$(id -g) \
-            -v ${{ github.workspace }}:/openwrt \
+            -v ${{ github.workspace }}:/openwrt:ro \
             -v ${{ github.workspace }}/dl:/build/dl \
-            -v ${{ github.workspace }}/build/output:/build/output \
-            -v ${{ github.workspace }}/build/packages:/build/packages \
-            -v ${{ github.workspace }}/build/staging:/build/staging \
-            -v ${{ github.workspace }}/build/kernel:/build/kernel \
-            -v ${{ github.workspace }}/build/rootfs:/build/rootfs \
-            -v ${{ github.workspace }}/build/apk-repo:/build/apk-repo \
+            -v ${{ github.workspace }}/build:/build \
             -w /openwrt \
             -e BUILD_DIR=/build \
-            -e DL_DIR=/build/dl \
             -e HOME=/tmp \
-            ${{ env.TOOLCHAIN_IMAGE }}:${TOOLCHAIN_TAG} \
+            ${{ needs.build-toolchain.outputs.image }} \
             python3 -m owrt -v build ${{ env.TARGET }} -p ${{ env.PROFILE }}
 
-      - name: List build outputs
+      - name: List outputs
         run: |
-          echo "=== Build outputs ==="
-          find build/output -type f -ls 2>/dev/null || true
-          echo ""
           echo "=== Firmware images ==="
-          ls -la build/output/images/ 2>/dev/null || true
+          ls -la build/output/images/ 2>/dev/null || echo "No images found"
 
-      - name: Upload firmware artifacts
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ env.TARGET }}
@@ -420,6 +367,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+  # Run QEMU tests on the built firmware
   runtime-tests:
     name: Runtime Tests (QEMU)
     runs-on: ubuntu-latest
@@ -429,10 +377,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Clone openwrt-tests
-        run: |
-          git clone --depth 1 https://github.com/aparcar/openwrt-tests.git openwrt-tests
+        run: git clone --depth 1 https://github.com/aparcar/openwrt-tests.git openwrt-tests
 
-      - name: Download firmware artifacts
+      - name: Download firmware
         uses: actions/download-artifact@v4
         with:
           name: firmware-${{ env.TARGET }}
@@ -446,66 +393,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-aarch64
 
-      - name: List firmware files
-        run: |
-          echo "=== Downloaded firmware ==="
-          ls -la firmware/ || echo "No firmware files found"
-
       - name: Find firmware image
         id: firmware
         run: |
-          # Find the initramfs kernel for QEMU testing
-          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' | head -1)
-          
+          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' -o -name '*-initramfs*.elf' | head -1)
           if [ -z "$FIRMWARE" ]; then
-            FIRMWARE=$(find firmware -name '*-initramfs*.elf' | head -1)
-          fi
-          
-          if [ -z "$FIRMWARE" ]; then
-            FIRMWARE=$(find firmware -name '*.bin' | head -1)
-          fi
-          
-          if [ -z "$FIRMWARE" ]; then
-            echo "No bootable firmware image found"
             echo "found=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          echo "Found firmware: $FIRMWARE"
           echo "path=$FIRMWARE" >> $GITHUB_OUTPUT
           echo "found=true" >> $GITHUB_OUTPUT
 
-      - name: Install test dependencies
+      - name: Run tests
         if: steps.firmware.outputs.found == 'true'
         working-directory: openwrt-tests
         run: |
           uv sync
-
-      - name: Run openwrt-tests
-        if: steps.firmware.outputs.found == 'true'
-        working-directory: openwrt-tests
-        run: |
           uv run pytest tests/ \
             --lg-env targets/qemu_armsr-armv8.yaml \
             --lg-log \
-            --log-cli-level=INFO \
-            --lg-colored-steps \
             --firmware "${{ github.workspace }}/${{ steps.firmware.outputs.path }}" \
-            -v \
-            --timeout=300 \
+            -v --timeout=300 \
             --junit-xml=test-results.xml \
-            -x \
-            || true  # Don't fail the job on test failures for now
+            || true
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always() && steps.firmware.outputs.found == 'true'
         with:
-          name: runtime-test-results
-          path: |
-            openwrt-tests/test-results.xml
-            openwrt-tests/*.log
-          retention-days: 30
+          name: test-results
+          path: openwrt-tests/test-results.xml
           if-no-files-found: ignore
 
       - name: Publish test results
@@ -515,4 +432,3 @@ jobs:
           report_paths: openwrt-tests/test-results.xml
           check_name: QEMU Runtime Tests
           fail_on_failure: false
-          include_passed: true

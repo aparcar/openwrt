@@ -1,51 +1,94 @@
-# OpenWrt Toolchain Container
+# OpenWrt Build System - Toolchain Image
 #
-# This Dockerfile builds a target-specific toolchain container.
-# It extends the base image and includes the compiled cross-toolchain.
+# This image extends owrt-tools with a cross-compilation toolchain for a
+# specific target architecture. One image is built per target.
 #
-# Build with:
-#   docker build -f Dockerfile.toolchain \
-#     --build-arg TARGET=mediatek-filogic \
-#     --build-arg OPENWRT_SRC=/path/to/openwrt \
-#     -t openwrt-toolchain:mediatek-filogic .
+# Build (example for mediatek/filogic):
+#   docker build -f docker/Dockerfile.toolchain \
+#     --build-arg TARGET=mediatek/filogic \
+#     --build-arg TOOLS_IMAGE=owrt-tools \
+#     -t owrt-toolchain-mediatek-filogic .
 #
-# The resulting image contains the complete cross-compilation toolchain
-# for the specified target and can be used to build packages and kernel.
+# The toolchain is built from OpenWrt sources because OpenWrt applies
+# custom patches to GCC, binutils, and musl that are required for
+# correct package compilation.
+#
+# Contents:
+# - All host tools from owrt-tools
+# - Cross-compiler (gcc, g++, as, ld, etc.)
+# - Target libc (musl with OpenWrt patches)
+# - Linux kernel headers for target
+# - pkg-config wrapper for cross-compilation
 
-ARG BASE_IMAGE=openwrt-poc-base:latest
-FROM ${BASE_IMAGE}
+ARG TOOLS_IMAGE=owrt-tools
+FROM ${TOOLS_IMAGE} AS builder
 
-# Target to build toolchain for
-ARG TARGET=mediatek-filogic
+# Target to build toolchain for (e.g., mediatek/filogic, x86/64)
+ARG TARGET
+ARG OPENWRT_REF=main
+
+# Require TARGET argument
+RUN test -n "${TARGET}" || (echo "ERROR: TARGET argument required" && exit 1)
+
+USER root
+
+# Clone OpenWrt source (needed for toolchain build)
+RUN mkdir -p /openwrt && chown builder:builder /openwrt
+
+USER builder
+
+# Clone OpenWrt and checkout specified ref
+RUN git clone --depth=1 --branch=${OPENWRT_REF} \
+    https://github.com/openwrt/openwrt.git /openwrt/openwrt || \
+    git clone --depth=1 https://github.com/openwrt/openwrt.git /openwrt/openwrt
+
+WORKDIR /openwrt
+
+# Copy owrt build system
+COPY --chown=builder:builder owrt /openwrt/owrt
+COPY --chown=builder:builder toolchain /openwrt/toolchain
+
+# Build the cross-toolchain for the specified target
+# This compiles: binutils, gcc (bootstrap), linux headers, musl, gcc (final)
+RUN python3 -m owrt -v toolchain build ${TARGET} \
+    --output /toolchain
+
+# Verify toolchain was built
+RUN ls -la /toolchain/bin/ | head -20
+
+# ============================================================================
+# Final toolchain image
+# ============================================================================
+FROM ${TOOLS_IMAGE}
+
+ARG TARGET
 
 LABEL maintainer="OpenWrt Developers"
 LABEL description="OpenWrt Toolchain for ${TARGET}"
-LABEL target="${TARGET}"
+LABEL org.opencontainers.image.target="${TARGET}"
 
-# Switch to root for installation
-USER root
+# Copy built toolchain
+COPY --from=builder --chown=builder:builder /toolchain /opt/toolchain
 
-# Copy OpenWrt sources (needed for toolchain build)
-COPY --chown=builder:builder . /openwrt
+# Extract target tuple from toolchain (e.g., aarch64-openwrt-linux-musl)
+RUN TUPLE=$(ls /opt/toolchain/bin/*-gcc 2>/dev/null | head -1 | xargs basename | sed 's/-gcc$//') && \
+    echo "TOOLCHAIN_TUPLE=${TUPLE}" >> /etc/environment && \
+    echo "export TOOLCHAIN_TUPLE=${TUPLE}" >> /home/builder/.bashrc
 
-# Switch back to builder
+# Environment for cross-compilation
+ENV TOOLCHAIN_DIR=/opt/toolchain
+ENV PATH="/opt/toolchain/bin:${PATH}"
+
+# Target identification
+ENV OWRT_TARGET=${TARGET}
+
 USER builder
+WORKDIR /build
 
-# Set environment
-ENV OPENWRT_DIR=/openwrt
-ENV TARGET=${TARGET}
+# Verify toolchain works
+RUN . /etc/environment 2>/dev/null || true && \
+    TUPLE=$(ls /opt/toolchain/bin/*-gcc 2>/dev/null | head -1 | xargs basename | sed 's/-gcc$//') && \
+    echo "Toolchain tuple: ${TUPLE}" && \
+    /opt/toolchain/bin/${TUPLE}-gcc --version | head -1
 
-WORKDIR /openwrt/poc
-
-# Build the toolchain
-# This runs the full toolchain build: binutils -> gcc-initial -> kernel-headers -> musl -> gcc-final
-RUN python3 -m owrt_build toolchain build ${TARGET}
-
-# The toolchain is now installed in /build/toolchain/${TARGET}
-# This image can be used as a base for building packages
-
-# Set the toolchain in PATH for convenience
-ENV PATH="/build/toolchain/${TARGET}/bin:${PATH}"
-
-# Default command shows toolchain info
-CMD ["python3", "-m", "owrt_build", "info", "${TARGET}"]
+CMD ["/bin/bash"]

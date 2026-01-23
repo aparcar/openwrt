@@ -45,8 +45,159 @@ def toolchain():
 
 
 @cli.group()
+def container():
+    """Container image management commands"""
+    pass
+
+
+@container.command('build')
+@click.option('--target', '-t', help='Build toolchain for specific target (e.g., mediatek/filogic)')
+@click.option('--force', '-f', is_flag=True, help='Force rebuild even if up-to-date')
+@click.option('--base-only', is_flag=True, help='Only build base image')
+@click.option('--tools-only', is_flag=True, help='Only build base + tools images')
+@click.option('--registry', '-r', help='Docker registry prefix (e.g., ghcr.io/openwrt)')
+@click.pass_context
+def container_build(ctx, target, force, base_only, tools_only, registry):
+    """Build container images with content-based caching.
+
+    Images are tagged with content hashes so unchanged inputs don't trigger rebuilds.
+
+    Examples:
+        # Build base + tools images
+        owrt container build
+
+        # Build toolchain for a specific target
+        owrt container build --target mediatek/filogic
+
+        # Force rebuild everything
+        owrt container build --target x86/64 --force
+    """
+    from owrt.docker_build import DockerImageBuilder
+
+    project_dir = Path(__file__).parent.parent
+    builder = DockerImageBuilder(
+        project_dir=project_dir,
+        registry=registry,
+        verbose=ctx.obj['verbose'],
+    )
+
+    print("Building container images...")
+
+    if base_only:
+        builder.build_base(force=force)
+    elif tools_only:
+        builder.build_tools(force=force)
+    elif target:
+        builder.build_toolchain(target, force=force)
+    else:
+        # Default: build base + tools
+        builder.build_tools(force=force)
+
+    print("\nDone!")
+
+
+@container.command('status')
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.option('--registry', '-r', help='Docker registry prefix')
+@click.pass_context
+def container_status(ctx, output_json, registry):
+    """Show status of container images.
+
+    Displays which images exist and their content hashes.
+    """
+    import json as json_module
+    from owrt.docker_build import DockerImageBuilder
+
+    project_dir = Path(__file__).parent.parent
+    builder = DockerImageBuilder(
+        project_dir=project_dir,
+        registry=registry,
+        verbose=ctx.obj['verbose'],
+    )
+
+    status = builder.status()
+
+    if output_json:
+        result = {}
+        for key, info in status.items():
+            result[key] = {
+                'image': info.image_ref,
+                'hash': info.content_hash,
+                'exists': info.exists,
+            }
+        print(json_module.dumps(result, indent=2))
+    else:
+        print("Container image status:")
+        print()
+        for key, info in status.items():
+            status_str = "EXISTS" if info.exists else "MISSING"
+            print(f"  {key}:")
+            print(f"    Image: {info.image_ref}")
+            print(f"    Hash:  {info.content_hash}")
+            print(f"    Status: {status_str}")
+            print()
+
+
+@container.command('hash')
+@click.option('--target', '-t', help='Include toolchain hash for target')
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.pass_context
+def container_hash(ctx, target, output_json):
+    """Compute content hashes for container images.
+
+    Useful for CI to check if images need rebuilding.
+
+    Examples:
+        # Get all hashes
+        owrt container hash --json
+
+        # Get toolchain hash for a target
+        owrt container hash --target mediatek/filogic
+    """
+    import json as json_module
+    from owrt.docker_build import DockerImageBuilder
+
+    project_dir = Path(__file__).parent.parent
+    builder = DockerImageBuilder(
+        project_dir=project_dir,
+        verbose=ctx.obj['verbose'],
+    )
+
+    hashes = builder.export_hashes()
+    if target:
+        hashes[f'toolchain:{target}'] = builder.compute_toolchain_hash(target)
+
+    if output_json:
+        print(json_module.dumps(hashes, indent=2))
+    else:
+        for key, hash_value in hashes.items():
+            print(f"{key}: {hash_value}")
+
+
+@container.command('clean')
+@click.option('--keep-base', is_flag=True, help='Keep base image')
+@click.option('--registry', '-r', help='Docker registry prefix')
+@click.pass_context
+def container_clean(ctx, keep_base, registry):
+    """Remove all owrt container images."""
+    from owrt.docker_build import DockerImageBuilder
+
+    project_dir = Path(__file__).parent.parent
+    builder = DockerImageBuilder(
+        project_dir=project_dir,
+        registry=registry,
+        verbose=ctx.obj['verbose'],
+    )
+
+    print("Cleaning container images...")
+    builder.clean(keep_base=keep_base)
+    print("Done!")
+
+
+# Legacy base group (deprecated, use 'container' instead)
+@cli.group(hidden=True)
 def base():
-    """Base container management commands"""
+    """Base container management commands (deprecated: use 'container' instead)"""
     pass
 
 
@@ -55,22 +206,17 @@ def base():
               type=click.Choice(['hash', 'json']),
               help='Output format: hash (12 char), json (full details)')
 def base_hash(fmt):
-    """Compute base container cache key.
-
-    The hash includes the Dockerfile that defines the build environment.
-    This can be used to determine if the base Docker image needs rebuilding.
-    """
+    """Compute base container cache key (deprecated: use 'container hash')."""
     import hashlib
     import json
 
     poc_dir = Path(__file__).parent.parent
-    dockerfile = poc_dir / 'docker' / 'Dockerfile'
+    dockerfile = poc_dir / 'docker' / 'Dockerfile.base'
 
     if not dockerfile.exists():
-        click.echo("Error: Dockerfile not found", err=True)
+        click.echo("Error: Dockerfile.base not found", err=True)
         sys.exit(1)
 
-    # Compute hash of Dockerfile
     h = hashlib.sha256()
     h.update(dockerfile.read_bytes())
     hash_value = h.hexdigest()[:12]
@@ -89,7 +235,7 @@ def compute_base_hash() -> str:
     """Compute base container hash (shared helper function)."""
     import hashlib
     poc_dir = Path(__file__).parent.parent
-    dockerfile = poc_dir / 'docker' / 'Dockerfile'
+    dockerfile = poc_dir / 'docker' / 'Dockerfile.base'
     if dockerfile.exists():
         h = hashlib.sha256()
         h.update(dockerfile.read_bytes())

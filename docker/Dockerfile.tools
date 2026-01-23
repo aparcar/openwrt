@@ -1,0 +1,67 @@
+# OpenWrt Build System - Host Tools Image
+#
+# This image contains all host tools built from source:
+# - apk: APK v3 package manager
+# - mkimage: U-Boot FIT image creation
+# - fwtool: Firmware metadata injection
+# - squashfs4: SquashFS with XZ extended options
+# - mtd-utils: Flash utilities with OpenWrt patches (-E option)
+# - lua: Scripting language for build system
+# - arm-trusted-firmware-tools: fiptool for ARM64 firmware
+#
+# These tools are architecture-independent and shared across all toolchains.
+#
+# Build:
+#   docker build -f docker/Dockerfile.tools -t owrt-tools .
+#
+# The resulting image provides consistent tool versions regardless of host.
+
+ARG BASE_IMAGE=owrt-base
+FROM ${BASE_IMAGE} AS builder
+
+# Copy the owrt build system
+COPY --chown=builder:builder owrt /src/owrt
+COPY --chown=builder:builder tools /src/tools
+
+WORKDIR /src
+USER builder
+
+# Build all host tools
+# Output goes to /build/host-staging/{bin,lib,include}
+RUN python3 -m owrt -v tool build-all
+
+# Verify tools were built
+RUN ls -la /build/host-staging/bin/
+
+# ============================================================================
+# Final tools image - minimal with just the built tools
+# ============================================================================
+FROM ${BASE_IMAGE}
+
+LABEL maintainer="OpenWrt Developers"
+LABEL description="OpenWrt Host Tools"
+
+# Copy built host tools from builder
+COPY --from=builder --chown=builder:builder /build/host-staging /opt/owrt-tools
+
+# Add tools to PATH (prepend so our tools take precedence)
+ENV PATH="/opt/owrt-tools/bin:${PATH}"
+ENV PKG_CONFIG_PATH="/opt/owrt-tools/lib/pkgconfig:${PKG_CONFIG_PATH}"
+ENV LD_LIBRARY_PATH="/opt/owrt-tools/lib:${LD_LIBRARY_PATH}"
+
+# Tools location for other stages
+ENV OWRT_TOOLS_DIR=/opt/owrt-tools
+
+USER builder
+WORKDIR /build
+
+# Verify host tools are functional
+RUN echo "Verifying host tools..." && \
+    apk --version && \
+    mkimage -V && \
+    mksquashfs4 -version 2>&1 | head -1 && \
+    ubinize --version 2>&1 | head -1 && \
+    fiptool --version 2>&1 | head -1 || true && \
+    echo "All host tools verified successfully"
+
+CMD ["/bin/bash"]
