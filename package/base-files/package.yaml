@@ -34,6 +34,8 @@ install:
     - /lib/apk/packages
     - /lib/functions
     - /lib/preinit
+    - /lib/upgrade
+    - /lib/upgrade/keep.d
     - /mnt
     - /opt
     - /overlay
@@ -52,6 +54,16 @@ install:
     - /var/run
     - /www
   files:
+    # Board detection and config generation
+    - src: "${pkg_dir}/files/bin/board_detect"
+      dst: "/bin/board_detect"
+      mode: "0755"
+    - src: "${pkg_dir}/files/bin/config_generate"
+      dst: "/bin/config_generate"
+      mode: "0755"
+    - src: "${pkg_dir}/files/bin/ipcalc.sh"
+      dst: "/bin/ipcalc.sh"
+      mode: "0755"
     # Essential system files
     - src: "${pkg_dir}/files/etc/passwd"
       dst: "/etc/passwd"
@@ -107,6 +119,21 @@ install:
     - src: "${pkg_dir}/files/lib/functions/leds.sh"
       dst: "/lib/functions/leds.sh"
       mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/uci-defaults.sh"
+      dst: "/lib/functions/uci-defaults.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/network.sh"
+      dst: "/lib/functions/network.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/caldata.sh"
+      dst: "/lib/functions/caldata.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/ipv4.sh"
+      dst: "/lib/functions/ipv4.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/functions/migrations.sh"
+      dst: "/lib/functions/migrations.sh"
+      mode: "0644"
     # Preinit scripts (sourced in order by /etc/preinit)
     - src: "${pkg_dir}/files/lib/preinit/02_default_set_state"
       dst: "/lib/preinit/02_default_set_state"
@@ -140,6 +167,28 @@ install:
       mode: "0644"
     - src: "${pkg_dir}/files/lib/preinit/99_10_run_init"
       dst: "/lib/preinit/99_10_run_init"
+      mode: "0644"
+    # Upgrade scripts
+    - src: "${pkg_dir}/files/lib/upgrade/common.sh"
+      dst: "/lib/upgrade/common.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/upgrade/do_stage2"
+      dst: "/lib/upgrade/do_stage2"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/upgrade/stage2"
+      dst: "/lib/upgrade/stage2"
+      mode: "0755"
+    - src: "${pkg_dir}/files/lib/upgrade/fwtool.sh"
+      dst: "/lib/upgrade/fwtool.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/upgrade/nand.sh"
+      dst: "/lib/upgrade/nand.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/upgrade/emmc.sh"
+      dst: "/lib/upgrade/emmc.sh"
+      mode: "0644"
+    - src: "${pkg_dir}/files/lib/upgrade/tar.sh"
+      dst: "/lib/upgrade/tar.sh"
       mode: "0644"
     # UCI config files
     - src: "${pkg_dir}/files/etc/config/system"
