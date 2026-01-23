@@ -1,0 +1,28 @@
+# GNU patch - Apply diff files to originals
+# Core bootstrap tool - built first to ensure consistent patch behavior
+# Synced with OpenWrt tools/patch/Makefile
+
+name: patch
+version: "2.8"
+license: GPL-3.0-or-later
+
+source:
+  type: tarball
+  url: "https://ftp.gnu.org/gnu/patch/patch-${version}.tar.gz"
+  sha256: "308a4983ff324521b9b21310bfc2398ca861798f02307c79eb99bb0e0d2bf980"
+  mirrors:
+    - "https://ftpmirror.gnu.org/patch/patch-${version}.tar.gz"
+
+metadata:
+  title: GNU patch
+  description: |
+    GNU patch applies diff files to original files. This is a core bootstrap
+    tool that must be built early to ensure consistent patching behavior
+    across all host systems.
+  core_tool: true
+
+dependencies: []
+
+build:
+  system: autotools
+  parallel: true

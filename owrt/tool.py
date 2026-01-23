@@ -37,6 +37,11 @@ class ToolConfig:
         self.metadata = data.get('metadata', {})
 
     @property
+    def is_core_tool(self) -> bool:
+        """Check if this is a core bootstrap tool."""
+        return self.metadata.get('core_tool', False)
+
+    @property
     def build_system(self) -> str:
         return self.build.get('system', 'autotools')
 

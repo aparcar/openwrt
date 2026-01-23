@@ -35,7 +35,7 @@ build:
     # Create pkgconfig file
     mkdir -p "${STAGING_DIR}/lib/pkgconfig"
     cp etc/lua.pc "${STAGING_DIR}/lib/pkgconfig/lua5.1.pc"
-    # Create symlinks
-    ln -sf lua5.1 "${STAGING_DIR}/bin/lua"
-    ln -sf luac5.1 "${STAGING_DIR}/bin/luac"
     ln -sf lua5.1.pc "${STAGING_DIR}/lib/pkgconfig/lua.pc"
+    # Create versioned symlinks (meson looks for lua5.1)
+    ln -sf lua "${STAGING_DIR}/bin/lua5.1"
+    ln -sf luac "${STAGING_DIR}/bin/luac5.1"

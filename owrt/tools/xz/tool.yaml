@@ -1,0 +1,35 @@
+# XZ Utils - LZMA compression
+# Required by squashfs4, kernel, and many packages
+# Synced with OpenWrt tools/xz/Makefile
+
+name: xz
+version: "5.8.2"
+license: LGPL-2.1-or-later
+
+source:
+  type: tarball
+  url: "https://github.com/tukaani-project/xz/releases/download/v${version}/xz-${version}.tar.bz2"
+  sha256: "60345d7c0b9c8d7ffa469e96898c300def3669f5047fc76219b819340839f3d8"
+  mirrors:
+    - "https://tukaani.org/xz/xz-${version}.tar.bz2"
+
+metadata:
+  title: XZ Utils (LZMA compression)
+  description: |
+    XZ Utils provides LZMA/LZMA2 compression. Required for:
+    - Extracting .xz and .lzma archives
+    - SquashFS with XZ compression
+    - Kernel compression
+
+dependencies:
+  - zstd
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--enable-static=yes"
+    - "--enable-shared=no"
+    - "--disable-doc"
+    - "--disable-nls"
+    - "--with-pic"
