@@ -360,12 +360,18 @@ jobs:
       - name: Build firmware
         run: |
           TOOLCHAIN_TAG="${{ needs.build-toolchain.outputs.toolchain-tag }}"
-          mkdir -p dl build
+          mkdir -p dl build/output build/packages build/staging build/kernel build/rootfs
+          # Note: We mount specific subdirs instead of /build to preserve the
+          # toolchain that's baked into the image at /build/toolchain/
           docker run --rm \
             --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}:/openwrt \
             -v ${{ github.workspace }}/dl:/build/dl \
-            -v ${{ github.workspace }}/build:/build \
+            -v ${{ github.workspace }}/build/output:/build/output \
+            -v ${{ github.workspace }}/build/packages:/build/packages \
+            -v ${{ github.workspace }}/build/staging:/build/staging \
+            -v ${{ github.workspace }}/build/kernel:/build/kernel \
+            -v ${{ github.workspace }}/build/rootfs:/build/rootfs \
             -w /openwrt \
             -e BUILD_DIR=/build \
             -e DL_DIR=/build/dl \
