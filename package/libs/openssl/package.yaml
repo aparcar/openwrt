@@ -45,13 +45,13 @@ build:
       *) OPENSSL_TARGET="linux-generic64" ;;
     esac
     # OpenSSL uses its own Configure script (Perl-based)
-    # Set CC/CXX/AR/RANLIB directly rather than using --cross-compile-prefix
-    # since that gets doubled with the OpenWrt targets
+    # Use --cross-compile-prefix to set up toolchain, tools are in PATH via container
     ./Configure \
       ${OPENSSL_TARGET} \
       --prefix=/usr \
       --libdir=lib \
       --openssldir=/etc/ssl \
+      --cross-compile-prefix="${CROSS_COMPILE}" \
       shared \
       no-tests \
       no-docs \
@@ -59,15 +59,18 @@ build:
       -DOPENSSL_SMALL_FOOTPRINT \
       -DOPENSSL_NO_HEARTBEATS
   compile_script: |
-    # Override CC to prevent doubling of cross-compile prefix
+    # Build OpenSSL - pass all tool variables to override prefix-based paths
     make -j${JOBS} \
       CC="${CC}" \
-      CXX="${CXX}" \
       AR="${AR}" \
       RANLIB="${RANLIB}" \
-      build_libs build_programs
+      all
   install_script: |
-    make DESTDIR=${DESTDIR} install_sw
+    make DESTDIR=${DESTDIR} \
+      CC="${CC}" \
+      AR="${AR}" \
+      RANLIB="${RANLIB}" \
+      install_sw
 
 subpackages:
   libopenssl:

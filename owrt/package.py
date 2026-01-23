@@ -1103,12 +1103,14 @@ endian = '{endian}'
     def _get_custom_isolation_commands(self, pkg: PackageConfig, env: Dict[str, str]) -> List[List[str]]:
         """Get commands to build a custom package in container.
 
-        Provides kernel-related environment variables for wireless drivers etc:
+        Provides environment variables for custom build scripts:
+        - CC, CXX, AR, RANLIB: Cross-compiler tools
+        - TARGET_ARCH: Target architecture (e.g., x86_64, aarch64)
         - LINUX_DIR: Path to kernel source/build directory
         - KERNEL_VERSION: Full kernel version (e.g., 6.12.65)
         - KERNEL_ARCH: Kernel architecture (e.g., arm64)
         - CROSS_COMPILE: Cross-compiler prefix
-        - NPROC: Number of processors for parallel builds
+        - JOBS, NPROC: Number of processors for parallel builds
         """
         commands = []
 
@@ -1121,8 +1123,17 @@ endian = '{endian}'
             'i386': 'x86',
         }.get(self.config.arch, self.config.arch)
 
+        target = self.config.target_tuple
+
         # Environment setup for custom scripts
+        # Include toolchain variables from env (CC, CXX, AR, RANLIB, etc.)
         env_setup = (
+            f'export CC=/toolchain/bin/{target}-gcc && '
+            f'export CXX=/toolchain/bin/{target}-g++ && '
+            f'export AR=/toolchain/bin/{target}-gcc-ar && '
+            f'export RANLIB=/toolchain/bin/{target}-gcc-ranlib && '
+            f'export TARGET_ARCH={self.config.arch} && '
+            f'export JOBS={self.jobs} && '
             f'export LINUX_DIR=/kernel/linux-{kernel_version} && '
             f'export KERNEL_VERSION={kernel_version} && '
             f'export KERNEL_ARCH={kernel_arch} && '
