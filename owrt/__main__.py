@@ -284,8 +284,9 @@ def toolchain_info(ctx, target):
 @click.argument('target')
 @click.option('--force', '-f', is_flag=True, help='Force rebuild')
 @click.option('--dry-run', '-n', is_flag=True, help='Show what would be built without building')
+@click.option('--output', '-o', type=click.Path(), help='Output directory for toolchain')
 @click.pass_context
-def toolchain_build(ctx, target, force, dry_run):
+def toolchain_build(ctx, target, force, dry_run, output):
     """Build the cross-compilation toolchain for TARGET"""
     from owrt.docker_wrapper import run_in_docker
     from owrt.container import is_inside_docker
@@ -297,6 +298,8 @@ def toolchain_build(ctx, target, force, dry_run):
             args.append('-f')
         if dry_run:
             args.append('-n')
+        if output:
+            args.extend(['--output', output])
         sys.exit(run_in_docker(
             args=args,
             target=target,
@@ -307,6 +310,11 @@ def toolchain_build(ctx, target, force, dry_run):
         ))
 
     config = Config.load_target(target)
+    
+    # Override toolchain output directory if specified
+    if output:
+        config.toolchain_dir = Path(output)
+    
     builder = ToolchainBuilder(config, verbose=ctx.obj['verbose'], jobs=ctx.obj['jobs'])
 
     if dry_run:
