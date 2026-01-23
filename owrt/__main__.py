@@ -496,9 +496,10 @@ def kernel_modules(ctx, target):
 @click.argument('target')
 @click.option('--profile', '-p', default='generic', help='Device profile')
 @click.option('--packages', '-P', multiple=True, help='Additional packages')
+@click.option('--all-packages', '-a', is_flag=True, help='Build all available packages (buildbot mode)')
 @click.option('--force', '-f', is_flag=True, help='Force rebuild')
 @click.pass_context
-def build(ctx, target, profile, packages, force):
+def build(ctx, target, profile, packages, force, all_packages):
     """Build complete firmware for TARGET"""
     from owrt.docker_wrapper import run_in_docker
     from owrt.container import is_inside_docker
@@ -508,6 +509,8 @@ def build(ctx, target, profile, packages, force):
         args = ['build', target, '-p', profile]
         for pkg in packages:
             args.extend(['-P', pkg])
+        if all_packages:
+            args.append('-a')
         if force:
             args.append('-f')
         sys.exit(run_in_docker(
@@ -545,7 +548,51 @@ def build(ctx, target, profile, packages, force):
     # Step 3: Packages
     click.echo("\n[3/4] Building packages...")
     pkg_builder = PackageBuilder(config, verbose=verbose, jobs=jobs, use_ccache=use_ccache)
-    package_list = list(config.default_packages) + list(packages)
+    
+    if all_packages:
+        # Buildbot mode: build all available packages
+        all_pkgs = PackageConfig.find_all_packages()
+        # Get all source package names - we can check availability of dependencies
+        all_pkg_names = set()
+        for pkg in all_pkgs:
+            all_pkg_names.add(pkg.name)
+            for subpkg_name in pkg.subpackages:
+                all_pkg_names.add(subpkg_name)
+            if pkg.has_variants:
+                for variant in pkg.variants.values():
+                    all_pkg_names.add(variant.package_name)
+        
+        # Get all package names including subpackages and variants
+        package_list = []
+        skipped_variants = []
+        for pkg in all_pkgs:
+            if pkg.has_variants:
+                # For packages with variants, check which variants have their deps available
+                for variant_name, variant in pkg.variants.items():
+                    # Check if all build dependencies are available
+                    build_deps = variant._dependencies.get('build', [])
+                    missing_deps = [dep for dep in build_deps if dep not in all_pkg_names]
+                    if missing_deps:
+                        skipped_variants.append(f"{variant.package_name} (missing: {', '.join(missing_deps)})")
+                        continue
+                    package_list.append(variant.package_name)
+            else:
+                # Regular package
+                package_list.append(pkg.name)
+            # Add subpackages
+            for subpkg_name in pkg.subpackages:
+                package_list.append(subpkg_name)
+        
+        click.echo(f"  Buildbot mode: building {len(package_list)} packages")
+        if skipped_variants:
+            click.echo(f"  Skipping {len(skipped_variants)} variants with missing dependencies:")
+            for sv in skipped_variants[:5]:
+                click.echo(f"    - {sv}")
+            if len(skipped_variants) > 5:
+                click.echo(f"    ... and {len(skipped_variants) - 5} more")
+    else:
+        package_list = list(config.default_packages) + list(packages)
+    
     pkg_builder.build_packages(package_list, force=force)
 
     # Step 4: Image
