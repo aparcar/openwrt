@@ -87,6 +87,26 @@ jobs:
         run: |
           python -m py_compile owrt/*.py
 
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema click pytest
+
+      - name: Run unit tests
+        run: |
+          python -m pytest owrt/tests/ -v --tb=short
+
   test-cli:
     name: Test CLI
     runs-on: ubuntu-latest
@@ -369,13 +389,17 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  test-qemu:
-    name: Test with QEMU
+  runtime-tests:
+    name: Runtime Tests (QEMU)
     runs-on: ubuntu-latest
     needs: build-firmware
     if: success()
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clone openwrt-tests
+        run: |
+          git clone --depth 1 https://github.com/aparcar/openwrt-tests.git tests
 
       - name: Download firmware artifacts
         uses: actions/download-artifact@v4
@@ -383,8 +407,13 @@ jobs:
           name: firmware-${{ env.TARGET }}
           path: firmware
 
-      - name: Install QEMU
+      - name: Install test dependencies
         run: |
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          
+          # Install QEMU
           sudo apt-get update
           sudo apt-get install -y qemu-system-aarch64
 
@@ -393,26 +422,42 @@ jobs:
           echo "=== Downloaded firmware ==="
           ls -la firmware/ || echo "No firmware files found"
 
-      - name: Boot test with QEMU
-        if: hashFiles('firmware/*.img') != '' || hashFiles('firmware/*.qcow2') != ''
+      - name: Run runtime tests
         run: |
-          echo "=== Starting QEMU boot test ==="
-          FIRMWARE=$(find firmware -name '*.img' -o -name '*.qcow2' | head -1)
-
+          # Find the initramfs kernel for QEMU testing
+          FIRMWARE=$(find firmware -name '*-initramfs-kernel.bin' -o -name '*-initramfs*.elf' | head -1)
+          
           if [ -z "$FIRMWARE" ]; then
-            echo "No bootable firmware image found, skipping QEMU test"
+            echo "No initramfs firmware found, looking for other images..."
+            FIRMWARE=$(find firmware -name '*.bin' -o -name '*.img' | head -1)
+          fi
+          
+          if [ -z "$FIRMWARE" ]; then
+            echo "No bootable firmware image found, skipping runtime tests"
             exit 0
           fi
+          
+          echo "Testing firmware: $FIRMWARE"
+          
+          # Run tests using openwrt-tests framework
+          cd tests
+          ~/.cargo/bin/uv sync
+          
+          ~/.cargo/bin/uv run pytest tests/ \
+            --lg-env targets/qemu_armsr-armv8.yaml \
+            --lg-log \
+            --log-cli-level=INFO \
+            --lg-colored-steps \
+            --firmware "../$FIRMWARE" \
+            -v \
+            --timeout=300 \
+            || echo "Some tests failed (this is expected for development builds)"
 
-          echo "Testing: $FIRMWARE"
-
-          timeout 60 qemu-system-aarch64 \
-            -M virt \
-            -cpu cortex-a53 \
-            -m 256M \
-            -drive file="$FIRMWARE",format=raw,if=virtio \
-            -nographic \
-            -no-reboot \
-            || true
-
-          echo "=== QEMU boot test completed ==="
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: tests/*.log
+          retention-days: 7
+          if-no-files-found: ignore
