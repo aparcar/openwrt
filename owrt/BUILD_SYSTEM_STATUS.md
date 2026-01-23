@@ -126,11 +126,12 @@ owrt/
 - [x] APK index generation after all packages
 - [x] Proper dependency ordering
 
-### 11. Docker Integration (`build.sh`)
+### 11. Docker Integration (`build.sh`, `docker_wrapper.py`)
 - [x] Base image with build dependencies
 - [x] Toolchain image with pre-built cross-compiler
 - [x] Volume mounts for build artifacts
 - [x] Non-Docker fallback mode
+- [x] Parallel profile building with ThreadPoolExecutor
 
 ### 12. Download Management (`download.py`)
 - [x] Tarball downloads with hash verification
@@ -326,5 +327,5 @@ build/
 
 ---
 
-*Last updated: 2026-01-20*
+*Last updated: 2026-01-23*
 *Branch: claude/plan-build-system-8DNjM*
