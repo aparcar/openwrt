@@ -137,7 +137,7 @@ class PackageBuilder:
             shutil.rmtree(self.repo_dir)
 
     def build_packages(self, packages: List[str], force: bool = False, create_apk: bool = True,
-                       single_package: bool = False):
+                       single_package: bool = False, continue_on_error: bool = False):
         """Build a list of packages with dependency resolution.
 
         Args:
@@ -145,6 +145,7 @@ class PackageBuilder:
             force: Force rebuild even if already built
             create_apk: Create APK packages (default True)
             single_package: If True, skip dependency resolution (ninja handles deps)
+            continue_on_error: Continue building other packages on failure (buildbot mode)
         """
         # Create directories
         self.packages_dir.mkdir(parents=True, exist_ok=True)
@@ -172,8 +173,17 @@ class PackageBuilder:
         # Build each package
         # Track APK count to know when to regenerate index
         apk_count_before = len(self._apk_files)
+        failed_packages = []
         for pkg_name in build_order:
-            self._build_package(pkg_name, force=force, create_apk=create_apk)
+            try:
+                self._build_package(pkg_name, force=force, create_apk=create_apk)
+            except Exception as e:
+                if continue_on_error:
+                    print(f"    {pkg_name}: FAILED - {e}")
+                    failed_packages.append(pkg_name)
+                    continue
+                else:
+                    raise
             # Regenerate index after each package that creates APKs
             # This ensures subsequent packages can find their dependencies
             if create_apk and len(self._apk_files) > apk_count_before:
@@ -184,6 +194,13 @@ class PackageBuilder:
         if create_apk and self._apk_files:
             print(f"  Creating APK repository with {len(self._apk_files)} packages...")
             self._generate_apk_index()
+
+        # Report failed packages in continue-on-error mode
+        if failed_packages:
+            print(f"\n  Build completed with {len(failed_packages)} failures:")
+            for pkg in failed_packages:
+                print(f"    - {pkg}")
+            print(f"\n  Successfully built: {len(build_order) - len(failed_packages)}/{len(build_order)} packages")
 
     def _resolve_dependencies(self, packages: List[str]) -> List[str]:
         """Resolve package dependencies and return build order."""

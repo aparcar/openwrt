@@ -497,9 +497,10 @@ def kernel_modules(ctx, target):
 @click.option('--profile', '-p', default='generic', help='Device profile')
 @click.option('--packages', '-P', multiple=True, help='Additional packages')
 @click.option('--all-packages', '-a', is_flag=True, help='Build all available packages (buildbot mode)')
+@click.option('--continue-on-error', '-c', is_flag=True, help='Continue building other packages on failure (buildbot mode)')
 @click.option('--force', '-f', is_flag=True, help='Force rebuild')
 @click.pass_context
-def build(ctx, target, profile, packages, force, all_packages):
+def build(ctx, target, profile, packages, force, all_packages, continue_on_error):
     """Build complete firmware for TARGET"""
     from owrt.docker_wrapper import run_in_docker
     from owrt.container import is_inside_docker
@@ -511,6 +512,8 @@ def build(ctx, target, profile, packages, force, all_packages):
             args.extend(['-P', pkg])
         if all_packages:
             args.append('-a')
+        if continue_on_error:
+            args.append('-c')
         if force:
             args.append('-f')
         sys.exit(run_in_docker(
@@ -593,7 +596,7 @@ def build(ctx, target, profile, packages, force, all_packages):
     else:
         package_list = list(config.default_packages) + list(packages)
     
-    pkg_builder.build_packages(package_list, force=force)
+    pkg_builder.build_packages(package_list, force=force, continue_on_error=continue_on_error)
 
     # Step 4: Image
     click.echo("\n[4/4] Generating images...")
