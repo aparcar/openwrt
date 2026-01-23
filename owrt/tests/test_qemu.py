@@ -153,8 +153,11 @@ class TestQEMURunner:
         runner = QEMURunner("armsr-armv8", mock_firmware)
         assert runner._check_qemu_available() is False
 
-    def test_start_missing_firmware(self, temp_dir):
+    @patch("subprocess.run")
+    def test_start_missing_firmware(self, mock_run, temp_dir):
         """Test starting with missing firmware raises error."""
+        # Mock QEMU as available so we get to the firmware check
+        mock_run.return_value = MagicMock(returncode=0)
         missing_firmware = temp_dir / "nonexistent.bin"
         runner = QEMURunner("armsr-armv8", missing_firmware)
         with pytest.raises(FileNotFoundError):
