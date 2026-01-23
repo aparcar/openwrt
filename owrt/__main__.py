@@ -1217,5 +1217,235 @@ def info(target):
     click.echo(f"  Profiles: {', '.join(p['name'] for p in config.profiles)}")
 
 
+@cli.group()
+def test():
+    """Runtime testing commands"""
+    pass
+
+
+@test.command('qemu')
+@click.argument('target')
+@click.option('--firmware', '-f', required=True, type=click.Path(exists=True),
+              help='Path to firmware/kernel image')
+@click.option('--timeout', '-t', default=180, help='Boot timeout in seconds')
+@click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
+@click.pass_context
+def test_qemu(ctx, target, firmware, timeout, output_json):
+    """Run QEMU-based smoke tests on firmware.
+
+    Boots the firmware image in QEMU and runs basic tests to verify
+    the system is functioning correctly.
+
+    Supported targets: armsr-armv8, x86-64, malta-be
+
+    Example:
+        python -m owrt test qemu armsr-armv8 -f build/output/images/kernel.bin
+    """
+    from .qemu import run_qemu_tests, QEMU_TARGETS
+    import json
+
+    if target not in QEMU_TARGETS:
+        click.echo(f"Unsupported QEMU target: {target}", err=True)
+        click.echo(f"Supported targets: {', '.join(QEMU_TARGETS.keys())}", err=True)
+        sys.exit(1)
+
+    verbose = ctx.obj['verbose']
+    firmware_path = Path(firmware)
+
+    if not output_json:
+        click.echo(f"Running QEMU tests for {target}")
+        click.echo(f"  Firmware: {firmware_path}")
+        click.echo(f"  Timeout: {timeout}s")
+        click.echo()
+
+    success, results = run_qemu_tests(
+        target=target,
+        firmware=firmware_path,
+        verbose=verbose,
+        timeout=timeout,
+    )
+
+    if output_json:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        # Print summary
+        if 'error' in results:
+            click.echo(f"\nError: {results['error']}", err=True)
+        else:
+            summary = results.get('summary', {})
+            click.echo(f"\nTest Results:")
+            click.echo(f"  Passed: {summary.get('passed', 0)}/{summary.get('total', 0)}")
+            click.echo(f"  Pass rate: {summary.get('pass_rate', 0):.1f}%")
+
+            if summary.get('failed_tests'):
+                click.echo(f"\n  Failed tests:")
+                for test_name in summary['failed_tests']:
+                    click.echo(f"    - {test_name}")
+
+            if results.get('kernel_errors'):
+                click.echo(f"\n  Kernel errors found: {len(results['kernel_errors'])}")
+                for err in results['kernel_errors'][:3]:
+                    click.echo(f"    {err[:80]}")
+
+            sys_info = results.get('system_info', {})
+            if sys_info:
+                click.echo(f"\n  System info:")
+                if 'kernel_version' in sys_info:
+                    click.echo(f"    Kernel: {sys_info['kernel_version']}")
+                if 'memory' in sys_info:
+                    mem = sys_info['memory']
+                    click.echo(f"    Memory: {mem.get('used_mb', 0)}MB / {mem.get('total_mb', 0)}MB")
+                if 'process_count' in sys_info:
+                    click.echo(f"    Processes: {sys_info['process_count']}")
+
+    sys.exit(0 if success else 1)
+
+
+@test.command('list-targets')
+def test_list_targets():
+    """List supported QEMU test targets."""
+    from .qemu import QEMU_TARGETS
+
+    click.echo("Supported QEMU test targets:")
+    click.echo()
+    for name, config in QEMU_TARGETS.items():
+        click.echo(f"  {name}")
+        click.echo(f"    Binary: {config.binary}")
+        click.echo(f"    Machine: {config.machine}")
+        click.echo(f"    CPU: {config.cpu}")
+        click.echo()
+
+
+@test.command('run')
+@click.argument('target')
+@click.option('--firmware', '-f', type=click.Path(exists=True),
+              help='Path to firmware (auto-detected if not specified)')
+@click.option('--tests-dir', '-d', type=click.Path(exists=True),
+              help='Path to openwrt-tests directory')
+@click.option('--full', is_flag=True, help='Run full test suite with openwrt-tests')
+@click.pass_context
+def test_run(ctx, target, firmware, tests_dir, full):
+    """Run tests on built firmware.
+
+    By default, runs basic QEMU smoke tests. With --full, uses the
+    openwrt-tests framework for comprehensive testing.
+
+    Example:
+        # Basic smoke tests
+        python -m owrt test run armsr-armv8
+
+        # Full test suite
+        python -m owrt test run armsr-armv8 --full -d /path/to/openwrt-tests
+    """
+    from .qemu import QEMU_TARGETS
+
+    config = Config.load_target(target)
+    verbose = ctx.obj['verbose']
+
+    # Auto-detect firmware if not specified
+    if not firmware:
+        # Look for initramfs kernel in output directory
+        patterns = [
+            '*-initramfs-kernel.bin',
+            '*-initramfs*.elf',
+            '*-kernel.bin',
+        ]
+        for pattern in patterns:
+            matches = list(config.output_dir.glob(f'images/{pattern}'))
+            if matches:
+                firmware = matches[0]
+                break
+
+        if not firmware:
+            click.echo("No firmware found. Build firmware first or specify --firmware", err=True)
+            sys.exit(1)
+
+    firmware_path = Path(firmware)
+    click.echo(f"Testing firmware: {firmware_path}")
+
+    if full:
+        # Run full test suite with openwrt-tests
+        if not tests_dir:
+            # Look for openwrt-tests in common locations
+            possible_paths = [
+                Path.cwd() / 'tests',
+                Path.cwd() / 'openwrt-tests',
+                Path.home() / 'openwrt-tests',
+            ]
+            for p in possible_paths:
+                if (p / 'tests' / 'conftest.py').exists():
+                    tests_dir = p
+                    break
+
+            if not tests_dir:
+                click.echo("openwrt-tests not found. Specify --tests-dir or clone it:", err=True)
+                click.echo("  git clone https://github.com/aparcar/openwrt-tests.git tests", err=True)
+                sys.exit(1)
+
+        tests_path = Path(tests_dir)
+        click.echo(f"Using openwrt-tests from: {tests_path}")
+
+        # Map target to QEMU target config
+        qemu_target_map = {
+            'armsr-armv8': 'qemu_armsr-armv8',
+            'x86-64': 'qemu_x86-64',
+            'malta-be': 'qemu_malta-be',
+        }
+
+        qemu_target = qemu_target_map.get(target)
+        if not qemu_target:
+            click.echo(f"No QEMU target mapping for {target}", err=True)
+            sys.exit(1)
+
+        env_file = tests_path / 'targets' / f'{qemu_target}.yaml'
+        if not env_file.exists():
+            click.echo(f"Target config not found: {env_file}", err=True)
+            sys.exit(1)
+
+        # Run pytest with labgrid
+        import subprocess
+        cmd = [
+            'uv', '--project', str(tests_path), 'run',
+            'pytest', str(tests_path / 'tests'),
+            '--lg-env', str(env_file),
+            '--lg-log',
+            '--log-cli-level=INFO',
+            '--lg-colored-steps',
+            '--firmware', str(firmware_path.resolve()),
+            '-v',
+        ]
+
+        click.echo(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=tests_path)
+        sys.exit(result.returncode)
+    else:
+        # Run basic QEMU smoke tests
+        if target not in QEMU_TARGETS:
+            click.echo(f"Unsupported QEMU target: {target}", err=True)
+            click.echo(f"Supported targets: {', '.join(QEMU_TARGETS.keys())}", err=True)
+            sys.exit(1)
+
+        from .qemu import run_qemu_tests
+        success, results = run_qemu_tests(
+            target=target,
+            firmware=firmware_path,
+            verbose=verbose,
+            timeout=180,
+        )
+
+        # Print summary
+        if 'error' in results:
+            click.echo(f"\nError: {results['error']}", err=True)
+            sys.exit(1)
+
+        summary = results.get('summary', {})
+        click.echo(f"\nResults: {summary.get('passed', 0)}/{summary.get('total', 0)} tests passed")
+
+        if summary.get('failed_tests'):
+            click.echo(f"Failed: {', '.join(summary['failed_tests'])}")
+
+        sys.exit(0 if success else 1)
+
+
 if __name__ == '__main__':
     cli()
