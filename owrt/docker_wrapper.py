@@ -41,9 +41,13 @@ def get_toolchain_hash(target: str) -> str:
     """Compute hash of toolchain inputs for a target.
     
     Includes: Dockerfile, toolchain.py, target config, patches.
+    Target can be specified as 'x86/64' or 'x86-64' - both are normalized.
     """
     project_root = get_project_root()
     h = hashlib.sha256()
+    
+    # Normalize target format: x86/64 -> x86-64 for consistency
+    target_normalized = target.replace('/', '-')
     
     # Files that affect toolchain build
     files_to_hash = [
@@ -51,8 +55,8 @@ def get_toolchain_hash(target: str) -> str:
         project_root / 'owrt' / 'toolchain.py',
     ]
     
-    # Target config
-    target_yaml = project_root / 'targets' / target.replace('-', '/') / 'target.yaml'
+    # Target config - convert dash to slash for filesystem path
+    target_yaml = project_root / 'targets' / target_normalized.replace('-', '/') / 'target.yaml'
     if target_yaml.exists():
         files_to_hash.append(target_yaml)
     
@@ -76,8 +80,13 @@ def get_toolchain_hash(target: str) -> str:
 
 
 def get_toolchain_image_tag(target: str) -> str:
-    """Get the toolchain Docker image tag for a target."""
-    return f"openwrt-toolchain:{target}-{get_toolchain_hash(target)}"
+    """Get the toolchain Docker image tag for a target.
+    
+    Target can be specified as 'x86/64' or 'x86-64' - both are normalized to dash format.
+    """
+    # Normalize target format: x86/64 -> x86-64
+    target_normalized = target.replace('/', '-')
+    return f"openwrt-toolchain:{target_normalized}-{get_toolchain_hash(target_normalized)}"
 
 
 def docker_available() -> bool:
@@ -127,13 +136,17 @@ def build_toolchain_image(target: str, verbose: bool = False) -> None:
     """Build the toolchain Docker image for a target.
     
     Requires the toolchain to already be built in build/toolchain/{target}/.
+    Target can be specified as 'x86/64' or 'x86-64' - both are normalized to dash format.
     """
     project_root = get_project_root()
     base_image = get_base_image_tag()
-    tag = get_toolchain_image_tag(target)
+    
+    # Normalize target format: x86/64 -> x86-64
+    target_normalized = target.replace('/', '-')
+    tag = get_toolchain_image_tag(target_normalized)
     
     # Check if toolchain exists
-    toolchain_dir = project_root / 'build' / 'toolchain' / target
+    toolchain_dir = project_root / 'build' / 'toolchain' / target_normalized
     if not toolchain_dir.exists():
         raise RuntimeError(
             f"Toolchain not found at {toolchain_dir}. "
@@ -162,7 +175,7 @@ ENV PATH="/build/toolchain/${{TARGET}}/bin:${{PATH}}"
         cmd = [
             'docker', 'build',
             '--build-arg', f'BASE_IMAGE={base_image}',
-            '--build-arg', f'TARGET={target}',
+            '--build-arg', f'TARGET={target_normalized}',
             '-f', temp_dockerfile,
             '-t', tag,
             str(project_root),

@@ -1389,31 +1389,43 @@ endian = '{endian}'
             src_dir = pkg_dir / 'src'
 
             if not src_dir.exists():
-                try:
-                    # Clone the repository
-                    run_command(['git', 'clone', '--depth=1', url, str(src_dir)],
-                               verbose=self.verbose)
-                    # Checkout specific version if specified
-                    if version and version != 'HEAD':
-                        run_command(['git', 'fetch', '--depth=1', 'origin', version],
-                                   cwd=src_dir, verbose=self.verbose)
-                        run_command(['git', 'checkout', version],
-                                   cwd=src_dir, verbose=self.verbose)
+                # Use cached tarball from dl_dir if available (OpenWrt mirror format)
+                # Filename format: {name}-{version}~{commit8}.tar.zst
+                from .download import get_download_filename, download_package_source
+                cached_filename = get_download_filename(pkg)
+                cached_tarball = self.dl_dir / cached_filename if cached_filename else None
 
-                    # Initialize submodules if .gitmodules exists
-                    if (src_dir / '.gitmodules').exists():
-                        run_command(['git', 'submodule', 'update', '--init', '--recursive', '--depth=1'],
-                                   cwd=src_dir, verbose=self.verbose)
+                if cached_tarball and cached_tarball.exists():
+                    # Extract from cached tarball
+                    if self.verbose:
+                        print(f"      Using cached source: {cached_filename}")
+                    extract_archive(cached_tarball, pkg_dir)
+                    # Find extracted directory and rename to src/
+                    dirs = [d for d in pkg_dir.iterdir() if d.is_dir() and d.name != 'build']
+                    if dirs:
+                        dirs[0].rename(src_dir)
+                else:
+                    # Try to download/create tarball first, then extract
+                    try:
+                        self.dl_dir.mkdir(parents=True, exist_ok=True)
+                        result = download_package_source(pkg, self.dl_dir, self.verbose)
+                        if result and result.exists():
+                            extract_archive(result, pkg_dir)
+                            dirs = [d for d in pkg_dir.iterdir() if d.is_dir() and d.name != 'build']
+                            if dirs:
+                                dirs[0].rename(src_dir)
+                        else:
+                            raise RuntimeError("Download returned no file")
+                    except Exception as e:
+                        # Clean up partial extraction on failure
+                        if src_dir.exists():
+                            shutil.rmtree(src_dir)
+                        raise
 
-                    # Apply patches from patches/ directory if it exists
-                    patches_path = pkg.pkg_dir / 'patches'
-                    if patches_path.exists():
-                        apply_patches(src_dir, patches_path, verbose=self.verbose)
-                except Exception as e:
-                    # Clean up partial clone on failure
-                    if src_dir.exists():
-                        shutil.rmtree(src_dir)
-                    raise
+                # Apply patches from patches/ directory if it exists
+                patches_path = pkg.pkg_dir / 'patches'
+                if patches_path.exists():
+                    apply_patches(src_dir, patches_path, verbose=self.verbose)
 
             return src_dir
 

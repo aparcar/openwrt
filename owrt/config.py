@@ -413,7 +413,8 @@ class Config:
     def load_target(cls, target_name: str) -> 'Config':
         """Load a target configuration by name.
 
-        Target name format: <board>-<subtarget> (e.g., mediatek-filogic, armsr-armv8, x86-64)
+        Target name format: <board>-<subtarget> or <board>/<subtarget>
+        Examples: mediatek-filogic, armsr-armv8, x86-64, x86/64
         Target file location: target/linux/<board>/<subtarget>/target.yaml
         """
         # Find repository root (parent of owrt/ directory)
@@ -421,7 +422,11 @@ class Config:
         root_dir = owrt_dir.parent
 
         # Parse target name into board and subtarget
-        parts = target_name.split('-', 1)
+        # Support both dash format (x86-64) and slash format (x86/64)
+        if '/' in target_name:
+            parts = target_name.split('/', 1)
+        else:
+            parts = target_name.split('-', 1)
         if len(parts) == 2:
             board, subtarget = parts
         else:
