@@ -1,0 +1,95 @@
+# libpcap - Low-level packet capture library
+# Synced with OpenWrt package/libs/libpcap/Makefile
+
+name: libpcap
+version: "1.10.5"
+release: 3
+license: BSD-3-Clause
+
+source:
+  type: tarball
+  url: "https://www.tcpdump.org/release/${name}-${version}.tar.gz"
+  sha256: "37ced90a19a302a7f32e458224a00c365c117905c2cd35ac544b6880a81488f0"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Low-level packet capture library
+  description: |
+    This package contains a system-independent library for user-level network
+    packet capture.
+  maintainer: Felix Fietkau <nbd@nbd.name>
+  url: https://www.tcpdump.org/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: cmake
+  parallel: true
+  cmake_options:
+    - "-DBUILD_SHARED_LIBS=ON"
+    - "-DBUILD_WITH_LIBNL=OFF"
+    - "-DDISABLE_DAG=ON"
+    - "-DDISABLE_DBUS=ON"
+    - "-DDISABLE_DPDK=ON"
+    - "-DDISABLE_NETMAP=ON"
+    - "-DDISABLE_RDMA=ON"
+    - "-DDISABLE_SEPTEL=ON"
+    - "-DDISABLE_SNF=ON"
+    - "-DDISABLE_TC=ON"
+    - "-DDISABLE_BLUETOOTH=ON"
+    - "-DDISABLE_LINUX_USBMON=ON"
+    - "-DBDEBUG=OFF"
+    - "-DYYDEBUG=OFF"
+
+subpackages:
+  libpcap:
+    metadata:
+      title: Packet capture library
+      description: |
+        This package contains a system-independent library for user-level
+        network packet capture.
+    install:
+      files:
+        - src: "usr/lib/libpcap.so*"
+          dst: "/usr/lib/"
+
+  libpcap-dev:
+    metadata:
+      title: libpcap development files
+      description: Development headers and libraries for libpcap
+    section: devel
+    dependencies:
+      runtime:
+        - libpcap
+    install:
+      files:
+        - src: "usr/include/pcap.h"
+          dst: "/usr/include/"
+        - src: "usr/include/pcap/*.h"
+          dst: "/usr/include/pcap/"
+        - src: "usr/include/pcap-bpf.h"
+          dst: "/usr/include/"
+        - src: "usr/lib/pkgconfig/libpcap.pc"
+          dst: "/usr/lib/pkgconfig/"
+        - src: "usr/bin/pcap-config"
+          dst: "/usr/bin/"
+          mode: "0755"
+
+  rpcapd:
+    metadata:
+      section: net
+      category: Network
+      title: Remote packet capture daemon
+      description: |
+        Capture daemon to be controlled by a remote libpcap application.
+    dependencies:
+      runtime:
+        - libpcap
+    install:
+      files:
+        - src: "usr/sbin/rpcapd"
+          dst: "/usr/sbin/rpcapd"
+          mode: "0755"

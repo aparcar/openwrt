@@ -1,0 +1,103 @@
+# libcap - Linux capabilities library
+# Synced with OpenWrt package/libs/libcap/Makefile
+
+name: libcap
+version: "2.69"
+release: 1
+license: GPL-2.0-only
+
+source:
+  type: tarball
+  url: "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/${name}-${version}.tar.xz"
+  sha256: "f311f8f3dad84699d0566d1d6f7ec943a9298b28f714cae3c931dfd57492d7eb"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Linux capabilities library
+  description: |
+    Linux capabilities library for managing POSIX 1003.1e capabilities.
+    This library implements the user-space interfaces to the POSIX
+    1003.1e capabilities available in Linux kernels.
+  maintainer: Paul Wassi <p.wassi@gmx.at>
+  url: https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: make
+  parallel: true
+  make_args:
+    - "GOLANG=no"
+    - "PAM_CAP=no"
+    - "RAISE_SETFCAP=no"
+    - "DYNAMIC=yes"
+    - 'lib=lib'
+  make_install_args:
+    - "GOLANG=no"
+    - "PAM_CAP=no"
+    - "RAISE_SETFCAP=no"
+    - "DYNAMIC=yes"
+    - 'lib=lib'
+  # musl compatibility: pthread_yield -> sched_yield
+  cflags:
+    - "-Dpthread_yield=sched_yield"
+
+subpackages:
+  libcap:
+    metadata:
+      title: Linux capabilities library
+      description: Shared library for managing POSIX capabilities
+    install:
+      files:
+        - src: "lib/libcap.so*"
+          dst: "/usr/lib/"
+
+  libcap-dev:
+    metadata:
+      title: libcap development files
+      description: Development headers and static libraries for libcap
+    section: devel
+    dependencies:
+      runtime:
+        - libcap
+    install:
+      files:
+        - src: "usr/include/sys/capability.h"
+          dst: "/usr/include/sys/"
+        - src: "usr/include/sys/psx_syscall.h"
+          dst: "/usr/include/sys/"
+        - src: "lib/libcap.a"
+          dst: "/usr/lib/"
+        - src: "lib/libpsx.a"
+          dst: "/usr/lib/"
+        - src: "lib/pkgconfig/libcap.pc"
+          dst: "/usr/lib/pkgconfig/"
+        - src: "lib/pkgconfig/libpsx.pc"
+          dst: "/usr/lib/pkgconfig/"
+
+  libcap-bin:
+    metadata:
+      title: Linux capabilities utilities
+      description: |
+        Command-line utilities for managing POSIX capabilities.
+        Includes capsh, getcap, getpcaps, and setcap.
+    dependencies:
+      runtime:
+        - libcap
+    install:
+      files:
+        - src: "sbin/capsh"
+          dst: "/usr/sbin/capsh"
+          mode: "0755"
+        - src: "sbin/getcap"
+          dst: "/usr/sbin/getcap"
+          mode: "0755"
+        - src: "sbin/getpcaps"
+          dst: "/usr/sbin/getpcaps"
+          mode: "0755"
+        - src: "sbin/setcap"
+          dst: "/usr/sbin/setcap"
+          mode: "0755"

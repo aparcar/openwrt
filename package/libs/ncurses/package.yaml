@@ -1,0 +1,139 @@
+# ncurses - Terminal handling library
+# Synced with OpenWrt package/libs/ncurses/Makefile
+
+name: ncurses
+version: "6.4"
+release: 3
+license: MIT
+
+source:
+  type: tarball
+  url: "https://ftp.gnu.org/gnu/ncurses/${name}-${version}.tar.gz"
+  sha256: "6931283d9ac87c5073f30b6290c4c75f21632bb4fc3603ac8100812bed248159"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Terminal handling library
+  description: |
+    The ncurses library provides screen-handling and optimization functions
+    for programs that need to output text to a terminal.
+  url: https://www.gnu.org/software/ncurses/
+
+dependencies:
+  runtime: []
+  build:
+    - ncurses  # Host build dependency for tic
+
+build:
+  system: autotools
+  parallel: true
+  configure_args:
+    - "--enable-echo"
+    - "--enable-const"
+    - "--enable-overwrite"
+    - "--enable-pc-files"
+    - "--disable-rpath"
+    - "--without-ada"
+    - "--without-debug"
+    - "--without-manpages"
+    - "--without-profile"
+    - "--without-progs"
+    - "--without-tests"
+    - "--disable-big-core"
+    - "--disable-home-terminfo"
+    - "--with-normal"
+    - "--with-shared"
+    - "--with-terminfo-dirs=/usr/share/terminfo"
+    - "--with-default-terminfo-dir=/usr/share/terminfo"
+    - "--with-pkg-config-libdir=/usr/lib/pkgconfig"
+    - "--enable-widec"
+    - "--with-build-cppflags=-D_GNU_SOURCE"
+  cflags:
+    - "-std=gnu17"
+  make_args:
+    - "libs"
+
+subpackages:
+  terminfo:
+    metadata:
+      title: Terminal Info Database (ncurses)
+      description: |
+        Terminal capability database for ncurses. Contains terminal
+        descriptions for common terminal types including xterm, linux,
+        screen, tmux, and others.
+    install:
+      dirs:
+        - dst: "/usr/share/terminfo"
+      terminfo_entries:
+        - "a/ansi"
+        - "a/alacritty"
+        - "d/dumb"
+        - "f/foot"
+        - "l/linux"
+        - "r/rxvt"
+        - "r/rxvt-unicode"
+        - "s/screen"
+        - "s/screen-256color"
+        - "t/tmux"
+        - "t/tmux-256color"
+        - "v/vt100"
+        - "v/vt102"
+        - "x/xterm"
+        - "x/xterm-color"
+        - "x/xterm-256color"
+
+  libncurses:
+    metadata:
+      title: Terminal handling library (Unicode)
+      description: |
+        The ncurses library provides screen-handling and optimization
+        functions for terminal programs. This package provides Unicode
+        (wide character) support.
+    provides:
+      - libncursesw
+    dependencies:
+      runtime:
+        - terminfo
+    install:
+      files:
+        - src: "usr/lib/libncursesw.so*"
+          dst: "/usr/lib/"
+        - src: "usr/lib/libpanelw.so*"
+          dst: "/usr/lib/"
+        - src: "usr/lib/libmenuw.so*"
+          dst: "/usr/lib/"
+        - src: "usr/lib/libformw.so*"
+          dst: "/usr/lib/"
+      # Create non-w symlinks for compatibility
+      symlinks:
+        - src: "libncursesw.so.6"
+          dst: "/usr/lib/libncurses.so.6"
+        - src: "libpanelw.so.6"
+          dst: "/usr/lib/libpanel.so.6"
+        - src: "libmenuw.so.6"
+          dst: "/usr/lib/libmenu.so.6"
+        - src: "libformw.so.6"
+          dst: "/usr/lib/libform.so.6"
+
+  libncurses-dev:
+    metadata:
+      section: devel
+      category: Development
+      submenu: Libraries
+      title: Development files for ncurses
+      description: Headers, static libraries, and pkg-config files for ncurses
+    dependencies:
+      runtime:
+        - libncurses
+    install:
+      files:
+        - src: "usr/include/*.h"
+          dst: "/usr/include/"
+        - src: "usr/lib/*.a"
+          dst: "/usr/lib/"
+        - src: "usr/lib/pkgconfig/*.pc"
+          dst: "/usr/lib/pkgconfig/"
+        - src: "usr/bin/ncursesw6-config"
+          dst: "/usr/bin/"
+          mode: "0755"

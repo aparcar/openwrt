@@ -1,0 +1,124 @@
+# libnl - Netlink Protocol Library Suite
+# Synced with OpenWrt package/libs/libnl/Makefile
+
+name: libnl
+version: "3.12.0"
+release: 1
+license: LGPL-2.1
+
+source:
+  type: tarball
+  url: "https://github.com/thom311/libnl/releases/download/libnl3_12_0/${name}-${version}.tar.gz"
+  sha256: "fc51ca7196f1a3f5fdf6ffd3864b50f4f9c02333be28be4eeca057e103c0dd18"
+
+metadata:
+  section: libs
+  category: Libraries
+  title: Netlink Protocol Library Suite
+  description: |
+    Socket handling, connection management, sending and receiving of data,
+    message construction and parsing, object caching system, etc.
+  url: https://www.infradead.org/~tgr/libnl/
+
+dependencies:
+  runtime: []
+  build: []
+
+build:
+  system: autotools
+  parallel: true
+  autoreconf: true
+  configure_args:
+    - "--disable-debug"
+  build_flags:
+    gc_sections: true
+
+subpackages:
+  libnl-core:
+    metadata:
+      title: Core Netlink Library
+      description: Common code for all netlink libraries
+    dependencies:
+      runtime:
+        - libpthread
+    install:
+      files:
+        - src: "usr/lib/libnl-3.so*"
+          dst: "/usr/lib/"
+
+  libnl-genl:
+    metadata:
+      title: Generic Netlink Library
+      description: Generic Netlink Library Functions
+    dependencies:
+      runtime:
+        - libnl-core
+    install:
+      files:
+        - src: "usr/lib/libnl-genl-3.so*"
+          dst: "/usr/lib/"
+
+  libnl-route:
+    metadata:
+      title: Routing Netlink Library
+      description: Routing Netlink Library Functions
+    dependencies:
+      runtime:
+        - libnl-core
+    install:
+      files:
+        - src: "usr/lib/libnl-route-3.so*"
+          dst: "/usr/lib/"
+
+  libnl-nf:
+    metadata:
+      title: Netfilter Netlink Library
+      description: Netfilter Netlink Library Functions
+    dependencies:
+      runtime:
+        - libnl-route
+    install:
+      files:
+        - src: "usr/lib/libnl-nf-3.so*"
+          dst: "/usr/lib/"
+
+  libnl-cli:
+    metadata:
+      title: CLI Netlink Library
+      description: CLI Netlink Library Functions
+    dependencies:
+      runtime:
+        - libnl-genl
+        - libnl-nf
+    install:
+      files:
+        - src: "usr/lib/libnl-cli-3.so*"
+          dst: "/usr/lib/"
+
+  libnl:
+    metadata:
+      title: Full Netlink Library
+      description: Meta-package for complete netlink library suite
+    dependencies:
+      runtime:
+        - libnl-genl
+        - libnl-route
+        - libnl-nf
+        - libnl-cli
+    install:
+      files: []
+
+  libnl-dev:
+    metadata:
+      title: libnl development files
+      description: Development headers and pkg-config files for libnl
+    section: devel
+    dependencies:
+      runtime:
+        - libnl-core
+    install:
+      files:
+        - src: "usr/include/libnl3/**/*.h"
+          dst: "/usr/include/libnl3/"
+        - src: "usr/lib/pkgconfig/*.pc"
+          dst: "/usr/lib/pkgconfig/"
