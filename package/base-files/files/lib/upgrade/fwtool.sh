@@ -42,6 +42,10 @@ fwtool_check_image() {
 		v "Invalid image metadata"
 		return 1
 	}
+
+	# Extract provisioning uci-defaults if present in metadata
+	fwtool_extract_provisioning
+
 	# Step 1. check if oem_name file exist and is not empty
 	# If the above is true store the contents (b3000) in $oem value for later
 	[ -s /tmp/sysinfo/oem_name ] && oem="$(cat /tmp/sysinfo/oem_name)"
@@ -114,4 +118,56 @@ fwtool_check_image() {
 	v "$devices"
 
 	return 1
+}
+
+# Extract provisioning uci-defaults scripts from firmware metadata
+#
+# The metadata JSON stores provisioning scripts as plain-text uci-defaults:
+# {
+#   "provisioning": {
+#     "uci-defaults": {
+#       "90_hostname": "<script contents>",
+#       "91_wifi": "<script contents>"
+#     }
+#   }
+# }
+#
+# Each script is stored verbatim as a JSON string, so multiple tools can add
+# their own scripts independently and no decoding tools are required on device.
+#
+# Scripts are extracted to /tmp/sysupgrade.d/ so sysupgrade can list them. They
+# are only included in the backup archive (and thus run on first boot via
+# uci_apply_defaults) when the user opts in with 'sysupgrade --apply-provisioning'.
+#
+fwtool_extract_provisioning() {
+	local script_name script_content script_keys
+
+	# Always start from a clean staging directory so provisioning scripts from
+	# a previous image check cannot leak into this upgrade.
+	rm -rf /tmp/sysupgrade.d
+
+	# Check if provisioning section exists
+	json_select provisioning 2>/dev/null || return 0
+	json_select "uci-defaults" 2>/dev/null || {
+		json_select ..
+		return 0
+	}
+
+	v "Extracting provisioning scripts from metadata"
+	mkdir -p /tmp/sysupgrade.d
+
+	json_get_keys script_keys
+	for script_name in $script_keys; do
+		json_get_var script_content "$script_name"
+		[ -n "$script_content" ] || continue
+
+		# Scripts are stored verbatim; write them out as-is
+		printf '%s' "$script_content" > "/tmp/sysupgrade.d/$script_name"
+		chmod +x "/tmp/sysupgrade.d/$script_name"
+		v "  - $script_name"
+	done
+
+	# Return to root of JSON
+	json_select ..
+	json_select ..
 }

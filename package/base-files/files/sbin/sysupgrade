@@ -34,6 +34,7 @@ export VERBOSE=1
 export SAVE_CONFIG=1
 export IGNORE_MINOR_COMPAT=0
 export FORCE=0
+export APPLY_PROVISIONING=0
 export CONFFILES=/tmp/sysupgrade.conffiles
 
 # parse options
@@ -58,6 +59,7 @@ while [ -n "$1" ]; do
 		-T|--test) TEST=1;;
 		-h|--help) HELP=1; break;;
 		--ignore-minor-compat-version) export IGNORE_MINOR_COMPAT=1;;
+		--apply-provisioning) export APPLY_PROVISIONING=1;;
 		-*)
 			echo "Invalid option: $1" >&2
 			exit 1
@@ -86,6 +88,10 @@ upgrade-option:
 	-s           stay on current partition (for dual firmware devices)
 	-P           create provisioning partition to keep sensitive data across
 	             factory resets.
+	--apply-provisioning
+	             apply uci-defaults provisioning scripts attached to the image
+	             metadata. Off by default: attached scripts are ignored unless
+	             this option is given.
 	-T | --test
 	             Verify image and config .tar.gz but do not actually flash.
 	-F | --force
@@ -316,6 +322,17 @@ create_backup_archive() {
 			fi
 		fi
 
+		# Add provisioning uci-defaults scripts extracted from firmware metadata,
+		# but only when the user opted in with --apply-provisioning. This must
+		# run before the "tar c" below, which writes the archive's ending padding
+		# (end-of-archive marker); members appended after it would be ignored.
+		if [ $ret -eq 0 ] && [ "$APPLY_PROVISIONING" = 1 ] && [ -d /tmp/sysupgrade.d ]; then
+			for script in /tmp/sysupgrade.d/*; do
+				[ -f "$script" ] || continue
+				tar_print_member "/etc/uci-defaults/${script##*/}" "$(cat "$script")" || ret=1
+			done
+		fi
+
 		# Rest of archive with config files and ending padding
 		if [ $ret -eq 0 ]; then
 			tar c${TAR_V} -C / -T "$CONFFILES" || ret=1
@@ -332,6 +349,7 @@ create_backup_archive() {
 	fi
 
 	rm -f "$CONFFILES"
+	rm -rf /tmp/sysupgrade.d
 
 	return "$err"
 }
@@ -407,6 +425,33 @@ json_get_var forceable "forceable"
 		exit 1
 	fi
 }
+
+# Notify user about provisioning scripts attached to the firmware metadata.
+# This runs regardless of --apply-provisioning so the user is always aware that
+# an image carries provisioning data.
+if [ -d /tmp/sysupgrade.d ] && [ -n "$(ls /tmp/sysupgrade.d 2>/dev/null)" ]; then
+	echo "Provisioning scripts attached to firmware image:"
+	for script in /tmp/sysupgrade.d/*; do
+		[ -f "$script" ] && echo "  - ${script##*/}"
+	done
+	ask_bool 0 "View provisioning scripts" && {
+		for script in /tmp/sysupgrade.d/*; do
+			[ -f "$script" ] || continue
+			echo "=== ${script##*/} ==="
+			cat "$script"
+			echo ""
+		done | less
+	}
+	if [ "$APPLY_PROVISIONING" = 1 ]; then
+		echo "These scripts will run on first boot after upgrade."
+		ask_bool 1 "Continue with upgrade" || {
+			rm -rf /tmp/sysupgrade.d
+			exit 0
+		}
+	else
+		echo "These scripts will NOT be applied. Re-run with --apply-provisioning to apply them."
+	fi
+fi
 
 if [ -n "$CONF_IMAGE" ]; then
 	case "$(get_magic_word "$CONF_IMAGE" cat)" in
