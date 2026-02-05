@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+# cloud-init - Simple cloud instance initialization for OpenWrt
+
+START=12
+
+boot() {
+	local enabled
+	config_load cloud-init
+	config_get_bool enabled settings enabled 1
+	[ "$enabled" -eq 1 ] || return 0
+
+	/usr/sbin/cloud-init run
+}

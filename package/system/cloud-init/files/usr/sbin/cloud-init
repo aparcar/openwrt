@@ -1,0 +1,378 @@
+#!/bin/sh
+#
+# cloud-init - Simple cloud instance initialization for OpenWrt
+#
+# Reads configuration from a datasource (nocloud seed directory or
+# config drive) and applies it to the system on first boot.
+#
+# Configuration format is JSON:
+# {
+#   "hostname": "my-router",
+#   "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
+#   "zonename": "Europe/Berlin",
+#   "password_hash": "$5$...",
+#   "ssh_authorized_keys": ["ssh-rsa AAAA..."],
+#   "network": {
+#     "lan": { "proto": "static", "ipaddr": "10.0.0.1/24" },
+#     "wan": { "proto": "dhcp" }
+#   },
+#   "write_files": [
+#     { "path": "/etc/banner", "content": "Hello\n", "mode": "0644" }
+#   ],
+#   "runcmd": [
+#     "echo done >> /tmp/cloud-init.log"
+#   ]
+# }
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+CLOUD_INIT_DIR="/etc/cloud-init"
+CLOUD_INIT_DONE="${CLOUD_INIT_DIR}/.done"
+CLOUD_INIT_LOG="/tmp/cloud-init.log"
+MOUNT_DIR="/tmp/cloud-init-config"
+
+log() {
+	local level="$1"; shift
+	logger -t cloud-init -p "daemon.${level}" "$@"
+	echo "[$(date)] ${level}: $@" >> "$CLOUD_INIT_LOG"
+}
+
+log_info() { log info "$@"; }
+log_warn() { log warn "$@"; }
+log_err() { log err "$@"; }
+
+# Check if cloud-init has already completed
+is_done() {
+	[ -f "$CLOUD_INIT_DONE" ]
+}
+
+mark_done() {
+	mkdir -p "$CLOUD_INIT_DIR"
+	local instance_id
+	instance_id=$(cat "${CLOUD_INIT_DIR}/instance-id" 2>/dev/null || echo "unknown")
+	echo "$instance_id $(date '+%Y-%m-%dT%H:%M:%S')" > "$CLOUD_INIT_DONE"
+}
+
+# --- Datasource: NoCloud seed directory ---
+# Looks for user-data (and optionally meta-data) in /etc/cloud-init/
+ds_nocloud_seed() {
+	local userdata="${CLOUD_INIT_DIR}/user-data"
+	[ -f "$userdata" ] || return 1
+	log_info "found nocloud seed directory datasource"
+	echo "$userdata"
+}
+
+# --- Datasource: Config drive (partition labeled cidata/CIDATA) ---
+# Looks for a block device with the filesystem label "cidata"
+ds_config_drive() {
+	local dev label userdata
+
+	# Try to find a block device labeled cidata
+	command -v blkid >/dev/null 2>&1 || return 1
+	dev=$(blkid -l -t LABEL="cidata" -o device 2>/dev/null)
+	[ -z "$dev" ] && dev=$(blkid -l -t LABEL="CIDATA" -o device 2>/dev/null)
+	[ -z "$dev" ] && return 1
+
+	log_info "found config drive at ${dev}"
+	mkdir -p "$MOUNT_DIR"
+	if ! mount -o ro "$dev" "$MOUNT_DIR" 2>/dev/null; then
+		log_err "failed to mount config drive ${dev}"
+		return 1
+	fi
+
+	userdata="${MOUNT_DIR}/user-data"
+	if [ ! -f "$userdata" ]; then
+		log_warn "config drive mounted but no user-data found"
+		umount "$MOUNT_DIR" 2>/dev/null
+		return 1
+	fi
+
+	# Copy meta-data instance-id if present
+	if [ -f "${MOUNT_DIR}/meta-data" ]; then
+		local instance_id
+		# meta-data can be JSON or simple key: value
+		if json_load "$(cat "${MOUNT_DIR}/meta-data")" 2>/dev/null; then
+			json_get_var instance_id "instance-id" 2>/dev/null
+		fi
+		if [ -n "$instance_id" ]; then
+			mkdir -p "$CLOUD_INIT_DIR"
+			echo "$instance_id" > "${CLOUD_INIT_DIR}/instance-id"
+		fi
+	fi
+
+	echo "$userdata"
+}
+
+# Try each datasource in order, return path to user-data
+find_datasource() {
+	local userdata
+
+	userdata=$(ds_nocloud_seed) && { echo "$userdata"; return 0; }
+	userdata=$(ds_config_drive) && { echo "$userdata"; return 0; }
+
+	return 1
+}
+
+# --- Configuration modules ---
+
+apply_hostname() {
+	local hostname
+	json_get_var hostname "hostname" 2>/dev/null || return 0
+	[ -z "$hostname" ] && return 0
+
+	log_info "setting hostname to '${hostname}'"
+	uci -q set "system.@system[0].hostname=${hostname}"
+	echo "$hostname" > /proc/sys/kernel/hostname
+}
+
+apply_timezone() {
+	local timezone zonename
+	json_get_var timezone "timezone" 2>/dev/null
+	json_get_var zonename "zonename" 2>/dev/null
+
+	if [ -n "$timezone" ]; then
+		log_info "setting timezone to '${timezone}'"
+		uci -q set "system.@system[0].timezone=${timezone}"
+	fi
+	if [ -n "$zonename" ]; then
+		log_info "setting zonename to '${zonename}'"
+		uci -q set "system.@system[0].zonename=${zonename}"
+	fi
+}
+
+apply_password() {
+	local password_hash
+	json_get_var password_hash "password_hash" 2>/dev/null || return 0
+	[ -z "$password_hash" ] && return 0
+
+	log_info "setting root password hash"
+	sed -i "s|^root:[^:]*|root:${password_hash}|" /etc/shadow
+}
+
+apply_ssh_keys() {
+	local keys key i
+
+	json_is_a "ssh_authorized_keys" array || return 0
+
+	json_get_keys keys "ssh_authorized_keys"
+	[ -z "$keys" ] && return 0
+
+	# Ensure dropbear directory exists
+	mkdir -p /etc/dropbear
+	# Clear and rewrite authorized_keys
+	> /etc/dropbear/authorized_keys
+
+	json_select "ssh_authorized_keys"
+	for i in $keys; do
+		json_get_var key "$i"
+		[ -n "$key" ] && {
+			echo "$key" >> /etc/dropbear/authorized_keys
+			log_info "added SSH authorized key (${key%% *}...)"
+		}
+	done
+	json_select ..
+
+	chmod 0600 /etc/dropbear/authorized_keys
+}
+
+apply_network() {
+	local interfaces iface
+
+	json_is_a "network" object || return 0
+
+	json_select "network"
+	json_get_keys interfaces
+
+	for iface in $interfaces; do
+		local proto ipaddr netmask gateway dns metric device
+		json_select "$iface"
+
+		json_get_var proto "proto" 2>/dev/null
+		json_get_var ipaddr "ipaddr" 2>/dev/null
+		json_get_var netmask "netmask" 2>/dev/null
+		json_get_var gateway "gateway" 2>/dev/null
+		json_get_var dns "dns" 2>/dev/null
+		json_get_var metric "metric" 2>/dev/null
+		json_get_var device "device" 2>/dev/null
+
+		if [ -n "$proto" ]; then
+			log_info "configuring network interface '${iface}' (proto=${proto})"
+			uci -q set "network.${iface}.proto=${proto}"
+
+			[ -n "$device" ] && uci -q set "network.${iface}.device=${device}"
+			[ -n "$metric" ] && uci -q set "network.${iface}.metric=${metric}"
+
+			case "$proto" in
+				static)
+					[ -n "$ipaddr" ] && {
+						uci -q delete "network.${iface}.ipaddr"
+						uci -q add_list "network.${iface}.ipaddr=${ipaddr}"
+					}
+					[ -n "$netmask" ] && uci -q set "network.${iface}.netmask=${netmask}"
+					[ -n "$gateway" ] && uci -q set "network.${iface}.gateway=${gateway}"
+					[ -n "$dns" ] && {
+						uci -q delete "network.${iface}.dns"
+						uci -q add_list "network.${iface}.dns=${dns}"
+					}
+					;;
+			esac
+		fi
+
+		json_select ..
+	done
+	json_select ..
+}
+
+apply_write_files() {
+	local files i
+
+	json_is_a "write_files" array || return 0
+
+	json_get_keys files "write_files"
+	[ -z "$files" ] && return 0
+
+	json_select "write_files"
+	for i in $files; do
+		local path content mode owner
+		json_select "$i"
+
+		json_get_var path "path" 2>/dev/null
+		json_get_var content "content" 2>/dev/null
+		json_get_var mode "mode" 2>/dev/null
+		json_get_var owner "owner" 2>/dev/null
+
+		if [ -n "$path" ] && [ -n "$content" ]; then
+			log_info "writing file '${path}'"
+			mkdir -p "$(dirname "$path")"
+			printf '%s' "$content" > "$path"
+			[ -n "$mode" ] && chmod "$mode" "$path"
+			[ -n "$owner" ] && chown "$owner" "$path" 2>/dev/null
+		fi
+
+		json_select ..
+	done
+	json_select ..
+}
+
+apply_runcmd() {
+	local cmds i cmd
+
+	json_is_a "runcmd" array || return 0
+
+	json_get_keys cmds "runcmd"
+	[ -z "$cmds" ] && return 0
+
+	json_select "runcmd"
+	for i in $cmds; do
+		json_get_var cmd "$i"
+		if [ -n "$cmd" ]; then
+			log_info "executing: ${cmd}"
+			eval "$cmd" >> "$CLOUD_INIT_LOG" 2>&1
+			local rc=$?
+			[ $rc -ne 0 ] && log_warn "command exited with status ${rc}: ${cmd}"
+		fi
+	done
+	json_select ..
+}
+
+# --- Main ---
+
+cmd_status() {
+	if is_done; then
+		echo "status: done"
+		cat "$CLOUD_INIT_DONE"
+		return 0
+	else
+		echo "status: pending"
+		return 1
+	fi
+}
+
+cmd_clean() {
+	log_info "cleaning cloud-init state"
+	rm -f "$CLOUD_INIT_DONE"
+	rm -f "${CLOUD_INIT_DIR}/instance-id"
+}
+
+cmd_run() {
+	local force=0
+	[ "$1" = "--force" ] && force=1
+
+	# Check if already done (unless forced)
+	if [ $force -eq 0 ] && is_done; then
+		log_info "cloud-init already completed, skipping (use --force to re-run)"
+		return 0
+	fi
+
+	log_info "cloud-init starting"
+
+	# Find a datasource
+	local userdata
+	userdata=$(find_datasource)
+	if [ -z "$userdata" ]; then
+		log_info "no datasource found, nothing to do"
+		return 0
+	fi
+
+	log_info "loading user-data from ${userdata}"
+
+	# Load and parse the JSON user-data
+	local raw
+	raw=$(cat "$userdata")
+	if [ -z "$raw" ]; then
+		log_warn "user-data is empty"
+		return 1
+	fi
+
+	json_init
+	if ! json_load "$raw" 2>/dev/null; then
+		log_err "failed to parse user-data as JSON"
+		return 1
+	fi
+
+	# Apply configuration modules in order
+	apply_hostname
+	apply_timezone
+	apply_password
+	apply_ssh_keys
+	apply_network
+	apply_write_files
+
+	# Commit UCI changes
+	uci commit system 2>/dev/null
+	uci commit network 2>/dev/null
+
+	# Run commands last (after config is applied)
+	apply_runcmd
+
+	# Cleanup config drive mount if used
+	umount "$MOUNT_DIR" 2>/dev/null
+	rmdir "$MOUNT_DIR" 2>/dev/null
+
+	mark_done
+	log_info "cloud-init completed successfully"
+}
+
+# CLI interface
+case "$1" in
+	run)
+		cmd_run "$2"
+		;;
+	status)
+		cmd_status
+		;;
+	clean)
+		cmd_clean
+		;;
+	*)
+		echo "Usage: $0 {run [--force]|status|clean}"
+		echo ""
+		echo "Commands:"
+		echo "  run           Apply cloud-init configuration (skips if already done)"
+		echo "  run --force   Re-apply cloud-init configuration"
+		echo "  status        Show cloud-init status"
+		echo "  clean         Remove done marker to allow re-run on next boot"
+		exit 1
+		;;
+esac
