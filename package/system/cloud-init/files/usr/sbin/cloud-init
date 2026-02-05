@@ -5,19 +5,23 @@
 # Reads configuration from a datasource (nocloud seed directory or
 # config drive) and applies it to the system on first boot.
 #
-# Configuration format is JSON:
+# Configuration format is JSON (keys align with standard cloud-init):
 # {
 #   "hostname": "my-router",
 #   "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
 #   "zonename": "Europe/Berlin",
-#   "password_hash": "$5$...",
+#   "password": "$5$...",
 #   "ssh_authorized_keys": ["ssh-rsa AAAA..."],
 #   "network": {
 #     "lan": { "proto": "static", "ipaddr": "10.0.0.1/24" },
 #     "wan": { "proto": "dhcp" }
 #   },
+#   "wifi": [
+#     { "ssid": "MyNetwork", "encryption": "sae-mixed", "key": "secret",
+#       "device": "radio0", "network": "lan", "mode": "ap" }
+#   ],
 #   "write_files": [
-#     { "path": "/etc/banner", "content": "Hello\n", "mode": "0644" }
+#     { "path": "/etc/banner", "content": "Hello\n", "permissions": "0644" }
 #   ],
 #   "runcmd": [
 #     "echo done >> /tmp/cloud-init.log"
@@ -142,12 +146,21 @@ apply_timezone() {
 }
 
 apply_password() {
-	local password_hash
-	json_get_var password_hash "password_hash" 2>/dev/null || return 0
-	[ -z "$password_hash" ] && return 0
+	local password
+	json_get_var password "password" 2>/dev/null || return 0
+	[ -z "$password" ] && return 0
 
-	log_info "setting root password hash"
-	sed -i "s|^root:[^:]*|root:${password_hash}|" /etc/shadow
+	# Detect hashed vs plain text: hashes start with $<id>$
+	case "$password" in
+		\$[0-9]*\$*|\$y\$*)
+			log_info "setting root password from hash"
+			sed -i "s|^root:[^:]*|root:${password}|" /etc/shadow
+			;;
+		*)
+			log_info "setting root password from plain text"
+			(echo "$password"; sleep 1; echo "$password") | passwd root >/dev/null 2>&1
+			;;
+	esac
 }
 
 apply_ssh_keys() {
@@ -224,6 +237,69 @@ apply_network() {
 	json_select ..
 }
 
+apply_wifi() {
+	local entries i
+
+	json_is_a "wifi" array || return 0
+
+	json_get_keys entries "wifi"
+	[ -z "$entries" ] && return 0
+
+	json_select "wifi"
+	for i in $entries; do
+		local ssid encryption key device network mode disabled
+		json_select "$i"
+
+		json_get_var ssid "ssid" 2>/dev/null
+		json_get_var encryption "encryption" 2>/dev/null
+		json_get_var key "key" 2>/dev/null
+		json_get_var device "device" 2>/dev/null
+		json_get_var network "network" 2>/dev/null
+		json_get_var mode "mode" 2>/dev/null
+		json_get_var disabled "disabled" 2>/dev/null
+
+		json_select ..
+
+		[ -z "$ssid" ] && continue
+
+		# Find wifi-iface sections matching the target device (or all if unset)
+		local iface_sections
+		iface_sections=$(uci -q show wireless | grep '=wifi-iface' | cut -d'=' -f1 | cut -d'.' -f2)
+		[ -z "$iface_sections" ] && {
+			log_warn "no wifi-iface sections found in UCI"
+			continue
+		}
+
+		for section in $iface_sections; do
+			local current_device
+			current_device=$(uci -q get "wireless.${section}.device")
+
+			# If a target device is specified, only configure matching interfaces
+			if [ -n "$device" ] && [ "$current_device" != "$device" ]; then
+				continue
+			fi
+
+			log_info "configuring wifi '${section}' (ssid=${ssid})"
+			uci -q set "wireless.${section}.ssid=${ssid}"
+			[ -n "$encryption" ] && uci -q set "wireless.${section}.encryption=${encryption}"
+			[ -n "$key" ] && uci -q set "wireless.${section}.key=${key}"
+			[ -n "$network" ] && uci -q set "wireless.${section}.network=${network}"
+			[ -n "$mode" ] && uci -q set "wireless.${section}.mode=${mode}"
+
+			# Enable the interface unless explicitly disabled
+			case "$disabled" in
+				true|1) uci -q set "wireless.${section}.disabled=1" ;;
+				*)      uci -q set "wireless.${section}.disabled=0" ;;
+			esac
+
+			# Also enable the radio device
+			[ -n "$current_device" ] && \
+				uci -q set "wireless.${current_device}.disabled=0"
+		done
+	done
+	json_select ..
+}
+
 apply_write_files() {
 	local files i
 
@@ -234,19 +310,21 @@ apply_write_files() {
 
 	json_select "write_files"
 	for i in $files; do
-		local path content mode owner
+		local path content permissions owner
 		json_select "$i"
 
 		json_get_var path "path" 2>/dev/null
 		json_get_var content "content" 2>/dev/null
-		json_get_var mode "mode" 2>/dev/null
+		# support both "permissions" (cloud-init standard) and "mode"
+		json_get_var permissions "permissions" 2>/dev/null
+		[ -z "$permissions" ] && json_get_var permissions "mode" 2>/dev/null
 		json_get_var owner "owner" 2>/dev/null
 
 		if [ -n "$path" ] && [ -n "$content" ]; then
 			log_info "writing file '${path}'"
 			mkdir -p "$(dirname "$path")"
 			printf '%s' "$content" > "$path"
-			[ -n "$mode" ] && chmod "$mode" "$path"
+			[ -n "$permissions" ] && chmod "$permissions" "$path"
 			[ -n "$owner" ] && chown "$owner" "$path" 2>/dev/null
 		fi
 
@@ -337,11 +415,13 @@ cmd_run() {
 	apply_password
 	apply_ssh_keys
 	apply_network
+	apply_wifi
 	apply_write_files
 
 	# Commit UCI changes
 	uci commit system 2>/dev/null
 	uci commit network 2>/dev/null
+	uci commit wireless 2>/dev/null
 
 	# Run commands last (after config is applied)
 	apply_runcmd
