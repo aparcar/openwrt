@@ -94,6 +94,8 @@ swlib_map_settings(struct switch_dev *dev, int type, int port_vlan, struct uci_s
 			continue;
 
 		setting = malloc(sizeof(struct swlib_setting));
+		if (!setting)
+			continue;
 		memset(setting, 0, sizeof(struct swlib_setting));
 		setting->attr = attr;
 		setting->port_vlan = port_vlan;

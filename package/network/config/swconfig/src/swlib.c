@@ -184,6 +184,8 @@ store_port_val(struct nl_msg *msg, struct nlattr *nla, struct switch_val *val)
 
 	if (!val->value.ports)
 		val->value.ports = malloc(sizeof(struct switch_port) * ports);
+	if (!val->value.ports)
+		return -ENOMEM;
 
 	nla_for_each_nested(p, nla, remaining) {
 		struct nlattr *tb[SWITCH_PORT_ATTR_MAX+1];
@@ -221,6 +223,8 @@ store_link_val(struct nl_msg *msg, struct nlattr *nla, struct switch_val *val)
 
 	if (!val->value.link)
 		val->value.link = malloc(sizeof(struct switch_port_link));
+	if (!val->value.link)
+		return -ENOMEM;
 
 	err = nla_parse_nested(tb, SWITCH_LINK_ATTR_MAX, nla, link_policy);
 	if (err < 0)
@@ -483,6 +487,8 @@ int swlib_set_attr_string(struct switch_dev *dev, struct switch_attr *a, int por
 		break;
 	case SWITCH_TYPE_LINK:
 		link = malloc(sizeof(struct switch_port_link));
+		if (!link)
+			return -1;
 		memset(link, 0, sizeof(struct switch_port_link));
 		ptr = (char *)str;
 		for (ptr = strtok(ptr," "); ptr; ptr = strtok(NULL, " ")) {

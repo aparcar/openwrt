@@ -177,7 +177,7 @@ static int find_header(uint8_t *buf, uint32_t buf_size,
 
 	VERBOSE("Looking for STAG header!");
 
-	while ((uint32_t) tmp_buf - (uint32_t) buf <= buf_size) {
+	while ((uintptr_t) tmp_buf - (uintptr_t) buf <= buf_size) {
 		if (!memcmp(tmp_buf, tmp_hdr, 4)) {
 			if (((struct stag_header *)tmp_buf)->tag_checksum ==
 			    (uint16_t) ~jboot_checksum(0, (uint16_t *) tmp_buf,
@@ -214,7 +214,7 @@ static int find_header(uint8_t *buf, uint32_t buf_size,
 
 	tmp_buf = tmp_buf + STAG_SIZE + CSXF_SIZE;
 
-	while ((uint32_t) tmp_buf - (uint32_t) buf <= buf_size) {
+	while ((uintptr_t) tmp_buf - (uintptr_t) buf <= buf_size) {
 
 		struct data_header *tmp_data_header =
 		    (struct data_header *)tmp_buf;

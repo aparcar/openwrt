@@ -263,6 +263,10 @@ static int mtd_check(const char *mtd)
 
 		if (!buf)
 			buf = malloc(erasesize);
+		if (!buf) {
+			fprintf(stderr, "Failed to allocate memory\n");
+			return 0;
+		}
 
 		close(fd);
 		mtd = next;
@@ -504,8 +508,15 @@ mtd_write(int imagefd, const char *mtd, char *fis_layout, size_t part_offset)
 			if (!next)
 				next = (char *) tmp + strlen(tmp);
 
-			memcpy(old_parts[n_old].name, tmp, next - tmp);
+			{
+				size_t name_len = next - tmp;
+				if (name_len > sizeof(old_parts[n_old].name) - 1)
+					name_len = sizeof(old_parts[n_old].name) - 1;
+				memcpy(old_parts[n_old].name, tmp, name_len);
+			}
 
+			if (n_old >= MAX_ARGS - 1)
+				break;
 			n_old++;
 			tmp = next + 1;
 		} while(*next);

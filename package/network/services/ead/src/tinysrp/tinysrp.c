@@ -154,6 +154,9 @@ int tsrp_server_authenticate(int s, TSRP_SESSION *tsrp)
 		return 0;
 	}
 	j = msgbuf[0];
+	if (j >= MAXUSERLEN) {
+		return 0;
+	}
 	i = recv(s, username, j, MSG_WAITALL);
 	if (i <= 0) {
 		return 0;
