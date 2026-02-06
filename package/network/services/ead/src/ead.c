@@ -163,7 +163,11 @@ get_random_bytes(void *ptr, int len)
 		perror("open");
 		exit(1);
 	}
-	read(fd, ptr, len);
+	if (read(fd, ptr, len) != len) {
+		perror("read");
+		close(fd);
+		exit(1);
+	}
 	close(fd);
 }
 
@@ -428,9 +432,12 @@ handle_send_a(struct ead_packet *pkt, int len, int *nstate)
 {
 	struct ead_msg *msg = &pkt->msg;
 	struct ead_msg_number *number = EAD_DATA(msg, number);
+	if (ntohl(msg->len) < sizeof(struct ead_msg_number))
+		return false;
+
 	len = ntohl(msg->len) - sizeof(struct ead_msg_number);
 
-	if (len > MAXPARAMLEN + 1)
+	if (len < 0 || len > MAXPARAMLEN + 1)
 		return false;
 
 	A.len = len;
@@ -905,6 +912,10 @@ int main(int argc, char **argv)
 			return usage(argv[0]);
 		case 'd':
 			in = malloc(sizeof(struct ead_instance));
+			if (!in) {
+				fprintf(stderr, "Error: memory allocation failed\n");
+				return -1;
+			}
 			memset(in, 0, sizeof(struct ead_instance));
 			INIT_LIST_HEAD(&in->list);
 			strncpy(in->ifname, optarg, sizeof(in->ifname) - 1);
@@ -943,7 +954,7 @@ int main(int argc, char **argv)
 	}
 
 	if (pidfile) {
-		char pid[8];
+		char pid[16];
 		int len;
 
 		unlink(pidfile);

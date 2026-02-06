@@ -245,7 +245,11 @@ static int find_entry(uint32_t id, struct tffs_entry *entry)
 				uint32_t new_num_segs = next_seg == 0 ? seg + 1 : next_seg + 1;
 				if (new_num_segs > num_segments) {
 					segments = realloc(segments, new_num_segs * sizeof(struct tffs_entry_segment));
-					memset(segments + (num_segments * sizeof(struct tffs_entry_segment)), 0x0,
+					if (!segments) {
+						fprintf(stderr, "ERROR: memory allocation failed!\n");
+						exit(EXIT_FAILURE);
+					}
+					memset(segments + num_segments, 0x0,
 							(new_num_segs - num_segments) * sizeof(struct tffs_entry_segment));
 					num_segments = new_num_segs;
 				}
