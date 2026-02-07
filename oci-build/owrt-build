@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# owrt-build - OpenWrt OCI Build System
+#
+# Multi-stage OCI-based build system for OpenWrt firmware.
+# Provides fast, reproducible, incremental builds using:
+#
+#   - Content-addressable caching (CAS + action cache)
+#   - Merkle-tree change detection (timestamp + hash two-tier)
+#   - OCI container isolation (podman/docker/buildah)
+#   - Parallel package builds in topological waves
+#   - Early cutoff optimization (skip cascading rebuilds)
+#
+# Usage:
+#   ./oci-build/owrt-build build              # Full pipeline
+#   ./oci-build/owrt-build packages           # Incremental packages
+#   ./oci-build/owrt-build cache status       # Cache stats
+#   ./oci-build/owrt-build --help             # All options
+
+import os
+import sys
+
+# Ensure the lib directory is importable
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
+
+from lib.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

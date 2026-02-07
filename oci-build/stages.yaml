@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# OpenWrt OCI Build Pipeline - Stage Definitions
+#
+# Five-stage pipeline: tools -> toolchain -> kernel -> packages -> images
+#
+# Each stage produces an OCI image layer that subsequent stages build upon.
+# Change detection uses Merkle-tree hashing of source directories.
+# Cache hits skip the entire stage (sub-second).
+
+stages:
+  tools:
+    containerfile: Containerfile.tools
+    base_image: "docker.io/library/alpine:3.21"
+    depends_on: []
+    source_dirs:
+      - tools
+      - scripts
+      - include
+    exclude_dirs:
+      - .git
+      - stamps
+    cache_mounts:
+      - id: ccache-tools
+        path: /var/cache/ccache
+      - id: dl
+        path: /dl
+    build_args:
+      JOBS: "auto"
+    env:
+      CCACHE_DIR: /var/cache/ccache
+      CCACHE_MAXSIZE: 5G
+    timeout_minutes: 120
+    outputs:
+      - staging_dir/host/
+
+  toolchain:
+    containerfile: Containerfile.toolchain
+    depends_on:
+      - tools
+    source_dirs:
+      - toolchain
+      - include
+    exclude_dirs:
+      - .git
+      - stamps
+    cache_mounts:
+      - id: ccache-toolchain
+        path: /var/cache/ccache
+      - id: dl
+        path: /dl
+    build_args:
+      JOBS: "auto"
+    env:
+      CCACHE_DIR: /var/cache/ccache
+      CCACHE_MAXSIZE: 10G
+    timeout_minutes: 180
+    outputs:
+      - staging_dir/toolchain/
+
+  kernel:
+    containerfile: Containerfile.kernel
+    depends_on:
+      - toolchain
+    source_dirs:
+      - target/linux
+      - include
+    exclude_dirs:
+      - .git
+      - stamps
+    cache_mounts:
+      - id: ccache-kernel
+        path: /var/cache/ccache
+      - id: dl
+        path: /dl
+    build_args:
+      JOBS: "auto"
+    env:
+      CCACHE_DIR: /var/cache/ccache
+      CCACHE_MAXSIZE: 5G
+    timeout_minutes: 60
+    outputs:
+      - build_dir/target/
+      - staging_dir/target/
+
+  packages:
+    containerfile: Containerfile.packages
+    depends_on:
+      - kernel
+    source_dirs:
+      - package
+    exclude_dirs:
+      - .git
+      - stamps
+    parallel: true
+    cache_mounts:
+      - id: ccache-packages
+        path: /var/cache/ccache
+      - id: dl
+        path: /dl
+      - id: staging-packages
+        path: /src/staging_dir
+    build_args:
+      JOBS: "auto"
+    env:
+      CCACHE_DIR: /var/cache/ccache
+      CCACHE_MAXSIZE: 20G
+    timeout_minutes: 240
+    outputs:
+      - bin/packages/
+      - staging_dir/target/root/
+
+  images:
+    containerfile: Containerfile.images
+    depends_on:
+      - packages
+    source_dirs:
+      - target
+      - include
+    exclude_dirs:
+      - .git
+      - stamps
+    cache_mounts:
+      - id: dl
+        path: /dl
+    build_args:
+      JOBS: "auto"
+    timeout_minutes: 30
+    outputs:
+      - bin/targets/

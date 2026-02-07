@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Stage 4: Package Build Environment
+#
+# This Containerfile creates the BASE ENVIRONMENT for package builds.
+# Individual packages are built incrementally by the orchestrator,
+# which runs separate container invocations per package (or wave).
+#
+# The environment includes:
+#   - All host tools (from stage 1)
+#   - Cross-compiler toolchain (from stage 2)
+#   - Kernel headers and modules (from stage 3)
+#   - Package build infrastructure (include/*.mk, scripts/)
+#
+# Individual package builds mount:
+#   - Source tree (bind mount, rw)
+#   - Download cache (cache mount)
+#   - ccache directory (cache mount)
+#   - Staging directory (cache mount, persistent across builds)
+
+ARG BASE_IMAGE=owrt-build-kernel:latest
+ARG JOBS=1
+
+FROM ${BASE_IMAGE} AS packages
+
+ARG TOPDIR=/src
+
+WORKDIR ${TOPDIR}
+
+# Copy build infrastructure (stable layer)
+COPY include/ include/
+COPY scripts/ scripts/
+COPY rules.mk rules.mk
+COPY Makefile Makefile
+COPY Config.in Config.in
+COPY config/ config/
+
+# Copy package sources
+COPY package/ package/
+
+# Bring in all previous build artifacts
+COPY --from=0 /staging_dir/ staging_dir/
+COPY --from=0 /build_dir/ build_dir/
+
+COPY .config .config
+
+# Pre-generate package metadata for fast dependency resolution
+RUN make package/dump 2>/dev/null > tmp/.packageinfo || true
+
+# Set up environment for package building
+ENV PATH="/staging_dir/host/bin:${PATH}"
+ENV TOPDIR="${TOPDIR}"
+
+# Metadata
+LABEL org.openwrt.stage="packages"
+LABEL org.openwrt.description="OpenWrt package build environment"

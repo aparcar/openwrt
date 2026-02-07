@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Stage 1: Host Build Tools
+#
+# Builds all host-side tools needed by subsequent stages:
+# autoconf, automake, bison, cmake, flex, m4, pkg-config,
+# mkimage, squashfs-tools, e2fsprogs, etc.
+#
+# This layer changes rarely (only when tools/ is modified)
+# and is aggressively cached.
+
+ARG BASE_IMAGE=docker.io/library/alpine:3.21
+ARG JOBS=1
+
+# ---- Bootstrap layer: system packages that tools need to build ----
+FROM ${BASE_IMAGE} AS bootstrap
+
+RUN apk add --no-cache \
+    bash \
+    binutils \
+    bzip2-dev \
+    ccache \
+    coreutils \
+    curl \
+    diffutils \
+    file \
+    findutils \
+    g++ \
+    gawk \
+    gcc \
+    gettext-dev \
+    git \
+    grep \
+    gzip \
+    libffi-dev \
+    linux-headers \
+    make \
+    musl-dev \
+    ncurses-dev \
+    openssl-dev \
+    patch \
+    perl \
+    python3 \
+    python3-dev \
+    rsync \
+    sed \
+    tar \
+    unzip \
+    wget \
+    xz \
+    xz-dev \
+    zlib-dev \
+    zstd-dev
+
+# Set up ccache
+ENV CCACHE_DIR=/var/cache/ccache
+ENV CCACHE_MAXSIZE=5G
+ENV PATH="/usr/lib/ccache/bin:${PATH}"
+
+# ---- Build layer: compile host tools ----
+FROM bootstrap AS builder
+
+ARG JOBS
+ARG TOPDIR=/src
+
+WORKDIR ${TOPDIR}
+
+# Copy only what's needed for tools build (maximizes layer cache hits)
+# Sorted by change frequency: least-changed first
+COPY include/ include/
+COPY scripts/ scripts/
+COPY config/ config/
+COPY rules.mk rules.mk
+COPY Makefile Makefile
+COPY Config.in Config.in
+COPY tools/ tools/
+
+# Build host tools with ccache acceleration
+RUN --mount=type=cache,target=/var/cache/ccache \
+    make -j${JOBS} tools/compile \
+        BUILD_LOG=1 \
+        CCACHE_DIR=/var/cache/ccache \
+    || { echo "Tools build failed"; cat logs/tools/*.txt 2>/dev/null | tail -50; exit 1; }
+
+# ---- Output layer: only the built artifacts ----
+FROM bootstrap AS tools
+
+ARG TOPDIR=/src
+
+# Copy built tools from builder
+COPY --from=builder ${TOPDIR}/staging_dir/host/ /staging_dir/host/
+COPY --from=builder ${TOPDIR}/build_dir/host/ /build_dir/host/
+
+# Add staging_dir/host/bin to PATH
+ENV PATH="/staging_dir/host/bin:${PATH}"
+
+# Metadata
+LABEL org.openwrt.stage="tools"
+LABEL org.openwrt.description="OpenWrt host build tools"

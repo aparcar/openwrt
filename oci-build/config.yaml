@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# OpenWrt OCI Build System - Configuration
+#
+# This file controls build behavior, caching, and target selection.
+# Override values via CLI flags or environment variables.
+#
+# Minimal configuration: just set target.board and target.subtarget,
+# or let the system read from .config.
+
+# ---- Target Selection ----
+# Leave blank to auto-detect from .config
+target:
+  board: ""
+  subtarget: ""
+  arch: ""
+  arch_packages: ""
+  kernel_version: ""
+  profiles: []
+
+# ---- Container Runtime ----
+# Supported: podman (preferred, daemonless), docker, buildah
+container_runtime: podman
+
+# ---- Parallelism ----
+# 0 = auto-detect (number of CPU cores)
+parallel_jobs: 0
+
+# ---- Directories ----
+dl_dir: dl
+output_dir: bin
+
+# ---- Build Cache ----
+cache:
+  # Local cache directory (relative to source tree root)
+  root: .build-cache
+
+  # Content-addressable store maximum size
+  cas_max_size_gb: 50.0
+
+  # Action cache entry TTL
+  ac_ttl_days: 30
+
+  # Compiler cache (ccache) size
+  ccache_size_gb: 10.0
+
+  # Remote cache registry (for CI/CD shared caching)
+  # Set to your registry URL to enable, e.g.: ghcr.io/openwrt/build-cache
+  registry: ""
+  registry_prefix: ""
+  enable_remote: false
+
+  # Compression for remote cache (zstd is fastest)
+  compression: zstd
+
+# ---- Reproducibility ----
+# When true: SOURCE_DATE_EPOCH=0, fixed timestamps in images
+reproducible: true
+
+# ---- Package Signing ----
+sign_packages: false
+
+# ---- Verbosity ----
+verbose: false

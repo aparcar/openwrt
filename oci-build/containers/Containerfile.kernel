@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Stage 3: Linux Kernel
+#
+# Builds the Linux kernel and modules for the target board:
+#   - Downloads and extracts kernel source
+#   - Applies generic + target-specific patches
+#   - Merges kernel configs (generic + target + subtarget)
+#   - Compiles vmlinux + modules
+#
+# Changes when: target/linux/ patches change, kernel config changes,
+# or toolchain is updated.
+
+ARG BASE_IMAGE=owrt-build-toolchain:latest
+ARG JOBS=1
+
+# ---- Build layer ----
+FROM ${BASE_IMAGE} AS builder
+
+ARG JOBS
+ARG TOPDIR=/src
+
+WORKDIR ${TOPDIR}
+
+# Copy kernel sources and target definitions
+COPY target/ target/
+COPY include/ include/
+COPY scripts/ scripts/
+COPY rules.mk rules.mk
+COPY Makefile Makefile
+COPY Config.in Config.in
+COPY config/ config/
+COPY package/kernel/ package/kernel/
+
+# Bring in tools and toolchain from previous stages
+COPY --from=0 /staging_dir/ staging_dir/
+COPY --from=0 /build_dir/ build_dir/
+
+COPY .config .config
+
+# Download kernel source and build
+RUN --mount=type=cache,target=/dl \
+    --mount=type=cache,target=/var/cache/ccache \
+    make -j${JOBS} target/compile \
+        BUILD_LOG=1 \
+        DL_DIR=/dl \
+        CCACHE_DIR=/var/cache/ccache \
+    || { echo "Kernel build failed"; exit 1; }
+
+# ---- Output layer ----
+FROM ${BASE_IMAGE} AS kernel
+
+ARG TOPDIR=/src
+
+# Copy kernel build artifacts
+COPY --from=builder ${TOPDIR}/build_dir/target-*/ /build_dir/target/
+COPY --from=builder ${TOPDIR}/staging_dir/target-*/ /staging_dir/target/
+
+# Metadata
+LABEL org.openwrt.stage="kernel"
+LABEL org.openwrt.description="OpenWrt Linux kernel and modules"

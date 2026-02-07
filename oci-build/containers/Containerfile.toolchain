@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Stage 2: Cross-Compilation Toolchain
+#
+# Builds the complete cross-compiler toolchain:
+#   binutils → gcc-minimal → kernel-headers → libc-headers →
+#   gcc-initial → libc → gcc-final
+#
+# For musl (default): simplified pipeline skipping gcc-minimal
+# and libc-headers steps.
+#
+# This layer changes only when toolchain/ sources or target
+# architecture changes. Heavily cached.
+
+ARG BASE_IMAGE=owrt-build-tools:latest
+ARG JOBS=1
+
+# ---- Build layer ----
+FROM ${BASE_IMAGE} AS builder
+
+ARG JOBS
+ARG TOPDIR=/src
+
+WORKDIR ${TOPDIR}
+
+# Copy toolchain sources and dependencies
+COPY toolchain/ toolchain/
+COPY include/ include/
+COPY scripts/ scripts/
+COPY rules.mk rules.mk
+COPY Makefile Makefile
+COPY Config.in Config.in
+COPY config/ config/
+COPY target/linux/generic/config-* target/linux/generic/
+
+# Bring in tools from previous stage
+COPY --from=0 /staging_dir/host/ staging_dir/host/
+
+# .config must be present (bind-mounted at runtime, but copy for image builds)
+COPY .config .config
+
+# Build the cross-compilation toolchain
+RUN --mount=type=cache,target=/var/cache/ccache \
+    --mount=type=cache,target=/dl \
+    make -j${JOBS} toolchain/compile \
+        BUILD_LOG=1 \
+        DL_DIR=/dl \
+        CCACHE_DIR=/var/cache/ccache \
+    || { echo "Toolchain build failed"; exit 1; }
+
+# ---- Output layer ----
+FROM ${BASE_IMAGE} AS toolchain
+
+ARG TOPDIR=/src
+
+# Copy built toolchain
+COPY --from=builder ${TOPDIR}/staging_dir/toolchain-*/ /staging_dir/toolchain/
+COPY --from=builder ${TOPDIR}/build_dir/toolchain-*/ /build_dir/toolchain/
+
+# Metadata
+LABEL org.openwrt.stage="toolchain"
+LABEL org.openwrt.description="OpenWrt cross-compilation toolchain"

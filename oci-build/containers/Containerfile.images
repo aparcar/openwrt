@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Stage 5: Firmware Image Assembly
+#
+# Assembles final firmware images from:
+#   - Compiled kernel (from stage 3)
+#   - Built packages (from stage 4)
+#   - Root filesystem assembly
+#   - Image formatting (squashfs, ext4, etc.)
+#   - Device-specific packaging
+#   - Metadata and checksums
+#
+# This stage is typically fast since it's mostly I/O:
+# combining pre-built components into final images.
+
+ARG BASE_IMAGE=owrt-build-packages:latest
+ARG JOBS=1
+
+FROM ${BASE_IMAGE} AS images
+
+ARG JOBS
+ARG TOPDIR=/src
+
+WORKDIR ${TOPDIR}
+
+# Copy target image definitions
+COPY target/ target/
+COPY include/ include/
+COPY scripts/ scripts/
+COPY rules.mk rules.mk
+COPY Makefile Makefile
+COPY Config.in Config.in
+COPY config/ config/
+
+# Bring in all build artifacts
+COPY --from=0 /staging_dir/ staging_dir/
+COPY --from=0 /build_dir/ build_dir/
+
+COPY .config .config
+
+# Install packages into rootfs, assemble images
+RUN --mount=type=cache,target=/dl \
+    make -j${JOBS} package/install V=s 2>&1 | tail -20 && \
+    make -j${JOBS} target/install V=s 2>&1 | tail -20 && \
+    make -j1 package/index V=s 2>&1 | tail -20 && \
+    make -j1 json_overview_image_info V=s 2>&1 | tail -5 && \
+    make -j1 checksum V=s 2>&1 | tail -5
+
+# Copy final images to output
+RUN mkdir -p /output && \
+    cp -a bin/targets/ /output/ 2>/dev/null || true && \
+    cp -a bin/packages/ /output/ 2>/dev/null || true
+
+# Metadata
+LABEL org.openwrt.stage="images"
+LABEL org.openwrt.description="OpenWrt firmware images"
