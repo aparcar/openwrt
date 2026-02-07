@@ -16,10 +16,6 @@
 #     "lan": { "proto": "static", "ipaddr": "10.0.0.1/24" },
 #     "wan": { "proto": "dhcp" }
 #   },
-#   "wifi": [
-#     { "ssid": "MyNetwork", "encryption": "sae-mixed", "key": "secret",
-#       "device": "radio0", "network": "lan", "mode": "ap" }
-#   ],
 #   "write_files": [
 #     { "path": "/etc/banner", "content": "Hello\n", "permissions": "0644" }
 #   ],
@@ -237,69 +233,6 @@ apply_network() {
 	json_select ..
 }
 
-apply_wifi() {
-	local entries i
-
-	json_is_a "wifi" array || return 0
-
-	json_get_keys entries "wifi"
-	[ -z "$entries" ] && return 0
-
-	json_select "wifi"
-	for i in $entries; do
-		local ssid encryption key device network mode disabled
-		json_select "$i"
-
-		json_get_var ssid "ssid" 2>/dev/null
-		json_get_var encryption "encryption" 2>/dev/null
-		json_get_var key "key" 2>/dev/null
-		json_get_var device "device" 2>/dev/null
-		json_get_var network "network" 2>/dev/null
-		json_get_var mode "mode" 2>/dev/null
-		json_get_var disabled "disabled" 2>/dev/null
-
-		json_select ..
-
-		[ -z "$ssid" ] && continue
-
-		# Find wifi-iface sections matching the target device (or all if unset)
-		local iface_sections
-		iface_sections=$(uci -q show wireless | grep '=wifi-iface' | cut -d'=' -f1 | cut -d'.' -f2)
-		[ -z "$iface_sections" ] && {
-			log_warn "no wifi-iface sections found in UCI"
-			continue
-		}
-
-		for section in $iface_sections; do
-			local current_device
-			current_device=$(uci -q get "wireless.${section}.device")
-
-			# If a target device is specified, only configure matching interfaces
-			if [ -n "$device" ] && [ "$current_device" != "$device" ]; then
-				continue
-			fi
-
-			log_info "configuring wifi '${section}' (ssid=${ssid})"
-			uci -q set "wireless.${section}.ssid=${ssid}"
-			[ -n "$encryption" ] && uci -q set "wireless.${section}.encryption=${encryption}"
-			[ -n "$key" ] && uci -q set "wireless.${section}.key=${key}"
-			[ -n "$network" ] && uci -q set "wireless.${section}.network=${network}"
-			[ -n "$mode" ] && uci -q set "wireless.${section}.mode=${mode}"
-
-			# Enable the interface unless explicitly disabled
-			case "$disabled" in
-				true|1) uci -q set "wireless.${section}.disabled=1" ;;
-				*)      uci -q set "wireless.${section}.disabled=0" ;;
-			esac
-
-			# Also enable the radio device
-			[ -n "$current_device" ] && \
-				uci -q set "wireless.${current_device}.disabled=0"
-		done
-	done
-	json_select ..
-}
-
 apply_write_files() {
 	local files i
 
@@ -415,13 +348,11 @@ cmd_run() {
 	apply_password
 	apply_ssh_keys
 	apply_network
-	apply_wifi
 	apply_write_files
 
 	# Commit UCI changes
 	uci commit system 2>/dev/null
 	uci commit network 2>/dev/null
-	uci commit wireless 2>/dev/null
 
 	# Run commands last (after config is applied)
 	apply_runcmd
