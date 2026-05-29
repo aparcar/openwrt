@@ -27,7 +27,12 @@ try_hg() {
 }
 
 try_mtime() {
-	SOURCE_DATE_EPOCH=$(perl -e 'print((stat $ARGV[0])[9])' "$0")
+	# Fall back to the most recent modification time of the source contents.
+	# Unlike the mtime of this script, the contents' mtimes are restored from
+	# the (reproducibly packed) source tarball, so the result stays static
+	# regardless of how OpenWrt / the feeds were checked out.
+	SOURCE_DATE_EPOCH=$(find "$SOURCE" -type f -printf '%T@\n' 2>/dev/null \
+		| sort -rn | head -n1 | cut -d. -f1)
 	[ -n "$SOURCE_DATE_EPOCH" ]
 }
 
