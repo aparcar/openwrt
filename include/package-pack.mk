@@ -437,8 +437,12 @@ $(_endef)
     $$(PACK_$(1)) : export CONTROL=$$(Package/$(1)/CONTROL)
     $$(PACK_$(1)) : export DESCRIPTION=$$(Package/$(1)/description)
     $$(PACK_$(1)) : export PATH=$$(TARGET_PATH_PKG)
-    $$(PACK_$(1)) : export PKG_SOURCE_DATE_EPOCH:=$(PKG_SOURCE_DATE_EPOCH)
-    $$(PACK_$(1)) : export SOURCE_DATE_EPOCH:=$(PKG_SOURCE_DATE_EPOCH)
+    # Evaluated lazily (=, not :=) so the value can inspect the downloaded
+    # source tarball, which only exists once the recipe runs. Reference the
+    # helper variable rather than PKG_SOURCE_DATE_EPOCH to avoid these
+    # target-specific exports recursively referencing themselves.
+    $$(PACK_$(1)) : export PKG_SOURCE_DATE_EPOCH=$(pkg_source_date_epoch)
+    $$(PACK_$(1)) : export SOURCE_DATE_EPOCH=$(pkg_source_date_epoch)
     $(PKG_INFO_DIR)/$(1).provides $$(PACK_$(1)): $(STAMP_BUILT) $(INCLUDE_DIR)/package-pack.mk
 	rm -rf $$(IDIR_$(1))
 ifeq ($$(CONFIG_USE_APK),)

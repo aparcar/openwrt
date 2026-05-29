@@ -15,14 +15,24 @@ PKG_SKIP_DOWNLOAD=$(USE_SOURCE_DIR)$(USE_GIT_TREE)$(USE_GIT_SRC_CHECKOUT)
 
 MAKE_J:=$(if $(MAKE_JOBSERVER),$(MAKE_JOBSERVER) $(if $(filter 3.% 4.0 4.1,$(MAKE_VERSION)),-j))
 
-# Derive the package source timestamp from the remote source whenever possible.
-# Packages fetched from git or archives declare the upstream source date via
-# PKG_SOURCE_DATE, which is static regardless of how OpenWrt / the feeds were
-# checked out (git, tarball, SDK snapshot, ...). Only fall back to inspecting
-# the local recipe directory when no such date is available.
-PKG_SOURCE_DATE_EPOCH:=$(strip $(if $(DUMP),,$(if $(PKG_SOURCE_DATE),\
-	$(shell date -d "$(PKG_SOURCE_DATE) UTC" +%s 2>/dev/null),\
+# Derive the package source timestamp from the remote source. Sources are
+# fetched as tarballs (repacked from git/VCS or plain upstream archives) whose
+# entries carry the upstream date, so the timestamp stored inside the tarball is
+# static regardless of how OpenWrt / the feeds were checked out (git, tarball,
+# SDK snapshot, ...). Inspecting the tarball happens at packaging time, so this
+# is evaluated lazily, once the download is guaranteed to be present.
+# Fall back to the declared PKG_SOURCE_DATE and finally to the local recipe
+# directory when no downloaded tarball is available (e.g. USE_SOURCE_DIR).
+#
+# The computation lives in a dedicated variable so that the (identically named)
+# target-specific PKG_SOURCE_DATE_EPOCH / SOURCE_DATE_EPOCH exports set up in
+# package-pack.mk can reference it without shadowing themselves.
+pkg_source_date_epoch = $(strip $(if $(DUMP),,$(or \
+	$(and $(PKG_SOURCE),$(wildcard $(DL_DIR)/$(PKG_SOURCE)),\
+		$(shell $(TOPDIR)/scripts/get_source_tarball_date.sh $(DL_DIR)/$(PKG_SOURCE))),\
+	$(and $(PKG_SOURCE_DATE),$(shell date -d "$(PKG_SOURCE_DATE) UTC" +%s 2>/dev/null)),\
 	$(shell $(TOPDIR)/scripts/get_source_date_epoch.sh $(CURDIR)))))
+PKG_SOURCE_DATE_EPOCH = $(pkg_source_date_epoch)
 
 ifeq ($(strip $(PKG_BUILD_PARALLEL)),0)
 PKG_JOBS?=-j1
