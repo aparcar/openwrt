@@ -1,0 +1,26 @@
+From: OpenWrt
+Subject: tools: do not build the unused mkimage host tool
+
+Building the APBoot image only needs the cross objcopy and the bundled
+Python header script (tools/scripts/mkheader.py) to produce u-boot.mbn;
+mkimage is never invoked. mkimage drags in the bundled xyssl crypto and
+the legacy U-Boot image headers (sha1.c, image.c, fit_image.c, ...), which
+redeclare libc symbols (memcpy, sbrk) and fail to compile against a modern
+(macOS) host libc. Drop mkimage from the host tool build.
+
+This should be fixed upstream as well.
+
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -21,9 +21,9 @@
+ # MA 02111-1307 USA
+ #
+ 
+-BINS	= img2srec$(SFX) mkimage$(SFX) envcrc$(SFX) gen_eth_addr$(SFX) bmp_logo$(SFX)
++BINS	= img2srec$(SFX) envcrc$(SFX) gen_eth_addr$(SFX) bmp_logo$(SFX)
+ 
+-OBJS	= environment.o img2srec.o mkimage.o crc32.o envcrc.o gen_eth_addr.o bmp_logo.o
++OBJS	= environment.o img2srec.o crc32.o envcrc.o gen_eth_addr.o bmp_logo.o
+ 
+ ifeq ($(ARCH),mips)
+ BINS   += inca-swap-bytes$(SFX)

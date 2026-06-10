@@ -1,0 +1,26 @@
+From: OpenWrt
+Subject: tools: do not statically link host tools on macOS
+
+The host tools default to "-static", which the only Apple special case
+(darwin-ppc) overrides but modern macOS does not match: uname -m maps to
+HOSTARCH=arm on Apple Silicon, so the build falls through to the generic
+"-static" and fails ("library 'crt0.o' not found") because Apple's linker
+does not support fully static binaries. Clear HOST_LDFLAGS on any darwin
+host. Static linking of these build-time helpers is not required.
+
+This should be fixed upstream as well.
+
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -113,6 +113,11 @@
+ HOST_LDFLAGS =
+ endif
+ 
++# Apple's linker does not support fully static binaries (no crt0.o).
++ifeq ($(HOSTOS),darwin)
++HOST_LDFLAGS =
++endif
++
+ #
+ # Include this after HOSTOS HOSTARCH check
+ # so that we can act intelligently.

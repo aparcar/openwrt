@@ -1,0 +1,31 @@
+From: OpenWrt
+Subject: tools: drop obsolete bundled getline for Apple hosts
+
+The host tools pull in a bundled getline implementation under #ifdef
+__APPLE__, but neither tools/getline.h nor tools/getline.c exist in this
+tree. Modern macOS provides getline() via <stdio.h> (POSIX-2008), so the
+includes are unnecessary and only break the build when compiling the host
+tools on a macOS build host (Linux build hosts never define __APPLE__).
+
+This should be fixed upstream as well.
+
+--- a/tools/os_support.h
++++ b/tools/os_support.h
+@@ -28,8 +28,4 @@
+ #include "mingw_support.h"
+ #endif
+ 
+-#ifdef __APPLE__
+-#include "getline.h"
+-#endif
+-
+ #endif /* __OS_SUPPORT_H_ */
+--- a/tools/os_support.c
++++ b/tools/os_support.c
+@@ -23,6 +23,3 @@
+ #ifdef __MINGW32__
+ #include "mingw_support.c"
+ #endif
+-#ifdef __APPLE__
+-#include "getline.c"
+-#endif
