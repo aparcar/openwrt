@@ -63,8 +63,9 @@ define Build/grub-config
 endef
 
 define Device/Default
-  KERNEL_INSTALL := 1
-  ARTIFACTS := $$(ARTIFACTS-y)
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
+  ARTIFACTS := kernel.bin $$(ARTIFACTS-y)
   SUPPORTED_DEVICES :=
 endef
 

@@ -151,8 +151,9 @@ define Device/Default
     IMAGES-$$(CONFIG_GRUB_EFI_IMAGES) += combined-efi.img
   endif
   KERNEL := kernel-bin
-  KERNEL_INSTALL := 1
   KERNEL_NAME := bzImage
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
   ifeq ($(CONFIG_ISO_IMAGES),y)
     ARTIFACTS-$$(CONFIG_GRUB_IMAGES) += image.iso
     ARTIFACTS-$$(CONFIG_GRUB_EFI_IMAGES) += image-efi.iso
@@ -171,11 +172,10 @@ define Device/Default
     IMAGES-$$(CONFIG_GRUB_EFI_IMAGES) += combined-efi.vhdx
   endif
   IMAGES := $$(IMAGES-y)
-  ARTIFACTS := $$(ARTIFACTS-y)
+  ARTIFACTS := kernel.bin $$(ARTIFACTS-y)
   SUPPORTED_DEVICES :=
 endef
 
 include $(SUBTARGET).mk
 
 $(eval $(call BuildImage))
-

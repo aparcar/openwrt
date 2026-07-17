@@ -149,6 +149,8 @@ define Device/Default
   BOARD_NAME = $$(DEVICE_DTS)
   KERNEL_NAME := zImage
   KERNEL := kernel-bin | append-dtb | uImage none
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
   IMAGES := sysupgrade.bin
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
   UBINIZE_OPTS := -E 5

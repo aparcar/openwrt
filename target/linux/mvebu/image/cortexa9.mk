@@ -99,7 +99,7 @@ TARGET_DEVICES += ctera_c200-v2
 define Device/cznic_turris-omnia
   DEVICE_VENDOR := CZ.NIC
   DEVICE_MODEL := Turris Omnia
-  KERNEL_INSTALL := 1
+  ARTIFACTS := kernel.bin
   SOC := armada-385
   KERNEL := kernel-bin
   KERNEL_INITRAMFS := kernel-bin | libdeflate-gzip | fit gzip $$(KDIR)/image-$$(DEVICE_DTS).dtb
@@ -234,7 +234,7 @@ TARGET_DEVICES += iptime_nas1dual
 define Device/kobol_helios4
   DEVICE_VENDOR := Kobol
   DEVICE_MODEL := Helios4
-  KERNEL_INSTALL := 1
+  ARTIFACTS := kernel.bin
   KERNEL := kernel-bin
   DEVICE_PACKAGES := mkf2fs e2fsprogs partx-utils
   IMAGES := sdcard.img.gz
@@ -415,7 +415,7 @@ TARGET_DEVICES += plathome_openblocks-ax3-4
 define Device/solidrun_clearfog-base-a1
   DEVICE_VENDOR := SolidRun
   DEVICE_MODEL := ClearFog Base
-  KERNEL_INSTALL := 1
+  ARTIFACTS := kernel.bin
   KERNEL := kernel-bin
   DEVICE_PACKAGES := mkf2fs e2fsprogs partx-utils kmod-dsa-mv88e6xxx
   IMAGES := sdcard.img.gz
@@ -433,7 +433,7 @@ define Device/solidrun_clearfog-pro-a1
   $(Device/dsa-migration)
   DEVICE_VENDOR := SolidRun
   DEVICE_MODEL := ClearFog Pro
-  KERNEL_INSTALL := 1
+  ARTIFACTS := kernel.bin
   KERNEL := kernel-bin
   DEVICE_PACKAGES := mkf2fs e2fsprogs partx-utils kmod-dsa-mv88e6xxx
   IMAGES := sdcard.img.gz

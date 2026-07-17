@@ -12,12 +12,13 @@ define Device/Default
   KERNEL_NAME := vmlinux.elf
   KERNEL_INITRAMFS_NAME := vmlinux-initramfs.elf
   KERNEL := kernel-bin
-  KERNEL_INSTALL := 1
   FILESYSTEMS := ext4 squashfs
   IMAGES := rootfs.img rootfs.img.gz
   IMAGE/rootfs.img := append-rootfs | pad-to $(ROOTFS_PARTSIZE)
   IMAGE/rootfs.img.gz := append-rootfs | pad-to $(ROOTFS_PARTSIZE) | gzip
-  ARTIFACTS := uImage-lzma uImage-gzip
+  ARTIFACTS := kernel.bin uImage-lzma uImage-gzip
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
   ARTIFACT/uImage-lzma := kernel-bin | lzma | uImage lzma
   ARTIFACT/uImage-gzip := kernel-bin | gzip | uImage gzip
   SUPPORTED_DEVICES :=

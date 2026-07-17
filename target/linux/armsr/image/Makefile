@@ -87,9 +87,10 @@ define Device/efi-default
     IMAGES-y += combined-efi.vmdk
   endif
   KERNEL := kernel-bin
-  KERNEL_INSTALL := 1
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
   IMAGES := $$(IMAGES-y)
-  ARTIFACTS := $$(ARTIFACTS-y)
+  ARTIFACTS := kernel.bin $$(ARTIFACTS-y)
   SUPPORTED_DEVICES :=
  ifeq ($(CONFIG_arm),y)
   KERNEL_NAME = zImage

@@ -34,9 +34,11 @@ define Device/Default
   PROFILES := Default
   FILESYSTEMS := squashfs ubifs ext4
   DEVICE_DTS_DIR := $(DTS_DIR)/freescale
-  KERNEL_INSTALL := 1
   KERNEL_NAME := Image
   KERNEL := kernel-bin
+  ARTIFACTS := kernel.bin
+  ARTIFACT/kernel.bin := kernel-bin
+  ARTIFACT_TYPE/kernel.bin := kernel
 endef
 
 define Device/imx8m
