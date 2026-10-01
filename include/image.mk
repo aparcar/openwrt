@@ -761,13 +761,24 @@ define Device/Build/kernel
   endif
 endef
 
+# With CONFIG_TARGET_IMAGES_GZIP, ext4 images are published compressed,
+# unless they already are or the device builds the compressed image itself.
+# @param 1: filesystem
+# @param 2: image name
+Device/Build/image/gzip = $(if $(and $(CONFIG_TARGET_IMAGES_GZIP),$(findstring ext4,$(1)), \
+	$(filter-out %dtb %gz,$(2)),$(if $(filter $(2).gz,$(IMAGES)),,1)),1)
+
+# An ext4 image whose compressed form the device builds itself is not
+# published on its own, since both would be published under one name.
+Device/Build/image/skip = $(and $(CONFIG_TARGET_IMAGES_GZIP),$(findstring ext4,$(1)), \
+	$(filter-out %dtb %gz,$(2)),$(filter $(2).gz,$(IMAGES)))
+
+# Path of an image as published in $(BIN_DIR)
+Device/Build/image/bin = \
+	$(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2))$(if $(call Device/Build/image/gzip,$(1),$(2)),.gz)
+
 define Device/Build/image
-  GZ_SUFFIX := $(if $(filter %dtb %gz,$(2)),,$(if $(and $(findstring ext4,$(1)),$(CONFIG_TARGET_IMAGES_GZIP)),.gz))
-  $$(_TARGET): $(if $(CONFIG_JSON_OVERVIEW_IMAGE_INFO), \
-	  $(BUILD_DIR)/json_info_files/$(call DEVICE_IMG_NAME,$(1),$(2)).json, \
-	  $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2))$$(GZ_SUFFIX))
   $(eval $(call Device/Export,$(KDIR)/tmp/$(call DEVICE_IMG_NAME,$(1),$(2)),$(1)))
-  $(3)-images: $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2))$$(GZ_SUFFIX)
 
   ROOTFS/$(1)/$(3) := \
 	$(KDIR)/root.$(1)$$(strip \
@@ -783,20 +794,30 @@ define Device/Build/image
 	[ -f $$(word 1,$$^) -a -f $$(word 2,$$^) ]
 	$$(call concat_cmd,$(if $(IMAGE/$(2)/$(1)),$(IMAGE/$(2)/$(1)),$(IMAGE/$(2))))
 
-  .IGNORE: $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2))
+  $(if $(call Device/Build/image/skip,$(1),$(2)),,$(call Device/Build/image/publish,$(1),$(2),$(3)))
+endef
 
-  $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2)).gz: $(KDIR)/tmp/$(call DEVICE_IMG_NAME,$(1),$(2))
-	gzip -c -9n $$^ > $$@
+define Device/Build/image/publish
+  $$(_TARGET): $(if $(CONFIG_JSON_OVERVIEW_IMAGE_INFO), \
+	  $(BUILD_DIR)/json_info_files/$(call DEVICE_IMG_NAME,$(1),$(2)).json, \
+	  $(call Device/Build/image/bin,$(1),$(2)))
+  $(3)-images: $(call Device/Build/image/bin,$(1),$(2))
 
-  $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2)): $(KDIR)/tmp/$(call DEVICE_IMG_NAME,$(1),$(2))
-	cp $$^ $$@
+  .IGNORE: $(call Device/Build/image/bin,$(1),$(2))
 
-  $(BUILD_DIR)/json_info_files/$(call DEVICE_IMG_NAME,$(1),$(2)).json: $(BIN_DIR)/$(call DEVICE_IMG_NAME,$(1),$(2))$$(GZ_SUFFIX)
+  # Only the rule that publishes the image, so that it can't collide with
+  # another image of the device, e.g. rootfs.img and rootfs.img.gz
+  $(call Device/Build/image/bin,$(1),$(2)): $(KDIR)/tmp/$(call DEVICE_IMG_NAME,$(1),$(2))
+	$(if $(call Device/Build/image/gzip,$(1),$(2)),gzip -c -9n $$^ > $$@,cp $$^ $$@)
+
+  # Describe the image as published, so that its name and hash match the
+  # file on the download server
+  $(BUILD_DIR)/json_info_files/$(call DEVICE_IMG_NAME,$(1),$(2)).json: $(call Device/Build/image/bin,$(1),$(2))
 	@mkdir -p $$(shell dirname $$@)
 	DEVICE_ID="$(DEVICE_NAME)" \
 	SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
-	FILE_NAME="$(DEVICE_IMG_NAME)" \
-	FILE_DIR="$(KDIR)/tmp" \
+	FILE_NAME="$(notdir $(call Device/Build/image/bin,$(1),$(2)))" \
+	FILE_DIR="$(BIN_DIR)" \
 	FILE_TYPE=$(word 1,$(subst ., ,$(2))) \
 	FILE_FILESYSTEM="$(1)" \
 	DEVICE_IMG_PREFIX="$(DEVICE_IMG_PREFIX)" \
