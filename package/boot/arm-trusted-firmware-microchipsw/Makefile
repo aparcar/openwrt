@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=arm-trusted-firmware-microchipsw
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=https://github.com/microchip-ung/arm-trusted-firmware.git
@@ -62,10 +62,22 @@ define Build/Prepare
 	$(TAR) -C $(PKG_BUILD_DIR) -xf $(DL_DIR)/$(MBEDTLS_SOURCE)
 endef
 
+# Keys of the TBBR chain of trust. The ones in keys/ are public development
+# keys, so that the images are reproducible; they are no weaker than keys
+# generated for every build, since the platform accepts any root key as long
+# as no ROTPK hash is programmed into the OTP. For a device with a programmed
+# ROTPK hash, point TFA_KEY_DIR to the matching keys.
+TFA_KEY_DIR ?= $(CURDIR)/keys
+
 TFA_MAKE_FLAGS += \
 	MBEDTLS_DIR=$(PKG_BUILD_DIR)/$(MBEDTLS_NAME) \
 	BL33=$(STAGING_DIR_IMAGE)/$(BUILD_VARIANT)-u-boot.bin \
 	KEY_ALG=ecdsa GENERATE_COT=1 TRUSTED_BOARD_BOOT=1 \
+	ROT_KEY=$(TFA_KEY_DIR)/rot.pem \
+	TRUSTED_WORLD_KEY=$(TFA_KEY_DIR)/trusted_world.pem \
+	NON_TRUSTED_WORLD_KEY=$(TFA_KEY_DIR)/non_trusted_world.pem \
+	BL31_KEY=$(TFA_KEY_DIR)/soc_fw.pem \
+	BL33_KEY=$(TFA_KEY_DIR)/nt_fw.pem \
 	all fip fwu_fip
 
 define Package/trusted-firmware-a/install

@@ -1,0 +1,272 @@
+From 400fdc665813b3d90d94a80b002509343624c885 Mon Sep 17 00:00:00 2001
+From: Paul Spooren <mail@aparcar.org>
+Date: Mon, 5 Oct 2026 22:56:03 +0200
+Subject: [PATCH] cert_create: make certificates reproducible
+
+Each run of cert_create gives different certificates for the same keys
+and images: the serial number is random, the validity starts at the time
+of the build, and ECDSA signs with a random nonce. A firmware build is
+thus never reproducible, even when it uses fixed keys.
+
+With SOURCE_DATE_EPOCH set, derive the serial number from the name of
+the certificate and SOURCE_DATE_EPOCH, and let the validity start at
+SOURCE_DATE_EPOCH.
+
+Sign with a deterministic nonce for EC keys, derived by HMAC from the
+private key and the digest of the certificate, in the spirit of RFC
+6979, since LibreSSL offers neither RFC 6979 nor a way to pass a nonce.
+The signing attempt goes into the nonce as well, so the retries which
+screen out scalars with a leading zero byte (ERR-LAN969X-001) still get
+a different, but reproducible, signature.
+
+Signed-off-by: Paul Spooren <mail@aparcar.org>
+---
+ tools/cert_create/src/cert.c | 197 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 193 insertions(+), 4 deletions(-)
+
+diff --git a/tools/cert_create/src/cert.c b/tools/cert_create/src/cert.c
+index 7542d70..0f0e7fe 100644
+--- a/tools/cert_create/src/cert.c
++++ b/tools/cert_create/src/cert.c
+@@ -6,12 +6,15 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <stdint.h>
+ #include <string.h>
++#include <time.h>
+ 
+ #include <openssl/conf.h>
+ #include <openssl/err.h>
+ #include <openssl/opensslv.h>
+ #include <openssl/ec.h>
++#include <openssl/hmac.h>
+ #include <openssl/pem.h>
+ #include <openssl/sha.h>
+ #include <openssl/x509v3.h>
+@@ -80,6 +83,176 @@ const EVP_MD *get_digest(int alg)
+ 	}
+ }
+ 
++/*
++ * SOURCE_DATE_EPOCH, or -1 if it is not set. With it set, the validity and
++ * the serial number of the certificates are derived from it instead of the
++ * time of the build and a random number, so that they are reproducible.
++ */
++static long long source_date_epoch(void)
++{
++	const char *env = getenv("SOURCE_DATE_EPOCH");
++	long long epoch;
++	char *end;
++
++	if (env == NULL || *env == '\0') {
++		return -1;
++	}
++	epoch = strtoll(env, &end, 10);
++	if (*end != '\0' || epoch < 0) {
++		return -1;
++	}
++	return epoch;
++}
++
++/* Serial number derived from the certificate name and SOURCE_DATE_EPOCH */
++static int epoch_serial(const char *cn, long long epoch, ASN1_INTEGER *ai)
++{
++	unsigned char md[SHA256_DIGEST_LENGTH];
++	char buf[256];
++	BIGNUM *bn;
++	int ok;
++
++	snprintf(buf, sizeof(buf), "%s %lld", cn, epoch);
++	SHA256((const unsigned char *)buf, strlen(buf), md);
++	md[0] &= 0x7f;	/* keep it positive */
++	bn = BN_bin2bn(md, SERIAL_RAND_BITS / 8, NULL);
++	if (bn == NULL) {
++		return 0;
++	}
++	ok = BN_to_ASN1_INTEGER(bn, ai) != NULL;
++	BN_free(bn);
++	return ok;
++}
++
++/*
++ * Replace the ECDSA signature of certificate 'x' by a deterministic one: the
++ * nonce k is derived from the private key and the digest of the certificate
++ * by HMAC, in the spirit of RFC 6979, instead of being drawn at random.
++ * 'attempt' goes into k as well, so that the retries screening out scalars
++ * with a leading zero byte (ERR-LAN969X-001) get a different but still
++ * reproducible signature. X509_sign_ctx() must have signed 'x' before, which
++ * fills in the signature algorithm. Returns 1 on success, 0 on error.
++ */
++static int cert_sign_deterministic(X509 *x, EVP_PKEY *ikey, int md_alg,
++				   int attempt)
++{
++	const EVP_MD *md = get_digest(md_alg);
++	const EC_KEY *eck = EVP_PKEY_get0_EC_KEY(ikey);
++	const EC_GROUP *group;
++	const BIGNUM *d;
++	unsigned char *tbs = NULL, *der = NULL, *p;
++	unsigned char dgst[EVP_MAX_MD_SIZE], kbuf[EVP_MAX_MD_SIZE];
++	unsigned char msg[EVP_MAX_MD_SIZE + 8];
++	unsigned char dbuf[66];
++	unsigned int dlen, klen;
++	int tbslen, derlen, nbits, dbytes, ok = 0;
++	uint32_t ctr;
++	BN_CTX *ctx = NULL;
++	BIGNUM *n = NULL, *k = NULL, *kinv = NULL, *e = NULL;
++	BIGNUM *r = NULL, *s = NULL, *x1 = NULL;
++	EC_POINT *R = NULL;
++	ECDSA_SIG *sig = NULL;
++	ASN1_BIT_STRING *psig;
++
++	if (md == NULL || eck == NULL) {
++		return 0;
++	}
++	group = EC_KEY_get0_group(eck);
++	d = EC_KEY_get0_private_key(eck);
++
++	ctx = BN_CTX_new();
++	n = BN_new(); k = BN_new(); kinv = BN_new(); e = BN_new();
++	r = BN_new(); s = BN_new(); x1 = BN_new();
++	R = EC_POINT_new(group);
++	if (!ctx || !n || !k || !kinv || !e || !r || !s || !x1 || !R ||
++	    !EC_GROUP_get_order(group, n, ctx)) {
++		goto out;
++	}
++	nbits = BN_num_bits(n);
++	dbytes = (nbits + 7) / 8;
++	if (dbytes > (int)sizeof(dbuf) || BN_bn2binpad(d, dbuf, dbytes) < 0) {
++		goto out;
++	}
++
++	/* Digest of the to-be-signed part, which is what the signature covers */
++	tbslen = i2d_re_X509_tbs(x, &tbs);
++	if (tbslen <= 0 || !EVP_Digest(tbs, tbslen, dgst, &dlen, md, NULL)) {
++		goto out;
++	}
++	/* e: leftmost bits of the digest, as many as the order has */
++	if (!BN_bin2bn(dgst, dlen, e) ||
++	    ((int)dlen * 8 > nbits && !BN_rshift(e, e, dlen * 8 - nbits))) {
++		goto out;
++	}
++
++	memcpy(msg, dgst, dlen);
++	msg[dlen + 0] = attempt >> 24; msg[dlen + 1] = attempt >> 16;
++	msg[dlen + 2] = attempt >> 8;  msg[dlen + 3] = attempt;
++	for (ctr = 0; ; ctr++) {
++		msg[dlen + 4] = ctr >> 24; msg[dlen + 5] = ctr >> 16;
++		msg[dlen + 6] = ctr >> 8;  msg[dlen + 7] = ctr;
++		if (!HMAC(md, dbuf, dbytes, msg, dlen + 8, kbuf, &klen) ||
++		    !BN_bin2bn(kbuf, klen, k) ||
++		    ((int)klen * 8 > nbits && !BN_rshift(k, k, klen * 8 - nbits))) {
++			goto out;
++		}
++		/* rejection sampling: 1 <= k < n */
++		if (BN_is_zero(k) || BN_cmp(k, n) >= 0) {
++			continue;
++		}
++		/* r = (k * G).x mod n */
++		if (!EC_POINT_mul(group, R, k, NULL, NULL, ctx) ||
++		    !EC_POINT_get_affine_coordinates(group, R, x1, NULL, ctx) ||
++		    !BN_nnmod(r, x1, n, ctx)) {
++			goto out;
++		}
++		if (BN_is_zero(r)) {
++			continue;
++		}
++		/* s = k^-1 * (e + r * d) mod n */
++		if (!BN_mod_inverse(kinv, k, n, ctx) ||
++		    !BN_mod_mul(s, r, d, n, ctx) ||
++		    !BN_mod_add(s, s, e, n, ctx) ||
++		    !BN_mod_mul(s, s, kinv, n, ctx)) {
++			goto out;
++		}
++		if (!BN_is_zero(s)) {
++			break;
++		}
++	}
++
++	sig = ECDSA_SIG_new();
++	if (sig == NULL || !ECDSA_SIG_set0(sig, r, s)) {
++		goto out;
++	}
++	r = s = NULL;	/* owned by sig now */
++	derlen = i2d_ECDSA_SIG(sig, &der);
++	if (derlen <= 0) {
++		goto out;
++	}
++
++	X509_get0_signature((const ASN1_BIT_STRING **)&psig, NULL, x);
++	p = der;
++	if (psig == NULL || !ASN1_BIT_STRING_set(psig, p, derlen)) {
++		goto out;
++	}
++	psig->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
++	psig->flags |= ASN1_STRING_FLAG_BITS_LEFT;
++	ok = 1;
++out:
++	if (!ok) {
++		ERR_print_errors_fp(stdout);
++	}
++	OPENSSL_free(tbs);
++	OPENSSL_free(der);
++	ECDSA_SIG_free(sig);
++	EC_POINT_free(R);
++	BN_free(n); BN_free(k); BN_free(kinv); BN_free(e);
++	BN_free(r); BN_free(s); BN_free(x1);
++	BN_CTX_free(ctx);
++	return ok;
++}
++
+ int cert_add_ext(X509 *issuer, X509 *subject, int nid, char *value)
+ {
+ 	X509_EXTENSION *ex;
+@@ -216,6 +389,7 @@ int cert_new(
+ 	ASN1_INTEGER *sno;
+ 	int i, num, rc = 0;
+ 	int fb, attempt;
++	long long epoch = source_date_epoch();
+ 
+ 	/* Create the certificate structure */
+ 	x = X509_new();
+@@ -242,14 +416,24 @@ int cert_new(
+ 	/* x509.v3 */
+ 	X509_set_version(x, 2);
+ 
+-	/* Random serial number */
++	/* Random serial number, or one derived from SOURCE_DATE_EPOCH */
+ 	sno = ASN1_INTEGER_new();
+-	rand_serial(NULL, sno);
++	if (epoch >= 0) {
++		epoch_serial(cert->cn, epoch, sno);
++	} else {
++		rand_serial(NULL, sno);
++	}
+ 	X509_set_serialNumber(x, sno);
+ 	ASN1_INTEGER_free(sno);
+ 
+-	X509_gmtime_adj(X509_get_notBefore(x), 0);
+-	X509_gmtime_adj(X509_get_notAfter(x), (long)60*60*24*days);
++	if (epoch >= 0) {
++		ASN1_TIME_set(X509_get_notBefore(x), (time_t)epoch);
++		ASN1_TIME_set(X509_get_notAfter(x),
++			      (time_t)(epoch + (long long)60*60*24*days));
++	} else {
++		X509_gmtime_adj(X509_get_notBefore(x), 0);
++		X509_gmtime_adj(X509_get_notAfter(x), (long)60*60*24*days);
++	}
+ 	X509_set_pubkey(x, pkey);
+ 
+ 	/* Subject name */
+@@ -295,6 +479,11 @@ int cert_new(
+ 		if (!cert_sign_once(x, ikey, md_alg)) {
+ 			goto END;
+ 		}
++		/* Replace the random ECDSA signature by a deterministic one */
++		if (fb != 0 &&
++		    !cert_sign_deterministic(x, ikey, md_alg, attempt)) {
++			goto END;
++		}
+ 		if (fb == 0 || cert_sig_full_width(x, fb)) {
+ 			break;
+ 		}
