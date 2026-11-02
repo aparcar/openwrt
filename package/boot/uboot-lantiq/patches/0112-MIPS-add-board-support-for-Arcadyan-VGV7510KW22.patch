@@ -245,7 +245,7 @@
  Active  mips        mips32         vrx200      avm             fb3370              fb3370_sfspl                         fb3370:SYS_BOOT_SFSPL                                                                                                             Daniel Schwierzeck <daniel.schwierzeck@gmail.com>
 --- /dev/null
 +++ b/include/configs/vgv7510kw22.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,73 @@
 +/*
 + * Copyright (C) 2015 Martin Blumenstingl <martin.blumenstingl@googlemail.com>
 + *
@@ -266,7 +266,13 @@
 +
 +#define CONFIG_LTQ_SUPPORT_NOR_FLASH		/* Have a parallel NOR flash */
 +
-+#define CONFIG_SYS_BOOTM_LEN		0x1000000	/* 16 MB */
++/*
++ * Allow kernels to decompress to up to 31 MiB, which is needed for
++ * initramfs images. Combined with CONFIG_SYS_LOAD_ADDR below this keeps
++ * the decompressed kernel (starting at 0x80002000) from overwriting the
++ * compressed image.
++ */
++#define CONFIG_SYS_BOOTM_LEN		0x1F00000	/* 31 MiB */
 +
 +#if defined(CONFIG_SYS_BOOT_BRN)
 +#define CONFIG_SYS_TEXT_BASE		0x80002000
@@ -299,6 +305,14 @@
 +
 +/* Pull in default OpenWrt configs for Lantiq SoC */
 +#include "openwrt-lantiq-common.h"
++
++/*
++ * Load images at 32 MiB instead of the default 16 MiB, otherwise a large
++ * initramfs kernel overwrites itself while being decompressed. The
++ * 64 MiB of RAM leave ~29 MiB for the compressed image below U-Boot.
++ */
++#undef CONFIG_SYS_LOAD_ADDR
++#define CONFIG_SYS_LOAD_ADDR		0x82000000
 +
 +#define CONFIG_EXTRA_ENV_SETTINGS	\
 +	CONFIG_ENV_LANTIQ_DEFAULTS	\
