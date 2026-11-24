@@ -8,7 +8,7 @@ __target_inc=1
 
 
 ##@
-# @brief Default device type ( basic | nas | router ).
+# @brief Default device type ( basic | nas | router | switch ).
 ##
 DEVICE_TYPE?=router
 
@@ -58,6 +58,11 @@ DEFAULT_PACKAGES.router:=\
 	odhcpd-ipv6only \
 	ppp \
 	ppp-mod-pppoe
+##@
+# @brief Default packages for @DEVICE_TYPE switch.
+##
+DEFAULT_PACKAGES.switch:=\
+	ustp
 
 ifneq ($(DUMP),)
   all: dumpinfo
