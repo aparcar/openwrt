@@ -5,7 +5,7 @@ include $(TOPDIR)/rules.mk
 ARCH:=mips
 BOARD:=realtek
 BOARDNAME:=Realtek MIPS
-DEVICE_TYPE:=basic
+DEVICE_TYPE:=switch
 FEATURES:=ramdisk squashfs
 SUBTARGETS:=rtl838x rtl839x rtl930x rtl930x_nand rtl931x rtl931x_nand rtl960x
 
