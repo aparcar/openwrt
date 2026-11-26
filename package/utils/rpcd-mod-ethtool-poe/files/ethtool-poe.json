@@ -1,0 +1,23 @@
+{
+	"poe-read": {
+		"description": "Read PoE port status",
+		"read": {
+			"ubus": {
+				"poe": [ "info", "status" ]
+			}
+		}
+	},
+	"poe-write": {
+		"description": "Control PoE ports",
+		"read": {
+			"ubus": {
+				"poe": [ "info", "status" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"poe": [ "manage", "set", "reload" ]
+			}
+		}
+	}
+}
